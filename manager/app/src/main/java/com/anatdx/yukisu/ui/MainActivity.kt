@@ -357,7 +357,7 @@ class MainActivity : ComponentActivity() {
     private fun refreshData() {
         lifecycleScope.launch {
             try {
-                superUserViewModel.fetchAppList()
+                superUserViewModel.fetchAppList(forceRefresh = true)
                 DataRefreshUtils.refreshData(lifecycleScope)
             } catch (e: Exception) {
                 e.printStackTrace()

@@ -22,6 +22,8 @@
     <string name="selinux_status_permissive">宽容模式</string>
     <string name="selinux_status_unknown">未知</string>
     <string name="superuser">超级用户</string>
+    <string name="recently_installed">最近安装</string>
+    <string name="other_apps">其他应用</string>
     <string name="module_failed_to_enable">无法启用模块：%s</string>
     <string name="module_failed_to_disable">无法禁用模块：%s</string>
     <string name="module_empty">没有安装模块</string>

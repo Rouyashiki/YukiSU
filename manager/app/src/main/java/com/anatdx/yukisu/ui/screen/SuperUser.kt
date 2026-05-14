@@ -32,6 +32,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,12 +58,17 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.dergoogler.mmrl.ui.component.LabelItem
@@ -89,7 +95,11 @@ import com.anatdx.yukisu.ui.viewmodel.AppCategory
 import com.anatdx.yukisu.ui.viewmodel.SortType
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import com.anatdx.yukisu.ui.viewmodel.appGroupComparator
+import com.anatdx.yukisu.ui.viewmodel.RECENTLY_INSTALLED_WINDOW_MILLIS
+import com.anatdx.yukisu.ui.viewmodel.isRecentlyInstalled
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
@@ -163,6 +173,31 @@ fun SuperUserScreen(navigator: DestinationsNavigator) {
         groups.sortedWith(compareBy(appGroupComparator(viewModel.currentSortType)) { it.sortKey })
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(filteredAndSortedAppGroups, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (isActive) {
+                val now = System.currentTimeMillis()
+                nowMillis = now
+                val nextExpiry = filteredAndSortedAppGroups
+                    .filter { isRecentlyInstalled(it.sortKey.latestInstallTime, now) }
+                    .minOfOrNull { it.sortKey.latestInstallTime + RECENTLY_INSTALLED_WINDOW_MILLIS }
+                    ?: break
+                delay((nextExpiry - now).coerceAtLeast(1L))
+            }
+        }
+    }
+    val (recentlyInstalledGroups, otherGroups) = remember(filteredAndSortedAppGroups, nowMillis) {
+        val (recent, others) = filteredAndSortedAppGroups.partition {
+            isRecentlyInstalled(it.sortKey.latestInstallTime, nowMillis)
+        }
+        recent.sortedWith(compareBy(appGroupComparator(SortType.INSTALL_TIME_NEW)) { it.sortKey }) to others
+    }
+    val displayedAppGroups = remember(recentlyInstalledGroups, otherGroups) {
+        recentlyInstalledGroups + otherGroups
+    }
+
     val appCounts = remember(viewModel.appGroupList, viewModel.showSystemApps) {
         mapOf(
             AppCategory.ALL to viewModel.appGroupList.size,
@@ -193,13 +228,14 @@ fun SuperUserScreen(navigator: DestinationsNavigator) {
         snackbarHost = { SnackbarHost(snackBarHostState.hostState) },
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         floatingActionButton = {
-            SuperUserFab(viewModel, filteredAndSortedAppGroups, listState, scope)
+            SuperUserFab(viewModel, listState, scope)
         }
     ) { innerPadding ->
         SuperUserContent(
             innerPadding = innerPadding,
             viewModel = viewModel,
-            filteredAndSortedAppGroups = filteredAndSortedAppGroups,
+            filteredAndSortedAppGroups = displayedAppGroups,
+            recentlyInstalledCount = recentlyInstalledGroups.size,
             listState = listState,
             scrollBehavior = scrollBehavior,
             navigator = navigator,
@@ -265,7 +301,6 @@ private fun TopBarTitle(
 @Composable
 private fun SuperUserFab(
     viewModel: SuperUserViewModel,
-    filteredAndSortedAppGroups: List<SuperUserViewModel.AppGroup>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     scope: CoroutineScope
 ) {
@@ -299,7 +334,7 @@ private fun SuperUserFab(
                 } },
                 onScrollToBottom = {
                     scope.launch {
-                        val lastIndex = filteredAndSortedAppGroups.size - 1
+                        val lastIndex = listState.layoutInfo.totalItemsCount - 1
                         if (lastIndex >= 0) {
                             if (motion.enabled) listState.animateScrollToItem(lastIndex) else listState.scrollToItem(lastIndex)
                         }
@@ -322,6 +357,7 @@ private fun SuperUserContent(
     innerPadding: PaddingValues,
     viewModel: SuperUserViewModel,
     filteredAndSortedAppGroups: List<SuperUserViewModel.AppGroup>,
+    recentlyInstalledCount: Int,
     listState: androidx.compose.foundation.lazy.LazyListState,
     scrollBehavior: TopAppBarScrollBehavior,
     navigator: DestinationsNavigator,
@@ -340,7 +376,22 @@ private fun SuperUserContent(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
         ) {
-            filteredAndSortedAppGroups.forEach { appGroup ->
+            filteredAndSortedAppGroups.forEachIndexed { index, appGroup ->
+                if (recentlyInstalledCount > 0 && (index == 0 || index == recentlyInstalledCount)) {
+                    item(key = if (index == 0) "recently_installed" else "other_apps") {
+                        Text(
+                            text = stringResource(
+                                if (index == 0) R.string.recently_installed else R.string.other_apps
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 12.dp, top = if (index == 0) 0.dp else 16.dp, bottom = 8.dp)
+                                .semantics { heading() }
+                        )
+                    }
+                }
                 item(key = "${appGroup.uid}-${appGroup.mainApp.displayIdentifier}") {
                     AppGroupItem(
                         appGroup = appGroup,
