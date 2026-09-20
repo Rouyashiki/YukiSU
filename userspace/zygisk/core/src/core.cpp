@@ -1029,6 +1029,47 @@ zygisk_core_entry_direct(int /*core_fd*/) {
   core_start(nullptr);
 }
 
+namespace {
+uintptr_t g_tango_stub = 0;
+uint32_t g_tango_stub_size = 0;
+} // namespace
+
+#if defined(__arm__)
+extern "C" [[gnu::visibility("default")]] void
+zygisk_core_entry_tango(uint32_t got, uint32_t original, uint32_t stub,
+                        uint32_t size) {
+  if (got != 0 && original != 0 && stub != 0 && size == 176 &&
+      yz_patch_text(got, &original, sizeof(original))) {
+    g_tango_stub = stub;
+    g_tango_stub_size = size;
+  } else {
+    LOGE("Tango GOT restore failed; retaining guest trampoline");
+  }
+  LOGI("Tango guest core start");
+  core_start(nullptr);
+}
+#endif
+
+void zygisk_cleanup_tango_stub() {
+  if (g_tango_stub == 0)
+    return;
+  const uint8_t zeros[64]{};
+  while (g_tango_stub_size != 0) {
+    const auto size = g_tango_stub_size < sizeof(zeros)
+                          ? g_tango_stub_size
+                          : static_cast<uint32_t>(sizeof(zeros));
+    if (!yz_patch_text(g_tango_stub, zeros, size)) {
+      LOGE("Tango trampoline cleanup failed");
+      return;
+    }
+    __builtin___clear_cache(reinterpret_cast<char *>(g_tango_stub),
+                            reinterpret_cast<char *>(g_tango_stub + size));
+    g_tango_stub += size;
+    g_tango_stub_size -= size;
+  }
+  g_tango_stub = 0;
+}
+
 /* Remove the first-stage soinfo; retain its mapping if handoff is incomplete.
  */
 extern "C" [[gnu::visibility("default")]] void zygisk_finalize_loader(int,

@@ -6,6 +6,7 @@ kernelsu-objs += feature/yukizygisk/runtime.o
 kernelsu-objs += feature/yukizygisk/early_native.o
 kernelsu-objs += feature/yukizygisk/payload.o
 kernelsu-objs += feature/yukizygisk/injector.o
+kernelsu-objs += feature/yukizygisk/tango.o
 kernelsu-objs += feature/yukizygisk/exec.o
 kernelsu-objs += feature/yukizygisk/lifecycle.o
 kernelsu-objs += feature/yukizygisk/events.o

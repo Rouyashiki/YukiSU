@@ -14,6 +14,7 @@
 #include <asm/cacheflush.h>
 
 #include "internal.h"
+#include "tango.h"
 #include "selinux/selinux.h"
 #include "klog.h" // IWYU pragma: keep
 #include "uapi/yukizygisk.h"
@@ -244,6 +245,12 @@ static void yz_inject_tw_func(struct callback_head *cb)
 	if (!READ_ONCE(yukizygisk_enabled) &&
 	    !(native && tw->early_native && yz_early_native_active()))
 		goto out;
+	if (!native && yz_tango_is_process()) {
+		pr_info("yukizygisk: Tango host exec pid=%d; waiting for guest "
+			"RELRO\n",
+			current->tgid);
+		goto out;
+	}
 
 #ifdef CONFIG_COMPAT
 	compat = is_compat_task();
@@ -632,4 +639,64 @@ void yz_schedule_injection(bool native, u8 target_type, bool early_native,
 	init_task_work(&tw->cb, yz_inject_tw_func);
 	if (task_work_add(current, &tw->cb, TWA_RESUME))
 		kfree(tw);
+}
+
+bool yz_tango_active(void)
+{
+	return READ_ONCE(yukizygisk_enabled);
+}
+
+void yz_tango_linker_offsets(u64 *dlopen, u64 *dlsym)
+{
+	*dlopen = READ_ONCE(yz_dlopen32_off);
+	*dlsym = READ_ONCE(yz_dlsym32_off);
+}
+
+int yz_tango_prepare(u32 *generation)
+{
+	struct ksu_file_load_policy policy = {};
+	char socket_name[YZ_ZYGOTE_NAME_MAX];
+	char process[YZ_RUNTIME_PROCESS_MAX];
+	int fd;
+
+	if (!yz_tango_active() ||
+	    !yz_parse_zygote_args(current->mm, socket_name,
+				  sizeof(socket_name)))
+		return -EINVAL;
+	yz_runtime_read_process(current->mm, process, sizeof(process));
+	*generation = yz_runtime_begin(
+	    YZ_RUNTIME_KIND_ZYGOTE, YZ_RUNTIME_ABI_32, 0, 0, process,
+	    socket_name, READ_ONCE(current->start_boottime));
+	if (yz_zygote_safemode_should_skip(socket_name)) {
+		yz_runtime_set_state(current->tgid, *generation,
+				     YZ_RUNTIME_STATE_SAFEMODE);
+		return -ECANCELED;
+	}
+	fd = yz_stage_fd(YZ_CORE32_PATH, YZ_VMA_NAME, &policy);
+	if (fd < 0) {
+		yz_restore_native_policy_state(&policy);
+		yz_runtime_set_state(current->tgid, *generation,
+				     YZ_RUNTIME_STATE_FAILED);
+		return fd;
+	}
+	if (ksu_file_load_policy_allow_execmem_current(&policy)) {
+		yz_close_current_fd(fd);
+		yz_restore_native_policy_state(&policy);
+		yz_runtime_set_state(current->tgid, *generation,
+				     YZ_RUNTIME_STATE_FAILED);
+		return -EACCES;
+	}
+	yz_publish_native_policy_state(current->tgid, &policy);
+	return fd;
+}
+
+void yz_tango_finish(u32 generation, int fd, bool redirected)
+{
+	if (!redirected) {
+		yz_close_current_fd(fd);
+		ksu_yukizygisk_restore_native_load_policy(current->tgid);
+	}
+	yz_runtime_set_state(current->tgid, generation,
+			     redirected ? YZ_RUNTIME_STATE_REDIRECTED
+					: YZ_RUNTIME_STATE_FAILED);
 }

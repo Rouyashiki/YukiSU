@@ -13,6 +13,7 @@
 #include "api.h"
 #include "arch.h"
 #include "internal.h"
+#include "tango.h"
 #include "hook/lsm_hook.h"
 #include "policy/feature.h"
 #include "selinux/selinux.h"
@@ -303,6 +304,9 @@ int yz_exec_enable(void)
 		return ret;
 	}
 	yz_exec_hook_registered = true;
+	ret = yz_tango_enable();
+	if (ret)
+		pr_warn("yukizygisk: Tango hook unavailable err=%d\n", ret);
 	pr_info("yukizygisk: exec injection hook registered abi=%s "
 		"resolver=%s\n",
 		YZ_BPRM_HOOK_ABI, YZ_BPRM_HOOK_CFI);
@@ -315,6 +319,7 @@ int yz_exec_enable(void)
 
 void yz_exec_disable(void)
 {
+	yz_tango_disable();
 #if YZ_ENABLE_LSM_INJECTOR
 	if (yz_exec_hook_registered) {
 		ksu_unregister_lsm_hook(&yz_exec_hook);

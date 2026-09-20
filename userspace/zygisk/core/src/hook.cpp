@@ -793,6 +793,7 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
 
 /* Drop the spent AT_ENTRY stub. */
 void yz_unmap_injection_stub() {
+  zygisk_cleanup_tango_stub();
   for (auto &m : lsplt::MapInfo::Scan()) {
     if ((m.perms & (PROT_READ | PROT_WRITE | PROT_EXEC)) !=
             (PROT_READ | PROT_WRITE | PROT_EXEC) ||

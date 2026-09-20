@@ -273,6 +273,30 @@ int ksu_yukizygisk_get_runtime(struct yz_runtime_record *entries, u32 capacity,
 	return 0;
 }
 
+bool ksu_yukizygisk_is_native_runtime(pid_t pid, u64 start_boottime)
+{
+	bool found = false;
+	u32 i;
+
+	mutex_lock(&yz_runtime_lock);
+	for (i = 0; i < YZ_RUNTIME_RECORD_MAX; i++) {
+		const struct yz_runtime_slot *slot = &yz_runtime_records[i];
+		const struct yz_runtime_record *record = &slot->record;
+
+		if (record->pid == (u32)pid &&
+		    slot->start_boottime == start_boottime &&
+		    record->kind == YZ_RUNTIME_KIND_NATIVE &&
+		    !record->module_id[0] &&
+		    (record->state == YZ_RUNTIME_STATE_REDIRECTED ||
+		     record->state == YZ_RUNTIME_STATE_INJECTED)) {
+			found = true;
+			break;
+		}
+	}
+	mutex_unlock(&yz_runtime_lock);
+	return found;
+}
+
 int ksu_yukizygisk_report_runtime(const struct yz_runtime_report_cmd *report)
 {
 	struct yz_runtime_slot *base = NULL;

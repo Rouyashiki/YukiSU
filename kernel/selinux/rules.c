@@ -459,7 +459,7 @@ static bool ksu_apply_process_av(struct policydb *db, const char *src, u32 av,
 }
 
 static int ksu_file_load_policy_allow_sid(struct file *file, u32 ssid,
-					  bool include_dir,
+					  bool include_dir, bool receive_only,
 					  const char *const *tmpfs_perms,
 					  int tmpfs_perm_count,
 					  struct ksu_file_load_policy *state)
@@ -540,8 +540,11 @@ static int ksu_file_load_policy_allow_sid(struct file *file, u32 ssid,
 	strscpy(src_log, src_name, sizeof(src_log));
 	strscpy(tgt_log, tgt_name, sizeof(tgt_log));
 
-	required_av = ksu_required_av(cls, ksu_file_load_perms,
-				      ARRAY_SIZE(ksu_file_load_perms));
+	required_av = receive_only
+			  ? ksu_required_av(cls, ksu_tmpfs_receive_perms,
+					    ARRAY_SIZE(ksu_tmpfs_receive_perms))
+			  : ksu_required_av(cls, ksu_file_load_perms,
+					    ARRAY_SIZE(ksu_file_load_perms));
 	if (dir_cls) {
 		dir_required_av =
 		    ksu_required_av(dir_cls, ksu_dir_load_perms,
@@ -671,7 +674,7 @@ int ksu_file_load_policy_allow_current(struct file *file,
 				       struct ksu_file_load_policy *state)
 {
 	return ksu_file_load_policy_allow_sid(
-	    file, current_sid(), false, ksu_tmpfs_hook_perms,
+	    file, current_sid(), false, false, ksu_tmpfs_hook_perms,
 	    ARRAY_SIZE(ksu_tmpfs_hook_perms), state);
 }
 
@@ -694,10 +697,13 @@ int ksu_file_load_policy_allow_cred(struct file *file, const struct cred *cred,
 {
 	u32 sid = ksu_file_load_policy_cred_sid(cred);
 
-	if (!sid)
+	if (!sid || !file)
 		return -EINVAL;
+	if (!S_ISDIR(file_inode(file)->i_mode))
+		return ksu_file_load_policy_allow_sid(file, sid, false, true,
+						      NULL, 0, state);
 	return ksu_file_load_policy_allow_sid(
-	    file, sid, true, ksu_tmpfs_receive_perms,
+	    file, sid, true, false, ksu_tmpfs_receive_perms,
 	    ARRAY_SIZE(ksu_tmpfs_receive_perms), state);
 }
 

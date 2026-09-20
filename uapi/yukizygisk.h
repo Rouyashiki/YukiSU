@@ -173,7 +173,7 @@ struct yz_safemode_status_cmd {
 
 struct yz_module_load_policy_cmd {
   __u32 pid;
-  __s32 dirfd;
+  __s32 dirfd; // Module directory or read-only source memfd.
 };
 
 #define KSU_IOCTL_YZ_SET_DLOPEN32 _IOC(_IOC_WRITE, 'K', 62, 0)

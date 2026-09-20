@@ -324,6 +324,10 @@ int spawn_zygiskd_process(const char* path, const char* label) {
 }
 
 bool has_zygote32() {
+    if (access("/system_ext/bin/tango_translator", X_OK) == 0 &&
+        access("/system/bin/app_process32", X_OK) == 0) {
+        return true;
+    }
     const auto zygote = getprop("ro.zygote");
     if (zygote) {
         return zygote->find("32") != std::string::npos;

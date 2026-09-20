@@ -6,6 +6,7 @@
 
 /* Early lifecycle hook. */
 bool zygisk_hook_bootstrap(const char *self_path);
+void zygisk_cleanup_tango_stub();
 
 /* 0=inject, 1=inject+umount, 2=skip+umount. */
 int zygisk_inject_decision(int uid);

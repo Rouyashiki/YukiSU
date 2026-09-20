@@ -385,6 +385,33 @@ bool send_hyos_response(int session, uint8_t value) {
   return result == sizeof(value);
 }
 
+bool send_module_image(int client, int fd) {
+  if (fd < 0)
+    return send_fd(client, -1);
+  struct ucred peer{};
+  socklen_t length = sizeof(peer);
+  if (getsockopt(client, SOL_SOCKET, SO_PEERCRED, &peer, &length) != 0 ||
+      length != sizeof(peer) || peer.pid <= 0) {
+    DLOGE("module image: peer credentials unavailable");
+    return send_fd(client, -1);
+  }
+  yz_module_load_policy_cmd cmd{};
+  cmd.pid = static_cast<uint32_t>(peer.pid);
+  cmd.dirfd = fd;
+  const int ret = ksud::ksuctl(KSU_IOCTL_YZ_ALLOW_MODULE_LOAD_POLICY, &cmd);
+  if (ret != 0) {
+    DLOGE("module image policy: pid=%d fd=%d ret=%d", peer.pid, fd, ret);
+    return send_fd(client, -1);
+  }
+  const bool sent = send_fd(client, fd);
+  if (!sent) {
+    yz_native_load_policy_cmd restore{};
+    restore.pid = cmd.pid;
+    (void)ksud::ksuctl(KSU_IOCTL_YZ_RESTORE_NATIVE_LOAD_POLICY, &restore);
+  }
+  return sent;
+}
+
 int copy_file_to_memfd(const std::string &path) {
   int src = open(path.c_str(), O_RDONLY | O_CLOEXEC);
   if (src < 0) {
@@ -1326,7 +1353,7 @@ void handle_client(int client) {
     // anonymous loading, this avoids an SCM_RIGHTS SELinux check against a
     // module that was installed with adb_data_file context.
     int fd = copy_file_to_memfd(g_modules[idx].lib_path);
-    send_fd(client, fd);
+    send_module_image(client, fd);
     if (fd >= 0)
       close(fd);
     break;
@@ -1501,7 +1528,7 @@ void handle_client(int client) {
     }
     const std::string &path = g_native_modules[idx].lib_path;
     int fd = copy_file_to_memfd(path);
-    send_fd(client, fd);
+    send_module_image(client, fd);
     if (fd >= 0)
       close(fd);
     break;

@@ -12,6 +12,7 @@
 #include <linux/kprobes.h>
 #include <linux/pid.h>
 #include <linux/mm.h>
+#include <linux/magic.h>
 #include <linux/ptrace.h>
 #include <linux/sched/signal.h>
 #include <linux/sched/task.h>
@@ -1259,46 +1260,50 @@ static int do_yz_allow_module_load_policy(void __user *arg)
 	struct yz_module_load_policy_cmd cmd;
 	struct task_struct *task;
 	const struct cred *cred;
-	struct fd dir;
+	struct fd payload;
+	struct file *file;
+	bool directory;
+	bool source_image;
 	int ret;
 
 	if (copy_from_user(&cmd, arg, sizeof(cmd)))
 		return -EFAULT;
 	if (!cmd.pid || cmd.dirfd < 0)
 		return -EINVAL;
-
 	rcu_read_lock();
 	task = get_pid_task(find_vpid(cmd.pid), PIDTYPE_PID);
 	rcu_read_unlock();
 	if (!task)
 		return -ESRCH;
-
 	cred = get_task_cred(task);
-	if (!is_zygote(cred)) {
-		pr_info("yukizygisk: module load policy rejected pid=%u "
-			"outside zygote domain\n",
-			cmd.pid);
-		put_cred(cred);
-		put_task_struct(task);
-		return -EPERM;
+	payload = fdget(cmd.dirfd);
+	file = fd_file(payload);
+	if (!file) {
+		ret = -EBADF;
+		goto out_cred;
 	}
-	put_task_struct(task);
-
-	dir = fdget(cmd.dirfd);
-	if (!fd_file(dir)) {
-		put_cred(cred);
-		return -EBADF;
+	directory = S_ISDIR(file_inode(file)->i_mode);
+	source_image = S_ISREG(file_inode(file)->i_mode) &&
+		       file_inode(file)->i_sb->s_magic == TMPFS_MAGIC &&
+		       (file->f_mode & FMODE_READ) &&
+		       !(file->f_mode & FMODE_WRITE);
+	if (!directory && !source_image) {
+		ret = -EINVAL;
+		goto out_fd;
 	}
-	if (!S_ISDIR(file_inode(fd_file(dir))->i_mode)) {
-		fdput(dir);
-		put_cred(cred);
-		return -ENOTDIR;
+	if (!is_zygote(cred) &&
+	    !(source_image &&
+	      ksu_yukizygisk_is_native_runtime(
+		  task->tgid, READ_ONCE(task->start_boottime)))) {
+		ret = -EPERM;
+		goto out_fd;
 	}
-
-	ret = ksu_yukizygisk_allow_module_load_policy((pid_t)cmd.pid,
-						      fd_file(dir), cred);
-	fdput(dir);
+	ret = ksu_yukizygisk_allow_module_load_policy(task->tgid, file, cred);
+out_fd:
+	fdput(payload);
+out_cred:
 	put_cred(cred);
+	put_task_struct(task);
 	pr_info("yukizygisk: module load policy request pid=%u fd=%d err=%d\n",
 		cmd.pid, cmd.dirfd, ret);
 	return ret;

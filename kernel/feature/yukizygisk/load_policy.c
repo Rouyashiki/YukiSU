@@ -322,9 +322,11 @@ int ksu_yukizygisk_allow_module_load_policy(pid_t tgid, struct file *dir,
 	ret = ksu_file_load_policy_allow_cred(dir, cred, &state);
 	if (ret)
 		goto out_unlock;
-	ret = ksu_file_load_policy_allow_execmem_cred(cred, &state);
-	if (ret)
-		goto out_restore;
+	if (S_ISDIR(file_inode(dir)->i_mode)) {
+		ret = ksu_file_load_policy_allow_execmem_cred(cred, &state);
+		if (ret)
+			goto out_restore;
+	}
 
 	group = yz_find_module_policy_group(&state);
 	if (!group && !yz_native_policy_has_additions(&state))
