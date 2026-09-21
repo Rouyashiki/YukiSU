@@ -796,13 +796,13 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
     record.name = m.name;
     record.signature = m.signature;
     g_jni_hooks.push_back(std::move(record));
-    if (owner == -1)
-      g_zygote_uses_fallback = true;
     if (env->RegisterNatives(clazz, &m, 1) != JNI_OK || env->ExceptionCheck()) {
       env->ExceptionClear();
       ZLOGE("RegisterNatives fallback failed for %s", m.name);
       m.fnPtr = nullptr;
     } else {
+      if (owner == -1)
+        g_zygote_uses_fallback = true;
       m.fnPtr = orig;
       ZLOGI("RegisterNatives fallback installed for %s", m.name);
     }

@@ -11,6 +11,7 @@
 #include <linux/spinlock.h>
 #include <linux/task_work.h>
 #include <linux/uaccess.h>
+#include <asm/cacheflush.h>
 
 #include "hook/lsm_hook.h"
 #include "tango.h"
@@ -416,6 +417,7 @@ static void yz_tango_inject(struct callback_head *cb)
 			      FOLL_FORCE | FOLL_WRITE);
 	if (n != sizeof(bytes))
 		goto restore;
+	flush_icache_range(stub, stub + sizeof(bytes));
 	redirect = stub | 1;
 	n = access_process_vm(current, got, &redirect, sizeof(redirect),
 			      FOLL_FORCE | FOLL_WRITE);

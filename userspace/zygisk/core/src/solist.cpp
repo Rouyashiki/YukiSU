@@ -642,6 +642,11 @@ int release_lib_containing(uintptr_t addr) {
       u_set_size(cur, 0);
       *ctor = false;
       g_soinfo_unload(cur);
+      if (g_load_counter != nullptr && g_unload_counter != nullptr &&
+          *g_load_counter > 0 && *g_unload_counter > 0) {
+        --(*g_load_counter);
+        --(*g_unload_counter);
+      }
       released = !u_contains(cur);
       if (!released) {
         // Other linker indexes may still reference this object.
