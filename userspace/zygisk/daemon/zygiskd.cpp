@@ -388,6 +388,11 @@ bool send_hyos_response(int session, uint8_t value) {
 bool send_module_image(int client, int fd) {
   if (fd < 0)
     return send_fd(client, -1);
+  yz_runtime_query_cmd runtime{};
+  if (ksud::ksuctl(KSU_IOCTL_YZ_GET_RUNTIME, &runtime) != 0) {
+    DLOGE("module image: kernel capabilities unavailable");
+    return send_fd(client, -1);
+  }
   struct ucred peer{};
   socklen_t length = sizeof(peer);
   if (getsockopt(client, SOL_SOCKET, SO_PEERCRED, &peer, &length) != 0 ||
@@ -398,13 +403,15 @@ bool send_module_image(int client, int fd) {
   yz_module_load_policy_cmd cmd{};
   cmd.pid = static_cast<uint32_t>(peer.pid);
   cmd.dirfd = fd;
+  // Older kernels lack image authorization; unadvertised backports may have it.
   const int ret = ksud::ksuctl(KSU_IOCTL_YZ_ALLOW_MODULE_LOAD_POLICY, &cmd);
-  if (ret != 0) {
+  if (ret != 0 &&
+      (runtime.capabilities & YZ_RUNTIME_CAP_MODULE_IMAGE_POLICY) != 0) {
     DLOGE("module image policy: pid=%d fd=%d ret=%d", peer.pid, fd, ret);
     return send_fd(client, -1);
   }
   const bool sent = send_fd(client, fd);
-  if (!sent) {
+  if (!sent && ret == 0) {
     yz_native_load_policy_cmd restore{};
     restore.pid = cmd.pid;
     (void)ksud::ksuctl(KSU_IOCTL_YZ_RESTORE_NATIVE_LOAD_POLICY, &restore);
