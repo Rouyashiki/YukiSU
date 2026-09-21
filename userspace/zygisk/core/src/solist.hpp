@@ -17,6 +17,9 @@ int drop_module_from_solist(const char *path_substr, bool dry_run,
 /* Drop the library containing an address. */
 int drop_lib_containing(uintptr_t addr, bool keep_mapped = false);
 
+/* Release a loaded library while preserving its mappings for deferred unmap. */
+int release_lib_containing(uintptr_t addr);
+
 /* Anonymize matching VMAs. */
 int spoof_virtual_maps(const char *path_substr, bool private_only);
 

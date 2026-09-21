@@ -24,6 +24,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -1035,6 +1036,67 @@ uint32_t g_tango_stub_size = 0;
 } // namespace
 
 #if defined(__arm__)
+struct TangoCoreImage {
+  uintptr_t anchor = 0;
+  uintptr_t base = 0;
+  size_t size = 0;
+};
+
+static int find_tango_core_image(dl_phdr_info *info, size_t, void *data) {
+  if (info == nullptr || info->dlpi_phdr == nullptr)
+    return 0;
+  auto &image = *static_cast<TangoCoreImage *>(data);
+  uintptr_t low = UINTPTR_MAX;
+  uintptr_t high = 0;
+  bool contains_entry = false;
+  for (size_t i = 0; i < info->dlpi_phnum; ++i) {
+    const auto &ph = info->dlpi_phdr[i];
+    if (ph.p_type == PT_TLS && ph.p_memsz != 0)
+      return 0;
+    if (ph.p_type != PT_LOAD || ph.p_memsz == 0)
+      continue;
+    if (ph.p_vaddr > UINTPTR_MAX - info->dlpi_addr)
+      return 0;
+    const uintptr_t start = info->dlpi_addr + ph.p_vaddr;
+    if (ph.p_memsz > UINTPTR_MAX - start)
+      return 0;
+    const uintptr_t end = start + ph.p_memsz;
+    low = std::min(start, low);
+    high = std::max(end, high);
+    if ((ph.p_flags & PF_X) != 0 && image.anchor >= start && image.anchor < end)
+      contains_entry = true;
+  }
+  const auto page_size = static_cast<uintptr_t>(getpagesize());
+  if (!contains_entry || page_size == 0 || (page_size & (page_size - 1)) != 0 ||
+      high > UINTPTR_MAX - (page_size - 1))
+    return 0;
+  image.base = low & ~(page_size - 1);
+  image.size = ((high + page_size - 1) & ~(page_size - 1)) - image.base;
+  return 1;
+}
+
+static void prepare_tango_core_unmap(uintptr_t entry) {
+  const uintptr_t anchor = entry & ~uintptr_t{1};
+  TangoCoreImage image{anchor};
+  if (dl_iterate_phdr(find_tango_core_image, &image) != 1 || image.base == 0 ||
+      image.size == 0) {
+    LOGE("Tango core bounds unavailable; retaining system linker mapping");
+    return;
+  }
+  // Remove linker ownership while keeping this executing image mapped.
+  if (yuki::solist::release_lib_containing(anchor) != 1) {
+    LOGE("Tango core linker detach failed; retaining mapping");
+    return;
+  }
+  TangoCoreImage remaining{anchor};
+  if (dl_iterate_phdr(find_tango_core_image, &remaining) != 0) {
+    LOGE("Tango core linker still owns the image; retaining mapping");
+    return;
+  }
+  g_self_base = image.base;
+  g_self_size = image.size;
+}
+
 extern "C" [[gnu::visibility("default")]] void
 zygisk_core_entry_tango(uint32_t got, uint32_t original, uint32_t stub,
                         uint32_t size) {
@@ -1047,6 +1109,9 @@ zygisk_core_entry_tango(uint32_t got, uint32_t original, uint32_t stub,
   }
   LOGI("Tango guest core start");
   core_start(nullptr);
+  if (g_tango_stub != 0)
+    prepare_tango_core_unmap(
+        reinterpret_cast<uintptr_t>(zygisk_core_entry_tango));
 }
 #endif
 
@@ -1145,7 +1210,8 @@ void zygisk_self_destruct(JNIEnv *env, bool isolated) {
   if (have_range && can_unmap) {
     yukilinker::shutdown();
     yz_finalize_self_dso();
-    yz_self_unmap_tail(reinterpret_cast<void *>(cbase), csize); // [[noreturn]]
+    LOGI("self-unmap: handing off core mapping to the original caller");
+    yz_self_unmap_tail(reinterpret_cast<void *>(cbase), csize);
   }
   LOGE("self-unmap failed: core remains mapped at %p size=%zu",
        reinterpret_cast<void *>(cbase), csize);

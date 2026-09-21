@@ -610,6 +610,56 @@ int drop_lib_containing(uintptr_t addr, bool keep_mapped) {
   return n;
 }
 
+static bool u_contains(void *needle) {
+  void *cur =
+      g_solist_head_slot != nullptr ? *g_solist_head_slot : g_solist_head;
+  for (int i = 0; i < kMaxWalk && cur != nullptr; ++i) {
+    if (cur == needle)
+      return true;
+    cur = u_next(cur);
+  }
+  return false;
+}
+
+int release_lib_containing(uintptr_t addr) {
+  if (!u_init() || addr == 0 || g_size_off < sizeof(void *))
+    return 0;
+  const size_t base_off = g_size_off - sizeof(void *);
+  bool released = false;
+  char guard_obj[16] = {};
+  g_pdg_ctor_u(guard_obj);
+  void *cur =
+      g_solist_head_slot != nullptr ? *g_solist_head_slot : g_solist_head;
+  for (int i = 0; i < kMaxWalk && cur != nullptr; ++i) {
+    const uintptr_t base = *reinterpret_cast<uintptr_t *>(
+        reinterpret_cast<uintptr_t>(cur) + base_off);
+    const size_t size = u_size(cur);
+    if (size > 0 && base != 0 && addr >= base && addr - base < size) {
+      auto *ctor = reinterpret_cast<bool *>(reinterpret_cast<uintptr_t>(cur) +
+                                            g_ctor_off);
+      const bool constructors_called = *ctor;
+      // Keep executing code mapped while releasing only our owned reference.
+      u_set_size(cur, 0);
+      *ctor = false;
+      g_soinfo_unload(cur);
+      released = !u_contains(cur);
+      if (!released) {
+        // Other linker indexes may still reference this object.
+        u_set_size(cur, size);
+        *ctor = constructors_called;
+      }
+      break;
+    }
+    cur = u_next(cur);
+  }
+  if (g_solist_head_slot != nullptr)
+    g_solist_head = *g_solist_head_slot;
+  g_pdg_dtor_u(guard_obj);
+  SLOGI("solist-unload: release retained library released=%d",
+        released ? 1 : 0);
+  return released ? 1 : 0;
+}
+
 struct CfiShadowRange {
   uintptr_t start = 0;
   uintptr_t end = 0;
