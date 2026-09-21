@@ -2199,10 +2199,13 @@ void dlclose(SoHandle *handle) {
   run_finalizers(image);
   discard_exit_callbacks(image);
   deactivate_tls(image);
+  if (image->memory.reservation != nullptr &&
+      munmap(image->memory.reservation, image->memory.span) != 0) {
+    ZLOGE("yukilinker: image unmap failed");
+    return;
+  }
   unregister_image(image);
   close_dependencies(image);
-  if (image->memory.reservation != nullptr)
-    munmap(image->memory.reservation, image->memory.span);
   image->memory.reservation = nullptr;
   handle->load_bias = nullptr;
   handle->map_size = 0;
@@ -2220,9 +2223,18 @@ bool has_active_tls() {
 #endif // #if YUKILINKER_FULL
 }
 
-void shutdown() {
+bool shutdown() {
+  registry_lock();
+  const bool images_empty = g_first_image == nullptr;
+  registry_unlock();
+  if (!images_empty) {
+    ZLOGE("yukilinker: shutdown blocked by loaded images");
+    return false;
+  }
 #if YUKILINKER_FULL
+#if defined(__aarch64__)
   disable_tls_fast_path();
+#endif // #if defined(__aarch64__)
   pthread_mutex_lock(&g_tls_mutex);
   g_tls_stopped = true;
   for (TlsTemplate *tls = g_tls_templates; tls != nullptr; tls = tls->next)
@@ -2242,6 +2254,37 @@ void shutdown() {
     __atomic_store_n(&g_thread_tls_key_valid, false, __ATOMIC_RELEASE);
   }
 #endif // #if YUKILINKER_FULL
+
+  MetadataPage *pages = nullptr;
+#if YUKILINKER_FULL
+  pthread_mutex_lock(&g_metadata_mutex);
+#endif // #if YUKILINKER_FULL
+  pages = g_metadata_pages;
+  g_metadata_pages = nullptr;
+#if YUKILINKER_FULL
+  pthread_mutex_unlock(&g_metadata_mutex);
+#endif // #if YUKILINKER_FULL
+  while (pages != nullptr) {
+    MetadataPage *next = pages->next;
+    if (munmap(pages, pages->mapped_size) != 0) {
+      g_metadata_pages = pages;
+      return false;
+    }
+    pages = next;
+  }
+  return true;
+}
+
+bool release_bootstrap_metadata(SoHandle *handle) {
+  ImageState *image = state_of(handle);
+  if (image == nullptr || image->tls.active || g_first_image != image ||
+      g_last_image != image)
+    return false;
+  // The core owns its mapping after verifying every borrowed entry point.
+  unregister_image(image);
+  close_dependencies(image);
+  handle->private_state = nullptr;
+  return shutdown();
 }
 
 extern "C" void __cxa_finalize(void *);
@@ -2443,11 +2486,18 @@ yuki_core_dlopen_memfd(int memfd, const char *vma_name) {
   entry(kCorePath, reinterpret_cast<void *>(&yuki_bootstrap),
         reinterpret_cast<void *>(core->load_bias),
         reinterpret_cast<void *>(core->map_size), early_packet_fd_plus1);
-  yukilinker::finalize_self_dso();
-
   using FinalizeLoader = void (*)(int, int);
   auto finalize = reinterpret_cast<FinalizeLoader>(
       yukilinker::dlsym(core, "zygisk_finalize_loader"));
+  using HandoffComplete = bool (*)();
+  auto handoff_complete = reinterpret_cast<HandoffComplete>(
+      yukilinker::dlsym(core, "zygisk_bootstrap_handoff_complete"));
+  if (finalize != nullptr && handoff_complete != nullptr &&
+      handoff_complete() && !yukilinker::release_bootstrap_metadata(core)) {
+    ZLOGE("bootstrap metadata cleanup failed; retaining loader");
+    return;
+  }
+  yukilinker::finalize_self_dso();
   if (finalize != nullptr) [[clang::musttail]]
     return finalize(0, 0); // NOLINT(readability-avoid-return-with-void-value)
 }

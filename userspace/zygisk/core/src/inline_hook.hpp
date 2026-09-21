@@ -102,7 +102,8 @@ inline ExecPage alloc_near(uintptr_t target) {
 }
 
 /* Patch target prologue and return call-original trampoline. */
-inline void *install(void *target, void *replacement, Hook *out, bool = false) {
+inline void *install(void *target, void *replacement, Hook *out, bool = false,
+                     bool capture_return = false) {
   auto *t = reinterpret_cast<uint32_t *>(target);
   for (int i = 0; i < 2; ++i)
     if (is_pcrel(t[i]))
@@ -122,7 +123,7 @@ inline void *install(void *target, void *replacement, Hook *out, bool = false) {
   // Capture stub.
   memcpy(base, yz_cap_tmpl, cap_size);
   *reinterpret_cast<uint64_t *>(base + ctx_off) =
-      reinterpret_cast<uint64_t>(g_yz_ret_ctx);
+      capture_return ? reinterpret_cast<uint64_t>(g_yz_ret_ctx) : 0;
   *reinterpret_cast<uint64_t *>(base + wrap_off) =
       reinterpret_cast<uint64_t>(replacement);
   // Call-original trampoline.
@@ -175,8 +176,8 @@ inline bool uninstall(Hook *h, UnhookMode mode = UnhookMode::RestoreBytes) {
   }
   __builtin___clear_cache(reinterpret_cast<char *>(h->target),
                           reinterpret_cast<char *>(h->target) + 8);
-  if (h->trampoline != nullptr)
-    munmap(h->trampoline, 0x1000);
+  if (h->trampoline != nullptr && munmap(h->trampoline, 0x1000) != 0)
+    return false;
   h->trampoline = nullptr;
   h->active = false;
   return true;
@@ -377,7 +378,8 @@ inline const uint8_t *arm32_code_bytes(uint8_t *symbol) {
 }
 
 inline void *install(void *target, void *replacement, Hook *out,
-                     bool prefer_relative = false) {
+                     bool prefer_relative = false,
+                     bool capture_return = false) {
   uintptr_t callable = reinterpret_cast<uintptr_t>(target);
   bool thumb = (callable & 1U) != 0;
   uintptr_t target_address = callable & ~uintptr_t{1};
@@ -422,7 +424,8 @@ inline void *install(void *target, void *replacement, Hook *out,
 
   auto *base = static_cast<uint8_t *>(page);
   memcpy(base, capture, capture_size);
-  uint32_t context = reinterpret_cast<uint32_t>(g_yz_ret_ctx);
+  uint32_t context =
+      capture_return ? reinterpret_cast<uint32_t>(g_yz_ret_ctx) : 0;
   uint32_t wrapper =
       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(replacement));
   memcpy(base + (capture_ctx - capture), &context, sizeof(context));
@@ -478,8 +481,8 @@ inline bool uninstall(Hook *hook, UnhookMode mode = UnhookMode::RestoreBytes) {
   __builtin___clear_cache(reinterpret_cast<char *>(hook->target),
                           reinterpret_cast<char *>(hook->target) +
                               hook->patched_size);
-  if (hook->trampoline != nullptr)
-    munmap(hook->trampoline, 0x1000);
+  if (hook->trampoline != nullptr && munmap(hook->trampoline, 0x1000) != 0)
+    return false;
   hook->trampoline = nullptr;
   hook->patched_size = 0;
   hook->active = false;
@@ -494,7 +497,9 @@ struct Hook {
   bool active = false;
 };
 
-inline void *install(void *, void *, Hook *, bool = false) { return nullptr; }
+inline void *install(void *, void *, Hook *, bool = false, bool = false) {
+  return nullptr;
+}
 inline bool uninstall(Hook *, UnhookMode = UnhookMode::RestoreBytes) {
   return false;
 }

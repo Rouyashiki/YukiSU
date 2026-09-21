@@ -2,6 +2,7 @@
 
 #include <jni.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstdlib>
@@ -10,6 +11,7 @@
 #include <dlfcn.h>
 #include <link.h>
 #include <sched.h>
+#include <string>
 #include <string_view>
 #include <sys/mman.h>
 #include <sys/sysmacros.h>
@@ -302,6 +304,7 @@ enum ZygoteMethodIndex : size_t {
 };
 
 bool g_app_specialize_hooks_complete = false;
+bool g_zygote_uses_fallback = false;
 
 std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
     {"nativeForkAndSpecialize",
@@ -354,7 +357,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                     app_data_dir, is_top_app, pkg_data_info_list,
                     allowlisted_data_info, mount_data_dirs, mount_storage_dirs);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            if (ctx.pid == 0)
              finish_app_child(env, is_child_zygote, is_isolated(uid));
            if (is_child_zygote && ctx.pid == 0)
@@ -420,7 +423,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                use_fifo_ui, pkg_data_info_list, allowlisted_data_info,
                mount_data_dirs, mount_storage_dirs, mount_sysprop_overrides);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            if (ctx.pid == 0)
              finish_app_child(env, is_child_zygote, is_isolated(uid));
            if (is_child_zygote && ctx.pid == 0)
@@ -480,7 +483,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                            allowlisted_data_info, mount_data_dirs,
                            mount_storage_dirs, mount_sysprop_overrides);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            if (ctx.pid == 0)
              finish_app_child(env, is_child_zygote, is_isolated(uid));
            if (is_child_zygote && ctx.pid == 0)
@@ -547,7 +550,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                use_fifo_ui, pkg_data_info_list, allowlisted_data_info,
                mount_data_dirs, mount_storage_dirs, mount_sysprop_overrides);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            if (ctx.pid == 0)
              finish_app_child(env, is_child_zygote, is_isolated(uid));
            if (is_child_zygote && ctx.pid == 0)
@@ -594,7 +597,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                instruction_set, app_data_dir, is_top_app, pkg_data_info_list,
                allowlisted_data_info, mount_data_dirs, mount_storage_dirs);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            finish_app_child(env, is_child_zygote, is_isolated(uid));
          })},
     {"nativeSpecializeAppProcess",
@@ -638,7 +641,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                allowlisted_data_info, mount_data_dirs, mount_storage_dirs,
                mount_sysprop_overrides);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            finish_app_child(env, is_child_zygote, is_isolated(uid));
          })},
     {"nativeSpecializeAppProcess",
@@ -683,7 +686,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                allowlisted_data_info, mount_data_dirs, mount_storage_dirs,
                mount_sysprop_overrides);
            if (run_modules)
-             zygisk_run_app_post(&args);
+             zygisk_run_app_post(env, &args);
            finish_app_child(env, is_child_zygote, is_isolated(uid));
          })},
     /* system_server fork. */
@@ -713,26 +716,27 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
        jint pid = orig(env, clazz, uid, gid, gids, runtime_flags, rlimits,
                        permitted_capabilities, effective_capabilities);
        if (ctx.pid == 0)
-         zygisk_run_server_post(&args);
+         zygisk_run_server_post(env, &args);
        g_ctx = nullptr;
        return pid;
      })},
 }};
 
-/* Hook records for restore. */
-struct InlineHookRecord {
+struct JniHookRecord {
+  int owner = -1;
+  void *method = nullptr;
   yuki::ihook::Hook hook;
-  yuki::ihook::UnhookMode unhook_mode;
+  yuki::ihook::UnhookMode mode = yuki::ihook::UnhookMode::RestoreBytes;
+  jclass clazz = nullptr;
+  std::string name;
+  std::string signature;
+  void *original = nullptr;
+  void *replacement = nullptr;
 };
-std::vector<InlineHookRecord> g_ihooks;
-struct RnFallback {
-  const char *clz;
-  JNINativeMethod m; // m.fnPtr == ORIGINAL entry, for RegisterNatives restore
-};
-std::vector<RnFallback> g_rn_fallback;
+std::vector<JniHookRecord> g_jni_hooks;
 
 void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
-                      int count, yuki::ihook::UnhookMode unhook_mode) {
+                      int count, yuki::ihook::UnhookMode mode, int owner) {
   jclass clazz = env->FindClass(clz);
   if (clazz == nullptr) {
     env->ExceptionClear();
@@ -740,12 +744,10 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
     return;
   }
 
-  std::vector<JNINativeMethod> to_register; // PC-relative prologue fallback
   for (int i = 0; i < count; ++i) {
     JNINativeMethod &m = methods[i];
     if (m.fnPtr == nullptr)
       continue;
-
     bool is_static = true;
     jmethodID mid = env->GetStaticMethodID(clazz, m.name, m.signature);
     if (mid == nullptr) {
@@ -755,40 +757,105 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
     }
     if (mid == nullptr) {
       env->ExceptionClear();
-      m.fnPtr = nullptr; // not present on this version
+      m.fnPtr = nullptr;
       continue;
     }
-
     jobject reflected = env->ToReflectedMethod(clazz, mid, is_static);
-    void *art = yuki::art::art_method_of(env, reflected);
+    void *art = reflected ? yuki::art::art_method_of(env, reflected) : nullptr;
+    if (reflected != nullptr)
+      env->DeleteLocalRef(reflected);
     void *orig = art ? yuki::art::native_entry(art) : nullptr;
-    env->DeleteLocalRef(reflected);
     if (orig == nullptr) {
+      env->ExceptionClear();
       ZLOGE("no original entry for %s", m.name);
       m.fnPtr = nullptr;
       continue;
     }
 
-    // Patch native body; keep ART entries untouched.
-    yuki::ihook::Hook h;
-    void *tramp = yuki::ihook::install(orig, m.fnPtr, &h);
+    JniHookRecord record;
+    record.owner = owner;
+    record.method = art;
+    record.mode = mode;
+    record.original = orig;
+    record.replacement = m.fnPtr;
+    void *tramp =
+        yuki::ihook::install(orig, m.fnPtr, &record.hook, false, owner == -1);
     if (tramp != nullptr) {
-      g_ihooks.push_back({h, unhook_mode});
-      m.fnPtr = tramp; // wrapper calls the original via the trampoline
+      g_jni_hooks.push_back(std::move(record));
+      m.fnPtr = tramp;
       ZLOGI("inline-hooked %s @orig=%p tramp=%p", m.name, orig, tramp);
+      continue;
+    }
+
+    record.clazz = reinterpret_cast<jclass>(env->NewGlobalRef(clazz));
+    if (record.clazz == nullptr) {
+      env->ExceptionClear();
+      m.fnPtr = nullptr;
+      continue;
+    }
+    record.name = m.name;
+    record.signature = m.signature;
+    g_jni_hooks.push_back(std::move(record));
+    if (owner == -1)
+      g_zygote_uses_fallback = true;
+    if (env->RegisterNatives(clazz, &m, 1) != JNI_OK || env->ExceptionCheck()) {
+      env->ExceptionClear();
+      ZLOGE("RegisterNatives fallback failed for %s", m.name);
+      m.fnPtr = nullptr;
     } else {
-      // Rare fallback for unrelocatable prologues.
-      JNINativeMethod restore{m.name, m.signature, orig};
-      g_rn_fallback.push_back({clz, restore});
-      to_register.push_back(m); // install our wrapper via the native table
-      m.fnPtr = orig;           // wrapper calls back through this
-      ZLOGE("inline hook bailed for %s; RegisterNatives fallback", m.name);
+      m.fnPtr = orig;
+      ZLOGI("RegisterNatives fallback installed for %s", m.name);
     }
   }
+  env->DeleteLocalRef(clazz);
+}
 
-  if (!to_register.empty())
-    env->RegisterNatives(clazz, to_register.data(),
-                         static_cast<jint>(to_register.size()));
+bool restore_jni_hooks(JNIEnv *env, int owner) {
+  bool restored = true;
+  for (size_t i = g_jni_hooks.size(); i > 0; --i) {
+    auto &record = g_jni_hooks[i - 1];
+    if (record.owner != owner)
+      continue;
+    const bool chained =
+        std::any_of(g_jni_hooks.begin() + static_cast<ptrdiff_t>(i),
+                    g_jni_hooks.end(), [&](const JniHookRecord &later) {
+                      return later.method == record.method ||
+                             later.original == record.original;
+                    });
+    if (chained) {
+      ZLOGE("JNI restore blocked by a later hook: module=%d", owner);
+      restored = false;
+      continue;
+    }
+    bool ok;
+    if (record.clazz == nullptr) {
+      ok = yuki::ihook::uninstall(&record.hook, record.mode);
+    } else {
+      void *current = yuki::art::native_entry(record.method);
+      ok = env != nullptr &&
+           (current == record.replacement || current == record.original);
+      if (ok && current != record.original) {
+        JNINativeMethod method{const_cast<char *>(record.name.c_str()),
+                               const_cast<char *>(record.signature.c_str()),
+                               record.original};
+        ok = env->RegisterNatives(record.clazz, &method, 1) == JNI_OK;
+        if (env->ExceptionCheck()) {
+          env->ExceptionClear();
+          ok = false;
+        }
+        ok = ok && yuki::art::native_entry(record.method) == record.original;
+      }
+      if (ok)
+        env->DeleteGlobalRef(record.clazz);
+    }
+    if (!ok) {
+      ZLOGE("JNI hook restore failed: module=%d", owner);
+      restored = false;
+      continue;
+    }
+    g_jni_hooks.erase(g_jni_hooks.begin() + static_cast<ptrdiff_t>(i - 1));
+  }
+  return restored;
 }
 
 /* Drop the spent AT_ENTRY stub. */
@@ -850,7 +917,7 @@ void hook_zygote_jni() {
   ZLOGI("fork hook armed (orig=%p)", reinterpret_cast<void *>(g_orig_fork));
   hook_jni_methods(env, kZygote, g_zygote_methods.data(),
                    static_cast<int>(g_zygote_methods.size()),
-                   yuki::ihook::UnhookMode::DiscardCowPages);
+                   yuki::ihook::UnhookMode::DiscardCowPages, -1);
   const bool fork_hooked = g_zygote_methods[kForkLegacy].fnPtr != nullptr ||
                            g_zygote_methods[kForkSysprop].fnPtr != nullptr ||
                            g_zygote_methods[kForkFifo].fnPtr != nullptr ||
@@ -910,8 +977,9 @@ bool zygisk_hook_bootstrap(const char *self_path) {
 }
 
 void zygisk_hook_jni_methods(JNIEnv *env, const char *cls,
-                             JNINativeMethod *methods, int n) {
-  hook_jni_methods(env, cls, methods, n, yuki::ihook::UnhookMode::RestoreBytes);
+                             JNINativeMethod *methods, int n, int owner) {
+  hook_jni_methods(env, cls, methods, n, yuki::ihook::UnhookMode::RestoreBytes,
+                   owner);
 }
 
 bool zygisk_plt_hook_register(dev_t dev, ino_t inode, const char *symbol,
@@ -929,27 +997,17 @@ bool zygisk_exempt_fd(int fd) {
 }
 
 bool zygisk_specialize_fully_inline_hooked() {
-  return g_app_specialize_hooks_complete && !g_ihooks.empty() &&
-         g_rn_fallback.empty();
+  return g_app_specialize_hooks_complete && !g_zygote_uses_fallback;
+}
+
+bool zygisk_restore_module_hooks(JNIEnv *env, int owner) {
+  return owner >= 0 && restore_jni_hooks(env, owner);
 }
 
 /* Restore hooks before self-unmap. */
 bool zygisk_self_unhook(JNIEnv *env) {
-  bool unhooked = true;
-  for (auto &h : g_ihooks)
-    if (!yuki::ihook::uninstall(&h.hook, h.unhook_mode))
-      unhooked = false;
-  if (unhooked)
-    g_ihooks.clear();
-  if (env != nullptr)
-    for (auto &fb : g_rn_fallback) {
-      jclass c = env->FindClass(fb.clz);
-      if (c != nullptr)
-        env->RegisterNatives(c, &fb.m, 1); // fb.m.fnPtr == original entry
-      else
-        env->ExceptionClear();
-    }
-  g_rn_fallback.clear();
+  const bool lifecycle_restored = restore_jni_hooks(env, -1);
+  bool unhooked = lifecycle_restored && g_jni_hooks.empty();
   dev_t dev = 0;
   ino_t inode = 0;
   if (find_libandroid_runtime(dev, inode)) {
@@ -979,5 +1037,15 @@ bool zygisk_self_unhook(JNIEnv *env) {
   int nc = close_inherited_module_fds();
   if (nc != 0)
     ZLOGI("self-destruct: closed %d leaked module fd", nc);
+  if (unhooked && !lsplt::ReleaseInactiveCache())
+    unhooked = false;
+  if (unhooked) {
+    std::vector<JniHookRecord>().swap(g_jni_hooks);
+    if (g_ctx != nullptr) {
+      std::vector<bool>().swap(g_ctx->allowed_fds);
+      std::vector<int>().swap(g_ctx->exempted_fds);
+      g_ctx = nullptr;
+    }
+  }
   return unhooked;
 }

@@ -58,6 +58,7 @@ struct Module {
   void *handle = nullptr;
   uintptr_t linker_anchor = 0;
   bool yuki_loaded = false;
+  bool has_plt_hooks = false;
   uint32_t option = 0; // zygisk::Option bits set via setOption
   CoreApiTable api{};  // per-module, filled by RegisterModuleImpl
 };
@@ -79,12 +80,15 @@ bool g_module_policy_armed = false;
 
 void api_hook_jni_native_methods(JNIEnv *env, const char *cls,
                                  JNINativeMethod *methods, int n) {
-  zygisk_hook_jni_methods(env, cls, methods, n);
+  if (g_cur != nullptr)
+    zygisk_hook_jni_methods(env, cls, methods, n, g_cur->id);
 }
 
 void api_plt_hook_register(dev_t dev, ino_t inode, const char *symbol,
                            void *new_func, void **old_func) {
-  zygisk_plt_hook_register(dev, inode, symbol, new_func, old_func);
+  if (zygisk_plt_hook_register(dev, inode, symbol, new_func, old_func) &&
+      g_cur != nullptr)
+    g_cur->has_plt_hooks = true;
 }
 
 /* v1/v2 path-regex PLT hook. */
@@ -99,7 +103,7 @@ void api_plt_hook_register_byname(const char *path_regex, const char *symbol,
     if (map.offset != 0 || !(map.perms & PROT_READ) || map.inode == 0)
       continue;
     if (regexec(&re, map.path.c_str(), 0, nullptr, 0) == 0)
-      zygisk_plt_hook_register(map.dev, map.inode, symbol, new_func, old_func);
+      api_plt_hook_register(map.dev, map.inode, symbol, new_func, old_func);
   }
   regfree(&re);
 }
@@ -577,15 +581,27 @@ void *app_args_for(const Module &m, zygisk::AppSpecializeArgs *v5,
   return m.version <= 2 ? static_cast<void *>(v1) : static_cast<void *>(v5);
 }
 
-void unload_requested_modules() {
-  for (auto &m : g_modules) {
+void unload_requested_modules(JNIEnv *env) {
+  for (auto it = g_modules.rbegin(); it != g_modules.rend(); ++it) {
+    auto &m = *it;
     if (m.handle == nullptr ||
         !(m.option & (1u << zygisk::DLCLOSE_MODULE_LIBRARY)))
       continue;
-    if (m.yuki_loaded)
-      g_yuki_dlclose(m.handle); // yukilinker-loaded: munmap its segments
-    else
-      dlclose(m.handle); // android_dlopen_ext path
+    if (m.has_plt_hooks || !zygisk_restore_module_hooks(env, m.id)) {
+      LOGE("module %d unload blocked by active hooks", m.id);
+      continue;
+    }
+    if (m.yuki_loaded) {
+      g_yuki_dlclose(m.handle);
+      if (static_cast<yukilinker::SoHandle *>(m.handle)->private_state !=
+          nullptr) {
+        LOGE("module %d mapping release failed", m.id);
+        continue;
+      }
+    } else if (dlclose(m.handle) != 0) {
+      LOGE("module %d dlclose failed", m.id);
+      continue;
+    }
     m.handle = nullptr;
     m.abi = nullptr;
     LOGI("module %d DLCLOSE'd after post-specialize", m.id);
@@ -619,7 +635,7 @@ void hide_injection() {
   }
 }
 
-void run_app_post_impl(const zygisk::AppSpecializeArgs *args) {
+void run_app_post_impl(JNIEnv *env, const zygisk::AppSpecializeArgs *args) {
   auto *mut = const_cast<zygisk::AppSpecializeArgs *>(args);
   AppSpecializeArgs_v1 v1args(mut);
   for (auto &m : g_modules)
@@ -630,7 +646,7 @@ void run_app_post_impl(const zygisk::AppSpecializeArgs *args) {
                            app_args_for(m, mut, &v1args)));
     }
   g_cur = nullptr;
-  unload_requested_modules();
+  unload_requested_modules(env);
   hide_injection();
   yz_drop_runtime_header_pages();
 }
@@ -652,7 +668,8 @@ void run_server_pre_impl(zygisk::ServerSpecializeArgs *args) {
   zd_restore_module_load_policy();
 }
 
-void run_server_post_impl(const zygisk::ServerSpecializeArgs *args) {
+void run_server_post_impl(JNIEnv *env,
+                          const zygisk::ServerSpecializeArgs *args) {
   LOGI("run_server_post: %zu module(s)", g_modules.size());
   for (auto &m : g_modules)
     if (m.abi != nullptr && m.abi->postServerSpecialize != nullptr) {
@@ -661,7 +678,7 @@ void run_server_post_impl(const zygisk::ServerSpecializeArgs *args) {
       m.abi->postServerSpecialize(m.abi->impl, args);
     }
   g_cur = nullptr;
-  unload_requested_modules();
+  unload_requested_modules(env);
   hide_injection();
 }
 
@@ -1025,6 +1042,11 @@ zygisk_core_entry(const char *self_path, void *loader_self, void *core_base,
     LOGI("loader handoff is complete; first-stage mapping may be unmapped");
 }
 
+extern "C" [[gnu::visibility("default")]] bool
+zygisk_bootstrap_handoff_complete() {
+  return g_loader_unmap_safe;
+}
+
 extern "C" [[gnu::visibility("default")]] void
 zygisk_core_entry_direct(int /*core_fd*/) {
   core_start(nullptr);
@@ -1208,9 +1230,16 @@ void zygisk_self_destruct(JNIEnv *env, bool isolated) {
     can_unmap = false;
   }
   if (have_range && can_unmap) {
-    yukilinker::shutdown();
+    if (!yukilinker::shutdown()) {
+      LOGE("self-unmap blocked: loader cleanup incomplete");
+      return;
+    }
+    std::vector<Module>().swap(g_modules);
+    g_cur = nullptr;
+    g_loading = nullptr;
     yz_finalize_self_dso();
-    LOGI("self-unmap: handing off core mapping to the original caller");
+    LOGI("self-unmap handoff: base=%p size=%zu",
+         reinterpret_cast<void *>(cbase), csize);
     yz_self_unmap_tail(reinterpret_cast<void *>(cbase), csize);
   }
   LOGE("self-unmap failed: core remains mapped at %p size=%zu",
@@ -1232,12 +1261,13 @@ void zygisk_load_modules(JNIEnv *env) { load_modules_impl(env); }
 void zygisk_run_app_pre(zygisk::AppSpecializeArgs *args) {
   run_app_pre_impl(args);
 }
-void zygisk_run_app_post(const zygisk::AppSpecializeArgs *args) {
-  run_app_post_impl(args);
+void zygisk_run_app_post(JNIEnv *env, const zygisk::AppSpecializeArgs *args) {
+  run_app_post_impl(env, args);
 }
 void zygisk_run_server_pre(zygisk::ServerSpecializeArgs *args) {
   run_server_pre_impl(args);
 }
-void zygisk_run_server_post(const zygisk::ServerSpecializeArgs *args) {
-  run_server_post_impl(args);
+void zygisk_run_server_post(JNIEnv *env,
+                            const zygisk::ServerSpecializeArgs *args) {
+  run_server_post_impl(env, args);
 }
