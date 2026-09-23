@@ -205,7 +205,7 @@ long ksu_adb_root_handle_execve(struct pt_regs *regs)
 {
 	if (static_branch_unlikely(&ksu_adb_root)) {
 		return do_ksu_adb_root_handle_execve(
-		    (const char __user *)PT_REGS_PARM1(regs), regs,
+		    (const char __user *)PT_REGS_SYSCALL_PARM1(regs), regs,
 		    (unsigned long *)&PT_REGS_PARM3(regs));
 	}
 	return 0;

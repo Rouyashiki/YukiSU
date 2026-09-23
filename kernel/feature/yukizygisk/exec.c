@@ -196,7 +196,7 @@ ksu_yukizygisk_observe_exec(const char __user *filename_user,
 void ksu_yukizygisk_observe_execve(const struct pt_regs *regs)
 {
 	ksu_yukizygisk_observe_exec(
-	    (const char __user *)PT_REGS_PARM1(regs),
+	    (const char __user *)PT_REGS_SYSCALL_PARM1(regs),
 	    (const char __user *const __user *)PT_REGS_PARM2(regs));
 }
 

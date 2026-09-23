@@ -204,7 +204,7 @@ static int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 static int reboot_handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
 	struct pt_regs *real_regs = PT_REAL_REGS(regs);
-	int magic1 = (int)PT_REGS_PARM1(real_regs);
+	int magic1 = (int)PT_REGS_SYSCALL_PARM1(real_regs);
 	int magic2 = (int)PT_REGS_PARM2(real_regs);
 	int cmd = (int)PT_REGS_PARM3(real_regs);
 	void __user **arg = (void __user **)&PT_REGS_SYSCALL_PARM4(real_regs);
@@ -402,7 +402,7 @@ static int ksu_handle_prctl_superkey(int option, unsigned long arg2)
  */
 static long __nocfi ksu_hook_prctl(int orig_nr, const struct pt_regs *regs)
 {
-	int option = (int)PT_REGS_PARM1(regs);
+	int option = (int)PT_REGS_SYSCALL_PARM1(regs);
 	unsigned long arg2 = PT_REGS_PARM2(regs);
 
 	ksu_handle_prctl_superkey(option, arg2);

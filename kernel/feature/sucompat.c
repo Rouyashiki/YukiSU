@@ -285,7 +285,7 @@ static int resolve_exec_path(const char __user *filename_user, bool execveat,
 	if (!filename_user || !path)
 		return -EFAULT;
 	if (execveat) {
-		dfd = (int)PT_REGS_PARM1(regs);
+		dfd = (int)PT_REGS_SYSCALL_PARM1(regs);
 		flags = (int)PT_REGS_PARM5(regs);
 		if (flags & ~(AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW))
 			return -EINVAL;
@@ -465,7 +465,7 @@ ksu_handle_execve_sucompat_common(const char __user **filename_user,
 			goto do_orig_execve;
 		if (!READ_ONCE(ksu_su_compat_enabled))
 			goto do_orig_execve;
-		if (execveat && ((int)PT_REGS_PARM1(regs) != AT_FDCWD ||
+		if (execveat && ((int)PT_REGS_SYSCALL_PARM1(regs) != AT_FDCWD ||
 				 (int)PT_REGS_PARM5(regs) != 0))
 			goto do_orig_execve;
 		if (!is_su_path(*filename_user))
@@ -511,7 +511,7 @@ ksu_handle_execve_sucompat_common(const char __user **filename_user,
 	pending_sucompat =
 	    ksu_sulog_capture_sucompat(*filename_user, argv_user, GFP_KERNEL);
 	exec_regs = *regs;
-	PT_REGS_PARM1(&exec_regs) = tmp_fd;
+	PT_REGS_SYSCALL_PARM1(&exec_regs) = tmp_fd;
 	PT_REGS_PARM2(&exec_regs) = (unsigned long)empty_path;
 	PT_REGS_PARM3(&exec_regs) = (unsigned long)argv_user;
 	PT_REGS_SYSCALL_PARM4(&exec_regs) = envp;

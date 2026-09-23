@@ -271,7 +271,7 @@ ksu_execve_hook_ksud_common(const char __user *filename_user,
 void ksu_execve_hook_ksud(const struct pt_regs *regs)
 {
 	ksu_execve_hook_ksud_common(
-	    (const char __user *)PT_REGS_PARM1(regs),
+	    (const char __user *)PT_REGS_SYSCALL_PARM1(regs),
 	    (const char __user *const __user *)PT_REGS_PARM2(regs));
 }
 
@@ -591,7 +591,7 @@ static syscall_fn_t orig_sys_fstat;
 
 static long __nocfi ksu_sys_read_impl(const struct pt_regs *regs)
 {
-	unsigned int fd = PT_REGS_PARM1(regs);
+	unsigned int fd = PT_REGS_SYSCALL_PARM1(regs);
 
 	ksu_handle_sys_read(fd);
 	return orig_sys_read(regs);
@@ -608,7 +608,7 @@ static long __nocfi ksu_sys_read(const struct pt_regs *regs)
 
 static long __nocfi ksu_sys_fstat_impl(const struct pt_regs *regs)
 {
-	unsigned int fd = PT_REGS_PARM1(regs);
+	unsigned int fd = PT_REGS_SYSCALL_PARM1(regs);
 	long ret;
 
 	ret = orig_sys_fstat(regs);
