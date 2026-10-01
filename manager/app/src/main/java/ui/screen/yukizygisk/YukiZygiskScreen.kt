@@ -112,7 +112,7 @@ data class YzConfig(
     val earlyLoad: Boolean = false,
     val denylistMode: Int = 0,
     val dmesgLog: Boolean = false,
-    val crashProtection: Boolean = false,
+    val crashProtection: Boolean = true,
 )
 
 private suspend fun readYzConfig(): YzConfig = withContext(Dispatchers.IO) {
@@ -128,7 +128,7 @@ private suspend fun readYzConfig(): YzConfig = withContext(Dispatchers.IO) {
             earlyLoad = o.optBoolean("early_load", false),
             denylistMode = o.optInt("denylist_mode", 0),
             dmesgLog = o.optBoolean("dmesg_log", false),
-            crashProtection = o.optBoolean("crash_protection", false),
+            crashProtection = o.optBoolean("crash_protection", true),
         )
     } catch (_: Exception) {
         YzConfig()
@@ -767,20 +767,20 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
                     onChange = { save(config.copy(yukilinker = it)) },
                 )
                 SwitchSettingItem(
-                    icon = Icons.Filled.Bolt,
-                    title = stringResource(R.string.yukizygisk_early_load_title),
-                    summary = stringResource(R.string.yukizygisk_early_load_summary),
-                    checked = config.earlyLoad,
-                    groupPosition = MoreSettingsItemPosition.Middle,
-                    onChange = { save(config.copy(earlyLoad = it)) },
-                )
-                SwitchSettingItem(
                     icon = Icons.Outlined.Warning,
                     title = stringResource(R.string.yukizygisk_crash_protection_title),
                     summary = stringResource(R.string.yukizygisk_crash_protection_summary),
                     checked = config.crashProtection,
-                    groupPosition = MoreSettingsItemPosition.Last,
+                    groupPosition = MoreSettingsItemPosition.Middle,
                     onChange = { save(config.copy(crashProtection = it)) },
+                )
+                SwitchSettingItem(
+                    icon = Icons.Filled.Bolt,
+                    title = stringResource(R.string.yukizygisk_early_load_title),
+                    summary = stringResource(R.string.yukizygisk_early_load_summary),
+                    checked = config.earlyLoad,
+                    groupPosition = MoreSettingsItemPosition.Last,
+                    onChange = { save(config.copy(earlyLoad = it)) },
                 )
                 DenylistModeSelector(
                     mode = config.denylistMode,

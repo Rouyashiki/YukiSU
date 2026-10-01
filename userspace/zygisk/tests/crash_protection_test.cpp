@@ -170,8 +170,10 @@ static void configuration(const fs::path &base) {
   const auto path = (base / "yzconfig.json").string();
   json::Value config;
   assert(yukizygisk::settings::read(path, &config));
-  assert(!config.at("crash_protection").as_bool());
+  assert(config.at("crash_protection").as_bool());
+  assert(yukizygisk::settings::protection_enabled(path));
   put(path, "{\"custom\":\"preserved\",\"early_load\":true}");
+  assert(yukizygisk::settings::protection_enabled(path));
   assert(yukizygisk::settings::update(path, {"crash_protection", "true"}));
   assert(yukizygisk::settings::read(path, &config));
   assert(config.at("custom").string_or("") == "preserved");
@@ -189,6 +191,7 @@ static void configuration(const fs::path &base) {
     assert(get(path) == before);
   }
   assert(yukizygisk::settings::update(path, {"crash_protection", "false"}));
+  assert(!yukizygisk::settings::protection_enabled(path));
   pid_t children[2]{};
   for (int i = 0; i < 2; ++i) {
     children[i] = fork();

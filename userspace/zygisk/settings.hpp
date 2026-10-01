@@ -14,7 +14,7 @@ inline json::Value defaults() {
   root["early_load"] = false;
   root["denylist_mode"] = 0;
   root["dmesg_log"] = false;
-  root["crash_protection"] = false;
+  root["crash_protection"] = true;
   return root;
 }
 

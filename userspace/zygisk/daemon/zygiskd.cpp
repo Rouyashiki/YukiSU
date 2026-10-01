@@ -4,6 +4,7 @@
 #include "native_modules.hpp"
 #include "uapi/yukizygisk.h"
 #include "userspace/zygisk/load_policy.hpp"
+#include "userspace/zygisk/settings.hpp"
 
 #include "core/json.hpp"
 #include "core/restorecon.hpp"
@@ -1011,7 +1012,6 @@ yz_config g_yz_config = yukizygisk::config::defaults;
 
 void read_yzconfig() {
   yz_config cfg = yukizygisk::config::defaults;
-  bool crash_protection = false;
   int fd = open(ksud::YUKIZYGISK_CONFIG_PATH, O_RDONLY | O_CLOEXEC);
   if (fd >= 0) {
     std::string buf;
@@ -1032,12 +1032,11 @@ void read_yzconfig() {
             static_cast<__u8>(root.at("denylist_mode").as_number());
       if (root.contains("dmesg_log"))
         cfg.dmesg_log = root.at("dmesg_log").as_bool() ? 1 : 0;
-      crash_protection = root.at("crash_protection").type == json::Type::Bool &&
-                         root.at("crash_protection").as_bool();
     }
   }
   g_yz_config = cfg;
-  g_crash_monitor.set_protection_enabled(crash_protection);
+  g_crash_monitor.set_protection_enabled(
+      yukizygisk::settings::protection_enabled(ksud::YUKIZYGISK_CONFIG_PATH));
   zygiskd::logging::set_kernel_mirror(cfg.dmesg_log != 0);
   yz_yukilinker_cmd yc{};
   yc.enabled = cfg.yukilinker;
