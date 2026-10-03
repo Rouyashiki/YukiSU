@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <map>
 #include <string>
 #include <vector>
@@ -35,10 +36,23 @@ int handle_updated_modules();
 int regenerate_preinit_rc();
 
 // Script execution
-int run_script(const std::string& script, bool block, const std::string& module_id = "",
+struct ScriptWait {
+    enum class Mode { NoWait, Forever, Until };
+
+    Mode mode;
+    std::chrono::steady_clock::time_point deadline{};
+
+    static ScriptWait no_wait() { return {Mode::NoWait}; }
+    static ScriptWait forever() { return {Mode::Forever}; }
+    static ScriptWait until(std::chrono::steady_clock::time_point deadline) {
+        return {Mode::Until, deadline};
+    }
+};
+
+int run_script(const std::string& script, ScriptWait wait, const std::string& module_id = "",
                const char* extra_env_name = nullptr, const char* extra_env_value = nullptr);
-int exec_stage_script(const std::string& stage, bool block);
-int exec_common_scripts(const std::string& stage_dir, bool block);
+int exec_stage_script(const std::string& stage, ScriptWait wait);
+int exec_common_scripts(const std::string& stage_dir, ScriptWait wait);
 int load_sepolicy_rule();
 int load_system_prop();
 

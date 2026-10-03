@@ -192,7 +192,7 @@ void catch_bootlog(const char* logname, const std::vector<const char*>& command)
     LOGI("Started %s capture (pid %d)", logname, pid);
 }
 
-void run_stage(const std::string& stage, bool block) {
+void run_stage(const std::string& stage, ScriptWait wait) {
     umask(0);
 
     // Check for Magisk (like Rust version)
@@ -207,16 +207,16 @@ void run_stage(const std::string& stage, bool block) {
     }
 
     // Execute common scripts first
-    exec_common_scripts(stage + ".d", block);
+    exec_common_scripts(stage + ".d", wait);
 
     // Execute metamodule stage script (priority)
-    metamodule_exec_stage_script(stage, block);
+    metamodule_exec_stage_script(stage, wait);
 
     // Execute regular modules stage scripts
-    exec_stage_script(stage, block);
+    exec_stage_script(stage, wait);
 
     // Execute plugin stage callbacks
-    exec_plugin_stage(stage, block);
+    exec_plugin_stage(stage, wait.mode != ScriptWait::Mode::NoWait);
 }
 
 bool yukizygisk_feature_enabled() {
@@ -290,11 +290,12 @@ int on_post_data_fs() {
         return 0;
     }
 
+    const auto wait = ScriptWait::until(std::chrono::steady_clock::now() + BOOT_STAGE_TIMEOUT);
     if (safe_mode) {
         LOGW("safe mode, skip common post-fs-data.d scripts");
     } else {
         // Execute common post-fs-data scripts
-        exec_common_scripts("post-fs-data.d", true);
+        exec_common_scripts("post-fs-data.d", wait);
     }
 
     // Ensure directories exist
@@ -367,8 +368,8 @@ int on_post_data_fs() {
     // 5. Metamodule's metamount.sh  <-- MUST run AFTER all post-fs-data
     // 6. post-mount.d
 
-    metamodule_exec_stage_script("post-fs-data", true);
-    exec_stage_script("post-fs-data", true);
+    metamodule_exec_stage_script("post-fs-data", wait);
+    exec_stage_script("post-fs-data", wait);
     exec_plugin_stage("post-fs-data", true);
     load_system_prop();
 
@@ -377,7 +378,7 @@ int on_post_data_fs() {
 
     umount_apply_config();
 
-    run_stage("post-mount", true);
+    run_stage("post-mount", wait);
     if (refresh_sucompat_vfs() != 0) {
         LOGW("refresh vnode-backed su after final mounts failed");
     }
@@ -400,7 +401,7 @@ void on_services() {
     // Service stage is the correct timing - after boot_completed is set
     hide_bootloader_status();
 
-    run_stage("service", false);
+    run_stage("service", ScriptWait::no_wait());
 
     LOGI("services completed");
 }
@@ -420,7 +421,7 @@ void on_boot_completed() {
     ensure_msud_running_if_enabled();
 
     // Run boot-completed stage
-    run_stage("boot-completed", false);
+    run_stage("boot-completed", ScriptWait::no_wait());
 
     LOGI("boot-completed completed");
 }
@@ -459,7 +460,8 @@ int soft_reboot() {
     if (!reset_boot_completed())
         LOGW("Failed to reset sys.boot_completed");
 
-    run_stage("emulated-soft-reboot", true);
+    run_stage("emulated-soft-reboot",
+              ScriptWait::until(std::chrono::steady_clock::now() + EMULATED_SOFT_REBOOT_TIMEOUT));
 
     {
         SoftRebootWaiter waiter;

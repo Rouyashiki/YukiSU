@@ -106,7 +106,7 @@ bool extract_and_load_kernelsu(bool allow_shell) {
     return loaded;
 }
 
-void run_stage_scripts(const std::string& stage, bool block) {
+void run_stage_scripts(const std::string& stage, ScriptWait wait) {
     if (has_magisk()) {
         LOGW("Magisk detected, skip %s", stage.c_str());
         return;
@@ -117,9 +117,9 @@ void run_stage_scripts(const std::string& stage, bool block) {
         return;
     }
 
-    exec_common_scripts(stage + ".d", block);
-    metamodule_exec_stage_script(stage, block);
-    exec_stage_script(stage, block);
+    exec_common_scripts(stage + ".d", wait);
+    metamodule_exec_stage_script(stage, wait);
+    exec_stage_script(stage, wait);
 }
 
 void restart_manager() {
@@ -228,7 +228,8 @@ int run(bool post_magica, bool allow_shell) {
         update_yukizygisk_boot_diagnostics(safe_mode, yz_supported, yz_enabled,
                                            "late-load-restored");
 
-        run_stage_scripts("late-load", true);
+        const auto wait = ScriptWait::until(std::chrono::steady_clock::now() + BOOT_STAGE_TIMEOUT);
+        run_stage_scripts("late-load", wait);
 
         if (load_system_prop() != 0) {
             LOGW("late-load: load_system_prop failed");
@@ -242,7 +243,7 @@ int run(bool post_magica, bool allow_shell) {
             LOGW("late-load: umount_apply_config failed");
         }
 
-        run_stage_scripts("post-mount", true);
+        run_stage_scripts("post-mount", wait);
         if (refresh_sucompat_vfs() != 0) {
             LOGW("late-load: refresh vnode-backed su after final mounts failed");
         }

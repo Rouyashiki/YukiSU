@@ -20,6 +20,7 @@
 #include <cctype>
 #include <cerrno>
 #include <climits>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -932,7 +933,7 @@ int module_run_action(const std::string& id) {
     }
 
     // Run action script with module_id for KSU_MODULE env var
-    return run_script(action_script, true, id);
+    return run_script(action_script, ScriptWait::forever(), id);
 }
 
 namespace {
@@ -1191,7 +1192,8 @@ int prune_modules() {
 
             const std::string uninstall_script = module_path + "/uninstall.sh";
             if (file_exists(uninstall_script)) {
-                const int uninstall_rc = run_script(uninstall_script, true, module_id);
+                const int uninstall_rc =
+                    run_script(uninstall_script, ScriptWait::forever(), module_id);
                 if (uninstall_rc != 0) {
                     LOGW("uninstall.sh failed for %s with code %d", module_id.c_str(),
                          uninstall_rc);
@@ -1284,7 +1286,70 @@ int handle_updated_modules() {
     return 0;
 }
 
-int run_script(const std::string& script, bool block, const std::string& module_id,
+namespace {
+
+class SigchldBlock {
+public:
+    SigchldBlock() = default;
+    SigchldBlock(const SigchldBlock&) = delete;
+    SigchldBlock& operator=(const SigchldBlock&) = delete;
+    SigchldBlock(SigchldBlock&&) = delete;
+    SigchldBlock& operator=(SigchldBlock&&) = delete;
+
+    ~SigchldBlock() {
+        if (blocked_ && !restore())
+            LOGW("Failed to restore signal mask: %s", strerror(errno));
+    }
+
+    bool block() {
+        sigemptyset(&set_);
+        sigaddset(&set_, SIGCHLD);
+        blocked_ = sigprocmask(SIG_BLOCK, &set_, &previous_) == 0;
+        return blocked_;
+    }
+
+    [[nodiscard]] bool restore() const {
+        return sigprocmask(SIG_SETMASK, &previous_, nullptr) == 0;
+    }
+
+    int wait_until(pid_t pid, std::chrono::steady_clock::time_point deadline, int& status) const {
+        for (;;) {
+            const pid_t result = waitpid(pid, &status, WNOHANG);
+            if (result == pid)
+                return 1;
+            if (result < 0) {
+                if (errno == EINTR)
+                    continue;
+                return -1;
+            }
+
+            const auto remaining = deadline - std::chrono::steady_clock::now();
+            if (remaining <= std::chrono::steady_clock::duration::zero())
+                return 0;
+            const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(remaining);
+            const auto nanoseconds =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(remaining - seconds);
+            const timespec timeout{static_cast<time_t>(seconds.count()),
+                                   static_cast<long>(nanoseconds.count())};
+            // Keep SIGCHLD blocked between waitpid and sigtimedwait to avoid lost wakeups.
+            if (sigtimedwait(&set_, nullptr, &timeout) < 0) {
+                if (errno == EAGAIN)
+                    return 0;
+                if (errno != EINTR)
+                    return -1;
+            }
+        }
+    }
+
+private:
+    sigset_t set_{};
+    sigset_t previous_{};
+    bool blocked_{};
+};
+
+}  // namespace
+
+int run_script(const std::string& script, ScriptWait wait, const std::string& module_id,
                const char* extra_env_name, const char* extra_env_value) {
     if (!file_exists(script))
         return 0;
@@ -1315,6 +1380,12 @@ int run_script(const std::string& script, bool block, const std::string& module_
     const char* extra_env_name_cstr = extra_env_name;
     const char* extra_env_value_cstr = extra_env_value;
 
+    SigchldBlock sigchld;
+    if (!sigchld.block()) {
+        LOGE("Failed to block SIGCHLD for script %s: %s", script.c_str(), strerror(errno));
+        return -1;
+    }
+
     // Rust's Command::spawn waits for pre_exec and exec through an internal
     // CLOEXEC error pipe. Mirror that behavior: the parent must not return to
     // init until the child has detached, switched cgroups, and entered exec.
@@ -1327,8 +1398,16 @@ int run_script(const std::string& script, bool block, const std::string& module_
 
     const pid_t pid = fork();
     if (pid == 0) {
-        // Child process
         close(exec_status_pipe[0]);
+
+        if (!sigchld.restore()) {
+            const int child_errno = errno;
+            ssize_t ignored;
+            do {
+                ignored = write(exec_status_pipe[1], &child_errno, sizeof(child_errno));
+            } while (ignored < 0 && errno == EINTR);
+            _exit(127);
+        }
 
         // Match upstream's Command::pre_exec setup.
         detach_process_group(true);
@@ -1388,7 +1467,23 @@ int run_script(const std::string& script, bool block, const std::string& module_
         return -1;
     }
 
-    if (block) {
+    if (wait.mode == ScriptWait::Mode::Until) {
+        if (wait.deadline <= std::chrono::steady_clock::now())
+            return 0;
+        int status = 0;
+        const int result = sigchld.wait_until(pid, wait.deadline, status);
+        if (result < 0) {
+            LOGE("Failed to wait for script %s: %s", script.c_str(), strerror(errno));
+            return -1;
+        }
+        if (result == 0) {
+            LOGW("Timed out waiting for script: %s", script.c_str());
+            return 0;
+        }
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+
+    if (wait.mode == ScriptWait::Mode::Forever) {
         int status;
         pid_t waited;
         do {
@@ -1404,7 +1499,7 @@ int run_script(const std::string& script, bool block, const std::string& module_
     return 0;
 }
 
-int exec_stage_script(const std::string& stage, bool block) {
+int exec_stage_script(const std::string& stage, ScriptWait wait) {
     DIR* dir = opendir(MODULE_DIR);
     if (!dir)
         return 0;
@@ -1438,14 +1533,14 @@ int exec_stage_script(const std::string& stage, bool block) {
         script += "/";
         script += stage;
         script += ".sh";
-        run_script(script, block, module_id);
+        run_script(script, wait, module_id);
     }
 
     closedir(dir);
     return 0;
 }
 
-int exec_common_scripts(const std::string& stage_dir, bool block) {
+int exec_common_scripts(const std::string& stage_dir, ScriptWait wait) {
     const std::string dir_path = std::string(ADB_DIR) + stage_dir + "/";
     DIR* dir = opendir(dir_path.c_str());
     if (!dir)
@@ -1459,7 +1554,7 @@ int exec_common_scripts(const std::string& stage_dir, bool block) {
         if (access(script.c_str(), X_OK) != 0)
             continue;
 
-        run_script(script, block);
+        run_script(script, wait);
     }
 
     closedir(dir);

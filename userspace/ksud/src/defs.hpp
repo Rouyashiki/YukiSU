@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -11,6 +12,9 @@ extern "C" {
 #include "uapi/supercall.h"  // EVENT_*, KSU_MARK_*, KSU_UMOUNT_* are macros
 
 namespace ksud {
+
+constexpr auto BOOT_STAGE_TIMEOUT = std::chrono::seconds(35);
+constexpr auto EMULATED_SOFT_REBOOT_TIMEOUT = std::chrono::seconds(5);
 
 // Version info
 constexpr const char* KSUD_VERSION = "1.0.0";
