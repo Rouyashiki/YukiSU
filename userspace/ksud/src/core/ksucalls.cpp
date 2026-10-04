@@ -337,6 +337,11 @@ void report_post_fs_data() {
     report_event(EVENT_POST_FS_DATA);
 }
 
+int report_services() {
+    ReportEventCmd cmd = {EVENT_SERVICES};
+    return ksuctl(KSU_IOCTL_REPORT_EVENT, &cmd);
+}
+
 void report_boot_complete() {
     report_event(EVENT_BOOT_COMPLETED);
 }

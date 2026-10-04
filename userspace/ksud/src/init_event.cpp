@@ -390,15 +390,24 @@ int on_post_data_fs() {
 }
 
 void on_services() {
-    LOGI("services triggered");
-
     if (!ensure_uapi_version_matched()) {
         LOGE("Skip services due to UAPI version mismatch");
         return;
     }
 
+    const int start = report_services();
+    if (start < 0) {
+        LOGE("Failed to report services: %s", strerror(errno));
+        return;
+    }
+    if (start != 1) {
+        LOGI("services already started, skipping");
+        return;
+    }
+
+    LOGI("services triggered");
+
     // Hide bootloader unlock status (soft BL hiding)
-    // Service stage is the correct timing - after boot_completed is set
     hide_bootloader_status();
 
     run_stage("service", ScriptWait::no_wait());

@@ -3,6 +3,7 @@
 #include "kasumi_entrypoints.h"
 #include <asm/unistd.h>
 #include <linux/anon_inodes.h>
+#include <linux/atomic.h>
 #include <linux/capability.h>
 #include <linux/cred.h>
 #include <linux/err.h>
@@ -127,6 +128,7 @@ static int do_get_load_mode(void __user *arg)
 
 static int do_report_event(void __user *arg)
 {
+	static atomic_t services_started = ATOMIC_INIT(0);
 	struct ksu_report_event_cmd cmd;
 
 	if (copy_from_user(&cmd, arg, sizeof(cmd))) {
@@ -136,6 +138,9 @@ static int do_report_event(void __user *arg)
 	switch (cmd.event) {
 	case EVENT_POST_FS_DATA: {
 		static bool post_fs_data_lock = false;
+
+		// Reset for emulated soft reboot.
+		atomic_set(&services_started, 0);
 		if (!post_fs_data_lock) {
 			post_fs_data_lock = true;
 			if (ksu_late_loaded) {
@@ -165,6 +170,14 @@ static int do_report_event(void __user *arg)
 		pr_info("module mounted!\n");
 		on_module_mounted();
 		break;
+	}
+	case EVENT_SERVICES: {
+		if (atomic_cmpxchg(&services_started, 0, 1)) {
+			pr_info("services already started, skipping\n");
+			return 0;
+		}
+		pr_info("services triggered\n");
+		return 1;
 	}
 	default:
 		break;

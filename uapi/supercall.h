@@ -60,6 +60,7 @@ struct ksu_become_daemon_cmd {
 #define EVENT_POST_FS_DATA 1
 #define EVENT_BOOT_COMPLETED 2
 #define EVENT_MODULE_MOUNTED 3
+#define EVENT_SERVICES 4
 
 /*
  * UAPI contract version. Queried via the dedicated KSU_IOCTL_GET_UAPI_VERSION
@@ -70,7 +71,8 @@ struct ksu_become_daemon_cmd {
 // 3: scoped su-session driver fd
 // The su prompt request/verdict ioctls are additive and feature-gated.
 // 4: bundled LKM provenance and UAPI-based version matching.
-#define KERNEL_SU_UAPI_VERSION 4
+// 5: service stage start/skip result.
+#define KERNEL_SU_UAPI_VERSION 5
 
 #define KSU_GET_INFO_FLAG_LKM (1U << 0)
 #define KSU_GET_INFO_FLAG_MANAGER (1U << 1)

@@ -71,6 +71,8 @@ bool ensure_uapi_version_matched(std::string* error = nullptr);
 int grant_root();
 int set_ksu_no_new_privs();
 void report_post_fs_data();
+// Returns 1 to start, 0 to skip, or -1 on error.
+int report_services();
 void report_boot_complete();
 void report_module_mounted();
 bool check_kernel_safemode();
