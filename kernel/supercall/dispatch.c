@@ -1250,6 +1250,11 @@ static int do_yz_get_exit_history_fd(void __user *arg)
 	return ksu_yukizygisk_get_exit_history_fd(arg);
 }
 
+static int do_yz_get_health(void __user *arg)
+{
+	return ksu_yukizygisk_get_health(arg);
+}
+
 static int do_yz_report_runtime(void __user *arg)
 {
 	struct yz_runtime_report_cmd cmd;
@@ -1693,6 +1698,10 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
     {.cmd = KSU_IOCTL_YZ_GET_EXIT_HISTORY_FD,
      .name = "YZ_GET_EXIT_HISTORY_FD",
      .handler = do_yz_get_exit_history_fd,
+     .perm_check = only_root},
+    {.cmd = KSU_IOCTL_YZ_GET_HEALTH,
+     .name = "YZ_GET_HEALTH",
+     .handler = do_yz_get_health,
      .perm_check = only_root},
     {.cmd = KSU_IOCTL_YZ_REPORT_RUNTIME,
      .name = "YZ_REPORT_RUNTIME",

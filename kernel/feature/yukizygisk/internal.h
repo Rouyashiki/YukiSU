@@ -86,7 +86,15 @@ void yz_exit_history_append(const struct yz_runtime_record *record,
 			    u64 start_boottime, u64 observed_boottime,
 			    u32 status);
 void yz_lifecycle_on_exit(struct task_struct *task);
-void yz_load_policy_reap(void);
+enum yz_policy_reap_reason {
+	YZ_POLICY_REAP_MISSING_OWNER,
+	YZ_POLICY_REAP_OVERFLOW,
+	YZ_POLICY_REAP_ENABLE,
+};
+void yz_load_policy_reap(enum yz_policy_reap_reason reason);
+void yz_load_policy_fill_health(struct yz_health_policy *policy,
+				struct yz_health_cleanup *cleanup);
+void yz_load_policy_note_exit_work(void);
 bool yz_load_policy_on_exit(struct task_struct *task);
 void yz_load_policy_drain_exits(void);
 void yz_load_policy_enable(void);

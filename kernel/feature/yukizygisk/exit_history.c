@@ -9,6 +9,7 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/timekeeping.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
 
@@ -36,6 +37,33 @@ static u64 yz_history_coverage;
 static u32 yz_history_count;
 static bool yz_history_active;
 static bool yz_history_closed = true;
+
+int ksu_yukizygisk_get_health(void __user *arg)
+{
+	struct yz_health_query_cmd cmd = {};
+	unsigned long flags;
+
+	if (copy_from_user(
+		&cmd, arg,
+		offsetof(struct yz_health_query_cmd, sample_begin_boottime)))
+		return -EFAULT;
+	if (cmd.version != YZ_HEALTH_VERSION || cmd.size != sizeof(cmd) ||
+	    cmd.flags || cmd.reserved)
+		return -EINVAL;
+	cmd.sample_begin_boottime = ktime_get_boottime_ns();
+	spin_lock_irqsave(&yz_history_lock, flags);
+	cmd.history.epoch = yz_history_epoch;
+	cmd.history.oldest_sequence =
+	    yz_history_count ? yz_history_sequence - yz_history_count + 1 : 0;
+	cmd.history.newest_sequence = yz_history_sequence;
+	cmd.history.coverage_generation = yz_history_coverage;
+	cmd.history.count = yz_history_count;
+	cmd.history.observer_active = yz_history_active;
+	spin_unlock_irqrestore(&yz_history_lock, flags);
+	yz_load_policy_fill_health(&cmd.policy, &cmd.cleanup);
+	cmd.sample_end_boottime = ktime_get_boottime_ns();
+	return copy_to_user(arg, &cmd, sizeof(cmd)) ? -EFAULT : 0;
+}
 
 void yz_exit_history_wake_readers(void)
 {

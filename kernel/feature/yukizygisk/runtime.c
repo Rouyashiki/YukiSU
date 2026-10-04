@@ -414,7 +414,8 @@ int ksu_yukizygisk_get_runtime(struct yz_runtime_record *entries, u32 capacity,
 	spin_unlock_irqrestore(&yz_runtime_lock, irqflags);
 
 	yz_safemode_fill_runtime_query(query);
-	query->capabilities |= YZ_RUNTIME_CAP_EXIT_HISTORY;
+	query->capabilities |=
+	    YZ_RUNTIME_CAP_EXIT_HISTORY | YZ_RUNTIME_CAP_HEALTH;
 	return 0;
 }
 

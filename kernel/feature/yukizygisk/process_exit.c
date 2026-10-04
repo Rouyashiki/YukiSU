@@ -17,6 +17,7 @@ static void yz_exit_work_fn(struct work_struct *work)
 	struct yz_target_exit_event event;
 
 	(void)work;
+	yz_load_policy_note_exit_work();
 	yz_exit_history_wake_readers();
 	yz_load_policy_drain_exits();
 	while (yz_runtime_take_exit(&event)) {
@@ -105,7 +106,7 @@ int yz_process_exit_enable(void)
 					(void *)yz_exit_on_exit, NULL);
 	if (!ret) {
 		yz_runtime_reconcile();
-		yz_load_policy_reap();
+		yz_load_policy_reap(YZ_POLICY_REAP_ENABLE);
 		spin_lock_irqsave(&yz_exit_lock, flags);
 		yz_exit_enabled = true;
 		schedule_work(&yz_exit_work);
