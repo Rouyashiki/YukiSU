@@ -36,6 +36,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  ANDROID_NDK_VERSION: "30.0.16248370"
 
 jobs:
   generate-key:
@@ -154,7 +155,20 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools
+          packages: |
+            platform-tools
+            ndk;30.0.16248370
+
+      - name: Select pinned NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          ndk_root="$sdk_root/ndk/$ANDROID_NDK_VERSION"
+          test -x "$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          echo "ANDROID_NDK_HOME=$ndk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ndk_root" >> "$GITHUB_ENV"
 
       - name: Build with Gradle
         if: ${{ steps.determine.outputs.SKIP != 'true' }}
