@@ -579,10 +579,10 @@
     <string name="settings_yukizygisk_toast_on">Включено. Вступит в силу после перезагрузки</string>
     <string name="settings_yukizygisk_toast_off">Выключено. Вступит в силу после перезагрузки</string>
     <string name="settings_yukizygisk_toast_failed">Не удалось переключить</string>
-    <string name="su_compact_off">Закрыть</string>
-    <string name="su_compact_traditional">Традиционный</string>
-    <string name="su_compact_ksm">Kasumi (экспериментально)</string>
-    <string name="su_compact_magisk_summary">Диалог предоставления прав</string>
+    <string name="su_compat_off">Закрыть</string>
+    <string name="su_compat_traditional">Традиционный</string>
+    <string name="su_compat_ksm">Kasumi (экспериментально)</string>
+    <string name="su_compat_magisk_summary">Диалог предоставления прав</string>
     <string name="settings_uts_view">Представление UTS</string>
     <string name="settings_uts_view_summary">Управление идентичностью ядра на раннем этапе загрузки, глобально во время работы и в области denylist.</string>
     <string name="uts_view_title">Представление UTS</string>

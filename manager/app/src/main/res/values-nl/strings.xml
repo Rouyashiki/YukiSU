@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Ingeschakeld. Wordt actief na opnieuw opstarten.</string>
     <string name="settings_yukizygisk_toast_off">Uitgeschakeld. Wordt actief na opnieuw opstarten.</string>
     <string name="settings_yukizygisk_toast_failed">Omschakelen mislukt</string>
-    <string name="su_compact_off">Sluiten</string>
-    <string name="su_compact_traditional">Traditioneel</string>
-    <string name="su_compact_ksm">Kasumi (experimenteel)</string>
-    <string name="su_compact_magisk_summary">Toestemmingsvenster</string>
+    <string name="su_compat_off">Sluiten</string>
+    <string name="su_compat_traditional">Traditioneel</string>
+    <string name="su_compat_ksm">Kasumi (experimenteel)</string>
+    <string name="su_compat_magisk_summary">Toestemmingsvenster</string>
     <string name="settings_uts_view">UTS-weergave</string>
     <string name="settings_uts_view_summary">Kernelidentiteiten beheren tijdens vroeg opstarten, globaal tijdens uitvoering en binnen het bereik van de weigerlijst.</string>
     <string name="uts_view_title">UTS-weergave</string>

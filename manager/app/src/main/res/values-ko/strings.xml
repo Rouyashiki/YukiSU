@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">업데이트</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">닫기</string>
+    <string name="su_compat_off">닫기</string>
     <string name="uts_view_value_yes">예</string>
     <string name="uts_view_value_no">아니요</string>
     <string name="uts_view_refresh">새로고침</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">활성화했습니다. 재부팅 후 적용됩니다</string>
     <string name="settings_yukizygisk_toast_off">비활성화했습니다. 재부팅 후 적용됩니다</string>
     <string name="settings_yukizygisk_toast_failed">전환 실패</string>
-    <string name="su_compact_traditional">기존 방식</string>
-    <string name="su_compact_ksm">Kasumi(실험적 기능)</string>
-    <string name="su_compact_magisk_summary">권한 승인 팝업</string>
+    <string name="su_compat_traditional">기존 방식</string>
+    <string name="su_compat_ksm">Kasumi(실험적 기능)</string>
+    <string name="su_compat_magisk_summary">권한 승인 팝업</string>
     <string name="settings_uts_view">UTS 보기</string>
     <string name="settings_uts_view_summary">초기 부팅, 런타임 전역 및 denylist 범위의 커널 식별 정보를 관리합니다.</string>
     <string name="uts_view_title">UTS 보기</string>

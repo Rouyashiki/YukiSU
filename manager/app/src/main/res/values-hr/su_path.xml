@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Prilagođena su putanja</string>
-    <string name="su_compact_path_help">Primjenjuje se samo u Kasumi načinu. Nadređena mapa mora postojati; postojeće datoteke neće biti prepisane.</string>
-    <string name="su_compact_path_invalid">Unesite valjanu apsolutnu putanju.</string>
-    <string name="su_compact_path_reset">Vrati zadanu putanju</string>
-    <string name="su_compact_path_error_exists">Ova putanja već postoji. Odaberite drugu putanju.</string>
-    <string name="su_compact_path_error_parent">Nadređena mapa ne postoji ili nije mapa.</string>
-    <string name="su_compact_path_error_permission">Nemate dovoljno dopuštenja za primjenu ove putanje.</string>
-    <string name="su_compact_path_error_persistence">Konfiguraciju nije moguće spremiti. Provjerite prostor za pohranu i dopuštenja pa pokušajte ponovno.</string>
+    <string name="su_compat_path_title">Prilagođena su putanja</string>
+    <string name="su_compat_path_help">Primjenjuje se samo u Kasumi načinu. Nadređena mapa mora postojati; postojeće datoteke neće biti prepisane.</string>
+    <string name="su_compat_path_invalid">Unesite valjanu apsolutnu putanju.</string>
+    <string name="su_compat_path_reset">Vrati zadanu putanju</string>
+    <string name="su_compat_path_error_exists">Ova putanja već postoji. Odaberite drugu putanju.</string>
+    <string name="su_compat_path_error_parent">Nadređena mapa ne postoji ili nije mapa.</string>
+    <string name="su_compat_path_error_permission">Nemate dovoljno dopuštenja za primjenu ove putanje.</string>
+    <string name="su_compat_path_error_persistence">Konfiguraciju nije moguće spremiti. Provjerite prostor za pohranu i dopuštenja pa pokušajte ponovno.</string>
 </resources>

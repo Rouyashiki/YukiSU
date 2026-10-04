@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Özel su yolu</string>
-    <string name="su_compact_path_help">Yalnızca Kasumi modunda geçerlidir. Üst dizin mevcut olmalıdır; mevcut dosyaların üzerine yazılmaz.</string>
-    <string name="su_compact_path_invalid">Geçerli bir mutlak yol girin.</string>
-    <string name="su_compact_path_reset">Varsayılan yolu geri yükle</string>
-    <string name="su_compact_path_error_exists">Bu yol zaten mevcut. Başka bir yol seçin.</string>
-    <string name="su_compact_path_error_parent">Üst dizin mevcut değil veya bir dizin değil.</string>
-    <string name="su_compact_path_error_permission">Bu yolu uygulamak için yeterli izin yok.</string>
-    <string name="su_compact_path_error_persistence">Yapılandırma kaydedilemedi. Depolama alanını ve izinleri kontrol edip tekrar deneyin.</string>
+    <string name="su_compat_path_title">Özel su yolu</string>
+    <string name="su_compat_path_help">Yalnızca Kasumi modunda geçerlidir. Üst dizin mevcut olmalıdır; mevcut dosyaların üzerine yazılmaz.</string>
+    <string name="su_compat_path_invalid">Geçerli bir mutlak yol girin.</string>
+    <string name="su_compat_path_reset">Varsayılan yolu geri yükle</string>
+    <string name="su_compat_path_error_exists">Bu yol zaten mevcut. Başka bir yol seçin.</string>
+    <string name="su_compat_path_error_parent">Üst dizin mevcut değil veya bir dizin değil.</string>
+    <string name="su_compat_path_error_permission">Bu yolu uygulamak için yeterli izin yok.</string>
+    <string name="su_compat_path_error_persistence">Yapılandırma kaydedilemedi. Depolama alanını ve izinleri kontrol edip tekrar deneyin.</string>
 </resources>

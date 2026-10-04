@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">ಅಪ್‌ಡೇಟ್</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">ಮುಚ್ಚಿ</string>
+    <string name="su_compat_off">ಮುಚ್ಚಿ</string>
     <string name="uts_view_value_yes">ಹೌದು</string>
     <string name="uts_view_value_no">ಇಲ್ಲ</string>
     <string name="uts_view_refresh">ರಿಫ್ರೆಶ್</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">ಸಕ್ರಿಯಗೊಳಿಸಲಾಗಿದೆ, ಮರುಪ್ರಾರಂಭದ ನಂತರ ಜಾರಿಗೆ ಬರುತ್ತದೆ</string>
     <string name="settings_yukizygisk_toast_off">ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಲಾಗಿದೆ, ಮರುಪ್ರಾರಂಭದ ನಂತರ ಜಾರಿಗೆ ಬರುತ್ತದೆ</string>
     <string name="settings_yukizygisk_toast_failed">ಬದಲಾಯಿಸಲು ವಿಫಲವಾಗಿದೆ</string>
-    <string name="su_compact_traditional">ಸಾಂಪ್ರದಾಯಿಕ</string>
-    <string name="su_compact_ksm">Kasumi (ಪ್ರಾಯೋಗಿಕ)</string>
-    <string name="su_compact_magisk_summary">ಅನುಮತಿ ನೀಡುವ ಸಂವಾದ</string>
+    <string name="su_compat_traditional">ಸಾಂಪ್ರದಾಯಿಕ</string>
+    <string name="su_compat_ksm">Kasumi (ಪ್ರಾಯೋಗಿಕ)</string>
+    <string name="su_compat_magisk_summary">ಅನುಮತಿ ನೀಡುವ ಸಂವಾದ</string>
     <string name="settings_uts_view">UTS ನೋಟ</string>
     <string name="settings_uts_view_summary">ಆರಂಭಿಕ ಬೂಟ್, ರನ್‌ಟೈಮ್ ಜಾಗತಿಕ ಹಾಗೂ denylist ವ್ಯಾಪ್ತಿಯ ಕರ್ನಲ್ ಗುರುತನ್ನು ನಿರ್ವಹಿಸಿ.</string>
     <string name="uts_view_title">UTS ನೋಟ</string>

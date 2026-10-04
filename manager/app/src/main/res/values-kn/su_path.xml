@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">ಕಸ್ಟಮ್ su ಪಥ</string>
-    <string name="su_compact_path_help">Kasumi ಮೋಡ್‌ನಲ್ಲಿ ಮಾತ್ರ ಅನ್ವಯಿಸುತ್ತದೆ. ಮೂಲ ಡೈರೆಕ್ಟರಿ ಅಸ್ತಿತ್ವದಲ್ಲಿರಬೇಕು; ಅಸ್ತಿತ್ವದಲ್ಲಿರುವ ಫೈಲ್‌ಗಳನ್ನು ತಿದ್ದಿಬರೆಯಲಾಗುವುದಿಲ್ಲ.</string>
-    <string name="su_compact_path_invalid">ಮಾನ್ಯವಾದ ಸಂಪೂರ್ಣ ಪಥವನ್ನು ನಮೂದಿಸಿ.</string>
-    <string name="su_compact_path_reset">ಡೀಫಾಲ್ಟ್ ಪಥವನ್ನು ಮರುಸ್ಥಾಪಿಸಿ</string>
-    <string name="su_compact_path_error_exists">ಈ ಪಥವು ಈಗಾಗಲೇ ಅಸ್ತಿತ್ವದಲ್ಲಿದೆ. ಬೇರೆ ಪಥವನ್ನು ಆರಿಸಿ.</string>
-    <string name="su_compact_path_error_parent">ಮೂಲ ಡೈರೆಕ್ಟರಿ ಅಸ್ತಿತ್ವದಲ್ಲಿಲ್ಲ ಅಥವಾ ಅದು ಡೈರೆಕ್ಟರಿಯಲ್ಲ.</string>
-    <string name="su_compact_path_error_permission">ಈ ಪಥವನ್ನು ಅನ್ವಯಿಸಲು ಸಾಕಷ್ಟು ಅನುಮತಿ ಇಲ್ಲ.</string>
-    <string name="su_compact_path_error_persistence">ಸಂರಚನೆಯನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಸಂಗ್ರಹಣೆಯ ಸ್ಥಳ ಮತ್ತು ಅನುಮತಿಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.</string>
+    <string name="su_compat_path_title">ಕಸ್ಟಮ್ su ಪಥ</string>
+    <string name="su_compat_path_help">Kasumi ಮೋಡ್‌ನಲ್ಲಿ ಮಾತ್ರ ಅನ್ವಯಿಸುತ್ತದೆ. ಮೂಲ ಡೈರೆಕ್ಟರಿ ಅಸ್ತಿತ್ವದಲ್ಲಿರಬೇಕು; ಅಸ್ತಿತ್ವದಲ್ಲಿರುವ ಫೈಲ್‌ಗಳನ್ನು ತಿದ್ದಿಬರೆಯಲಾಗುವುದಿಲ್ಲ.</string>
+    <string name="su_compat_path_invalid">ಮಾನ್ಯವಾದ ಸಂಪೂರ್ಣ ಪಥವನ್ನು ನಮೂದಿಸಿ.</string>
+    <string name="su_compat_path_reset">ಡೀಫಾಲ್ಟ್ ಪಥವನ್ನು ಮರುಸ್ಥಾಪಿಸಿ</string>
+    <string name="su_compat_path_error_exists">ಈ ಪಥವು ಈಗಾಗಲೇ ಅಸ್ತಿತ್ವದಲ್ಲಿದೆ. ಬೇರೆ ಪಥವನ್ನು ಆರಿಸಿ.</string>
+    <string name="su_compat_path_error_parent">ಮೂಲ ಡೈರೆಕ್ಟರಿ ಅಸ್ತಿತ್ವದಲ್ಲಿಲ್ಲ ಅಥವಾ ಅದು ಡೈರೆಕ್ಟರಿಯಲ್ಲ.</string>
+    <string name="su_compat_path_error_permission">ಈ ಪಥವನ್ನು ಅನ್ವಯಿಸಲು ಸಾಕಷ್ಟು ಅನುಮತಿ ಇಲ್ಲ.</string>
+    <string name="su_compat_path_error_persistence">ಸಂರಚನೆಯನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಸಂಗ್ರಹಣೆಯ ಸ್ಥಳ ಮತ್ತು ಅನುಮತಿಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.</string>
 </resources>

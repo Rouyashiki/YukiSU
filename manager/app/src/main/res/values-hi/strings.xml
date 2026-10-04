@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">अपडेट</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">बंद करें</string>
+    <string name="su_compat_off">बंद करें</string>
     <string name="uts_view_value_yes">हां</string>
     <string name="uts_view_value_no">नहीं</string>
     <string name="uts_view_refresh">रिफ्रेश</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">चालू किया गया। रीस्टार्ट के बाद लागू होगा।</string>
     <string name="settings_yukizygisk_toast_off">बंद किया गया। रीस्टार्ट के बाद लागू होगा।</string>
     <string name="settings_yukizygisk_toast_failed">बदलना विफल रहा</string>
-    <string name="su_compact_traditional">पारंपरिक</string>
-    <string name="su_compact_ksm">Kasumi (प्रयोगात्मक)</string>
-    <string name="su_compact_magisk_summary">अनुमति पॉपअप</string>
+    <string name="su_compat_traditional">पारंपरिक</string>
+    <string name="su_compat_ksm">Kasumi (प्रयोगात्मक)</string>
+    <string name="su_compat_magisk_summary">अनुमति पॉपअप</string>
     <string name="settings_uts_view">UTS दृश्य</string>
     <string name="settings_uts_view_summary">शुरुआती बूट, रनटाइम वैश्विक और निषेध सूची के दायरे में कर्नेल पहचान प्रबंधित करें।</string>
     <string name="uts_view_title">UTS दृश्य</string>

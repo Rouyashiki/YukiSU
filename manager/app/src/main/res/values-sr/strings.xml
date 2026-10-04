@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Укључено. Примењује се након поновног покретања</string>
     <string name="settings_yukizygisk_toast_off">Искључено. Примењује се након поновног покретања</string>
     <string name="settings_yukizygisk_toast_failed">Пребацивање није успело</string>
-    <string name="su_compact_off">Затвори</string>
-    <string name="su_compact_traditional">Традиционално</string>
-    <string name="su_compact_ksm">Kasumi (експериментално)</string>
-    <string name="su_compact_magisk_summary">Дијалог за доделу привилегије</string>
+    <string name="su_compat_off">Затвори</string>
+    <string name="su_compat_traditional">Традиционално</string>
+    <string name="su_compat_ksm">Kasumi (експериментално)</string>
+    <string name="su_compat_magisk_summary">Дијалог за доделу привилегије</string>
     <string name="settings_uts_view">Приказ UTS</string>
     <string name="settings_uts_view_summary">Управља идентитетом језгра при раном покретању, глобално током рада и у опсегу denylist.</string>
     <string name="uts_view_title">Приказ UTS</string>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Percorso su personalizzato</string>
-    <string name="su_compact_path_help">Si applica solo in modalità Kasumi. La cartella superiore deve esistere; i file esistenti non verranno sovrascritti.</string>
-    <string name="su_compact_path_invalid">Inserisci un percorso assoluto valido.</string>
-    <string name="su_compact_path_reset">Ripristina percorso predefinito</string>
-    <string name="su_compact_path_error_exists">Questo percorso esiste già. Scegli un altro percorso.</string>
-    <string name="su_compact_path_error_parent">La cartella superiore non esiste o non è una cartella.</string>
-    <string name="su_compact_path_error_permission">Autorizzazioni insufficienti per applicare questo percorso.</string>
-    <string name="su_compact_path_error_persistence">Impossibile salvare la configurazione. Controlla lo spazio disponibile e le autorizzazioni, quindi riprova.</string>
+    <string name="su_compat_path_title">Percorso su personalizzato</string>
+    <string name="su_compat_path_help">Si applica solo in modalità Kasumi. La cartella superiore deve esistere; i file esistenti non verranno sovrascritti.</string>
+    <string name="su_compat_path_invalid">Inserisci un percorso assoluto valido.</string>
+    <string name="su_compat_path_reset">Ripristina percorso predefinito</string>
+    <string name="su_compat_path_error_exists">Questo percorso esiste già. Scegli un altro percorso.</string>
+    <string name="su_compat_path_error_parent">La cartella superiore non esiste o non è una cartella.</string>
+    <string name="su_compat_path_error_permission">Autorizzazioni insufficienti per applicare questo percorso.</string>
+    <string name="su_compat_path_error_persistence">Impossibile salvare la configurazione. Controlla lo spazio disponibile e le autorizzazioni, quindi riprova.</string>
 </resources>

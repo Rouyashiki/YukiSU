@@ -146,10 +146,10 @@
     <string name="settings_yukizygisk_toast_on">已开启，重启生效</string>
     <string name="settings_yukizygisk_toast_off">已关闭，重启生效</string>
     <string name="settings_yukizygisk_toast_failed">切换失败</string>
-    <string name="su_compact_off">关闭</string>
-    <string name="su_compact_traditional">传统</string>
-    <string name="su_compact_ksm">Kasumi（实验性功能）</string>
-    <string name="su_compact_magisk_summary">授权弹窗</string>
+    <string name="su_compat_off">关闭</string>
+    <string name="su_compat_traditional">传统</string>
+    <string name="su_compat_ksm">Kasumi（实验性功能）</string>
+    <string name="su_compat_magisk_summary">授权弹窗</string>
     <string name="settings_uts_view">UTS 视图</string>
     <string name="settings_uts_view_summary">管理早启动、运行时全局及 denylist 作用域的内核身份。</string>
     <string name="uts_view_title">UTS 视图</string>

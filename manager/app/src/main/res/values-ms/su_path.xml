@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Laluan su tersuai</string>
-    <string name="su_compact_path_help">Hanya digunakan dalam mod Kasumi. Direktori induk mesti wujud; fail sedia ada tidak akan ditulis ganti.</string>
-    <string name="su_compact_path_invalid">Masukkan laluan mutlak yang sah.</string>
-    <string name="su_compact_path_reset">Pulihkan laluan lalai</string>
-    <string name="su_compact_path_error_exists">Laluan ini sudah wujud. Pilih laluan lain.</string>
-    <string name="su_compact_path_error_parent">Direktori induk tidak wujud atau bukan direktori.</string>
-    <string name="su_compact_path_error_permission">Kebenaran tidak mencukupi untuk menggunakan laluan ini.</string>
-    <string name="su_compact_path_error_persistence">Konfigurasi tidak dapat disimpan. Semak ruang storan dan kebenaran, kemudian cuba lagi.</string>
+    <string name="su_compat_path_title">Laluan su tersuai</string>
+    <string name="su_compat_path_help">Hanya digunakan dalam mod Kasumi. Direktori induk mesti wujud; fail sedia ada tidak akan ditulis ganti.</string>
+    <string name="su_compat_path_invalid">Masukkan laluan mutlak yang sah.</string>
+    <string name="su_compat_path_reset">Pulihkan laluan lalai</string>
+    <string name="su_compat_path_error_exists">Laluan ini sudah wujud. Pilih laluan lain.</string>
+    <string name="su_compat_path_error_parent">Direktori induk tidak wujud atau bukan direktori.</string>
+    <string name="su_compat_path_error_permission">Kebenaran tidak mencukupi untuk menggunakan laluan ini.</string>
+    <string name="su_compat_path_error_persistence">Konfigurasi tidak dapat disimpan. Semak ruang storan dan kebenaran, kemudian cuba lagi.</string>
 </resources>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Kohandatud su tee</string>
-    <string name="su_compact_path_help">Kehtib ainult Kasumi-režiimis. Ülemkaust peab olemas olema; olemasolevaid faile ei kirjutata üle.</string>
-    <string name="su_compact_path_invalid">Sisesta kehtiv absoluutne tee.</string>
-    <string name="su_compact_path_reset">Taasta vaiketee</string>
-    <string name="su_compact_path_error_exists">See tee on juba olemas. Vali teine tee.</string>
-    <string name="su_compact_path_error_parent">Ülemkausta pole olemas või see pole kaust.</string>
-    <string name="su_compact_path_error_permission">Selle tee rakendamiseks pole piisavalt õigusi.</string>
-    <string name="su_compact_path_error_persistence">Seadistust ei saanud salvestada. Kontrolli salvestusruumi ja õigusi ning proovi uuesti.</string>
+    <string name="su_compat_path_title">Kohandatud su tee</string>
+    <string name="su_compat_path_help">Kehtib ainult Kasumi-režiimis. Ülemkaust peab olemas olema; olemasolevaid faile ei kirjutata üle.</string>
+    <string name="su_compat_path_invalid">Sisesta kehtiv absoluutne tee.</string>
+    <string name="su_compat_path_reset">Taasta vaiketee</string>
+    <string name="su_compat_path_error_exists">See tee on juba olemas. Vali teine tee.</string>
+    <string name="su_compat_path_error_parent">Ülemkausta pole olemas või see pole kaust.</string>
+    <string name="su_compat_path_error_permission">Selle tee rakendamiseks pole piisavalt õigusi.</string>
+    <string name="su_compat_path_error_persistence">Seadistust ei saanud salvestada. Kontrolli salvestusruumi ja õigusi ning proovi uuesti.</string>
 </resources>

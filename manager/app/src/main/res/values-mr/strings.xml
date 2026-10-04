@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">अपडेट करा</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">बंद करा</string>
+    <string name="su_compat_off">बंद करा</string>
     <string name="uts_view_value_yes">होय</string>
     <string name="uts_view_value_no">नाही</string>
     <string name="uts_view_refresh">रिफ्रेश करा</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">सुरू केले. रीस्टार्टनंतर लागू होईल.</string>
     <string name="settings_yukizygisk_toast_off">बंद केले. रीस्टार्टनंतर लागू होईल.</string>
     <string name="settings_yukizygisk_toast_failed">बदल अयशस्वी झाला</string>
-    <string name="su_compact_traditional">पारंपरिक</string>
-    <string name="su_compact_ksm">Kasumi (प्रायोगिक)</string>
-    <string name="su_compact_magisk_summary">परवानगी पॉपअप</string>
+    <string name="su_compat_traditional">पारंपरिक</string>
+    <string name="su_compat_ksm">Kasumi (प्रायोगिक)</string>
+    <string name="su_compat_magisk_summary">परवानगी पॉपअप</string>
     <string name="settings_uts_view">UTS दृश्य</string>
     <string name="settings_uts_view_summary">सुरुवातीच्या बूटमधील, रनटाइम जागतिक आणि नकार यादीच्या व्याप्तीतील कर्नल ओळख व्यवस्थापित करा.</string>
     <string name="uts_view_title">UTS दृश्य</string>

@@ -577,10 +577,10 @@ A</string>
     <string name="settings_yukizygisk_toast_on">Bekapcsolva. Újraindítás után lép életbe</string>
     <string name="settings_yukizygisk_toast_off">Kikapcsolva. Újraindítás után lép életbe</string>
     <string name="settings_yukizygisk_toast_failed">Az átváltás sikertelen</string>
-    <string name="su_compact_off">Bezárás</string>
-    <string name="su_compact_traditional">Hagyományos</string>
-    <string name="su_compact_ksm">Kasumi (kísérleti)</string>
-    <string name="su_compact_magisk_summary">Engedélyezési párbeszédablak</string>
+    <string name="su_compat_off">Bezárás</string>
+    <string name="su_compat_traditional">Hagyományos</string>
+    <string name="su_compat_ksm">Kasumi (kísérleti)</string>
+    <string name="su_compat_magisk_summary">Engedélyezési párbeszédablak</string>
     <string name="settings_uts_view">UTS nézet</string>
     <string name="settings_uts_view_summary">A kernelazonosság kezelése korai rendszerindításkor, futás közben globálisan és a denylist hatókörében.</string>
     <string name="uts_view_title">UTS nézet</string>

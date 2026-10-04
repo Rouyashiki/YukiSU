@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Cale su personalizată</string>
-    <string name="su_compact_path_help">Se aplică doar în modul Kasumi. Directorul părinte trebuie să existe; fișierele existente nu vor fi suprascrise.</string>
-    <string name="su_compact_path_invalid">Introduceți o cale absolută validă.</string>
-    <string name="su_compact_path_reset">Restabilește calea implicită</string>
-    <string name="su_compact_path_error_exists">Această cale există deja. Alegeți altă cale.</string>
-    <string name="su_compact_path_error_parent">Directorul părinte nu există sau nu este un director.</string>
-    <string name="su_compact_path_error_permission">Permisiuni insuficiente pentru aplicarea acestei căi.</string>
-    <string name="su_compact_path_error_persistence">Configurația nu a putut fi salvată. Verificați spațiul de stocare și permisiunile, apoi încercați din nou.</string>
+    <string name="su_compat_path_title">Cale su personalizată</string>
+    <string name="su_compat_path_help">Se aplică doar în modul Kasumi. Directorul părinte trebuie să existe; fișierele existente nu vor fi suprascrise.</string>
+    <string name="su_compat_path_invalid">Introduceți o cale absolută validă.</string>
+    <string name="su_compat_path_reset">Restabilește calea implicită</string>
+    <string name="su_compat_path_error_exists">Această cale există deja. Alegeți altă cale.</string>
+    <string name="su_compat_path_error_parent">Directorul părinte nu există sau nu este un director.</string>
+    <string name="su_compat_path_error_permission">Permisiuni insuficiente pentru aplicarea acestei căi.</string>
+    <string name="su_compat_path_error_persistence">Configurația nu a putut fi salvată. Verificați spațiul de stocare și permisiunile, apoi încercați din nou.</string>
 </resources>

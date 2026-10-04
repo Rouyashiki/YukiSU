@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Jalur su khusus</string>
-    <string name="su_compact_path_help">Hanya berlaku dalam mode Kasumi. Direktori induk harus ada; berkas yang sudah ada tidak akan ditimpa.</string>
-    <string name="su_compact_path_invalid">Masukkan jalur absolut yang valid.</string>
-    <string name="su_compact_path_reset">Pulihkan jalur bawaan</string>
-    <string name="su_compact_path_error_exists">Jalur ini sudah ada. Pilih jalur lain.</string>
-    <string name="su_compact_path_error_parent">Direktori induk tidak ada atau bukan direktori.</string>
-    <string name="su_compact_path_error_permission">Izin tidak mencukupi untuk menerapkan jalur ini.</string>
-    <string name="su_compact_path_error_persistence">Konfigurasi tidak dapat disimpan. Periksa ruang penyimpanan dan izin, lalu coba lagi.</string>
+    <string name="su_compat_path_title">Jalur su khusus</string>
+    <string name="su_compat_path_help">Hanya berlaku dalam mode Kasumi. Direktori induk harus ada; berkas yang sudah ada tidak akan ditimpa.</string>
+    <string name="su_compat_path_invalid">Masukkan jalur absolut yang valid.</string>
+    <string name="su_compat_path_reset">Pulihkan jalur bawaan</string>
+    <string name="su_compat_path_error_exists">Jalur ini sudah ada. Pilih jalur lain.</string>
+    <string name="su_compat_path_error_parent">Direktori induk tidak ada atau bukan direktori.</string>
+    <string name="su_compat_path_error_permission">Izin tidak mencukupi untuk menerapkan jalur ini.</string>
+    <string name="su_compat_path_error_persistence">Konfigurasi tidak dapat disimpan. Periksa ruang penyimpanan dan izin, lalu coba lagi.</string>
 </resources>

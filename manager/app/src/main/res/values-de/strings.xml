@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Aktiviert. Wird nach einem Neustart wirksam.</string>
     <string name="settings_yukizygisk_toast_off">Deaktiviert. Wird nach einem Neustart wirksam.</string>
     <string name="settings_yukizygisk_toast_failed">Umschalten fehlgeschlagen</string>
-    <string name="su_compact_off">Schließen</string>
-    <string name="su_compact_traditional">Klassisch</string>
-    <string name="su_compact_ksm">Kasumi (experimentell)</string>
-    <string name="su_compact_magisk_summary">Berechtigungsdialog</string>
+    <string name="su_compat_off">Schließen</string>
+    <string name="su_compat_traditional">Klassisch</string>
+    <string name="su_compat_ksm">Kasumi (experimentell)</string>
+    <string name="su_compat_magisk_summary">Berechtigungsdialog</string>
     <string name="settings_uts_view">UTS-Ansicht</string>
     <string name="settings_uts_view_summary">Kernel-Identitäten beim frühen Start, global zur Laufzeit und im Denylist-Geltungsbereich verwalten.</string>
     <string name="uts_view_title">UTS-Ansicht</string>

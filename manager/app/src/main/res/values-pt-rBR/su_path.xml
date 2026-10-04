@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Caminho su personalizado</string>
-    <string name="su_compact_path_help">Aplica-se apenas no modo Kasumi. O diretório pai deve existir; arquivos existentes não serão sobrescritos.</string>
-    <string name="su_compact_path_invalid">Insira um caminho absoluto válido.</string>
-    <string name="su_compact_path_reset">Restaurar caminho padrão</string>
-    <string name="su_compact_path_error_exists">Este caminho já existe. Escolha outro caminho.</string>
-    <string name="su_compact_path_error_parent">O diretório pai não existe ou não é um diretório.</string>
-    <string name="su_compact_path_error_permission">Permissões insuficientes para aplicar este caminho.</string>
-    <string name="su_compact_path_error_persistence">Não foi possível salvar a configuração. Verifique o espaço de armazenamento e as permissões e tente novamente.</string>
+    <string name="su_compat_path_title">Caminho su personalizado</string>
+    <string name="su_compat_path_help">Aplica-se apenas no modo Kasumi. O diretório pai deve existir; arquivos existentes não serão sobrescritos.</string>
+    <string name="su_compat_path_invalid">Insira um caminho absoluto válido.</string>
+    <string name="su_compat_path_reset">Restaurar caminho padrão</string>
+    <string name="su_compat_path_error_exists">Este caminho já existe. Escolha outro caminho.</string>
+    <string name="su_compat_path_error_parent">O diretório pai não existe ou não é um diretório.</string>
+    <string name="su_compat_path_error_permission">Permissões insuficientes para aplicar este caminho.</string>
+    <string name="su_compat_path_error_persistence">Não foi possível salvar a configuração. Verifique o espaço de armazenamento e as permissões e tente novamente.</string>
 </resources>

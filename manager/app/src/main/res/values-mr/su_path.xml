@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">सानुकूल su पथ</string>
-    <string name="su_compact_path_help">फक्त Kasumi मोडमध्ये लागू होते. मूळ निर्देशिका अस्तित्वात असणे आवश्यक आहे; विद्यमान फायली बदलल्या जाणार नाहीत.</string>
-    <string name="su_compact_path_invalid">वैध पूर्ण पथ प्रविष्ट करा.</string>
-    <string name="su_compact_path_reset">डीफॉल्ट पथ पुनर्संचयित करा</string>
-    <string name="su_compact_path_error_exists">हा पथ आधीपासून अस्तित्वात आहे. दुसरा पथ निवडा.</string>
-    <string name="su_compact_path_error_parent">मूळ निर्देशिका अस्तित्वात नाही किंवा ती निर्देशिका नाही.</string>
-    <string name="su_compact_path_error_permission">हा पथ लागू करण्यासाठी पुरेशी परवानगी नाही.</string>
-    <string name="su_compact_path_error_persistence">संरचना जतन करता आली नाही. स्टोरेजमधील जागा आणि परवानग्या तपासून पुन्हा प्रयत्न करा.</string>
+    <string name="su_compat_path_title">सानुकूल su पथ</string>
+    <string name="su_compat_path_help">फक्त Kasumi मोडमध्ये लागू होते. मूळ निर्देशिका अस्तित्वात असणे आवश्यक आहे; विद्यमान फायली बदलल्या जाणार नाहीत.</string>
+    <string name="su_compat_path_invalid">वैध पूर्ण पथ प्रविष्ट करा.</string>
+    <string name="su_compat_path_reset">डीफॉल्ट पथ पुनर्संचयित करा</string>
+    <string name="su_compat_path_error_exists">हा पथ आधीपासून अस्तित्वात आहे. दुसरा पथ निवडा.</string>
+    <string name="su_compat_path_error_parent">मूळ निर्देशिका अस्तित्वात नाही किंवा ती निर्देशिका नाही.</string>
+    <string name="su_compat_path_error_permission">हा पथ लागू करण्यासाठी पुरेशी परवानगी नाही.</string>
+    <string name="su_compat_path_error_persistence">संरचना जतन करता आली नाही. स्टोरेजमधील जागा आणि परवानग्या तपासून पुन्हा प्रयत्न करा.</string>
 </resources>

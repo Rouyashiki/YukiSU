@@ -19,19 +19,19 @@ import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.screen.SettingItem
 
 @Composable
-internal fun SuCompactSelector(
-    selected: SuCompactMode,
+internal fun SuCompatSelector(
+    selected: SuCompatMode,
     enabled: Boolean,
     ksmSupported: Boolean,
-    onSelect: (SuCompactMode) -> Unit,
+    onSelect: (SuCompatMode) -> Unit,
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val labels = listOf(
-        stringResource(R.string.su_compact_off),
-        stringResource(R.string.su_compact_traditional),
-        stringResource(R.string.su_compact_ksm),
+        stringResource(R.string.su_compat_off),
+        stringResource(R.string.su_compat_traditional),
+        stringResource(R.string.su_compat_ksm),
     )
-    val title = stringResource(R.string.su_compact_title)
+    val title = stringResource(R.string.su_compat_title)
 
     SettingItem(
         icon = Icons.Rounded.RemoveModerator,
@@ -47,7 +47,7 @@ internal fun SuCompactSelector(
             title = { Text(title) },
             text = {
                 Column(Modifier.selectableGroup()) {
-                    SuCompactMode.entries.filter { it != SuCompactMode.KSM || ksmSupported }.forEach { mode ->
+                    SuCompatMode.entries.filter { it != SuCompatMode.KSM || ksmSupported }.forEach { mode ->
                         Row(
                             modifier = Modifier.fillMaxWidth()
                                 .selectable(

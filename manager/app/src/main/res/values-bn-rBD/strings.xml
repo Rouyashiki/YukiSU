@@ -505,7 +505,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">আপডেট</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">বন্ধ করুন</string>
+    <string name="su_compat_off">বন্ধ করুন</string>
     <string name="uts_view_value_yes">হ্যাঁ</string>
     <string name="uts_view_value_no">না</string>
     <string name="uts_view_refresh">রিফ্রেশ</string>
@@ -599,9 +599,9 @@
     <string name="settings_yukizygisk_toast_on">চালু হয়েছে, পুনরায় চালুর পর কার্যকর হবে</string>
     <string name="settings_yukizygisk_toast_off">বন্ধ হয়েছে, পুনরায় চালুর পর কার্যকর হবে</string>
     <string name="settings_yukizygisk_toast_failed">পরিবর্তন ব্যর্থ</string>
-    <string name="su_compact_traditional">প্রচলিত</string>
-    <string name="su_compact_ksm">Kasumi (পরীক্ষামূলক)</string>
-    <string name="su_compact_magisk_summary">অনুমতি দেওয়ার ডায়ালগ</string>
+    <string name="su_compat_traditional">প্রচলিত</string>
+    <string name="su_compat_ksm">Kasumi (পরীক্ষামূলক)</string>
+    <string name="su_compat_magisk_summary">অনুমতি দেওয়ার ডায়ালগ</string>
     <string name="settings_uts_view">UTS ভিউ</string>
     <string name="settings_uts_view_summary">বুটের প্রথম পর্যায়ে, রানটাইমে গ্লোবাল এবং denylist-এর আওতায় কার্নেলের পরিচয় পরিচালনা করুন।</string>
     <string name="uts_view_title">UTS ভিউ</string>

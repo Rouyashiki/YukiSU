@@ -42,12 +42,12 @@ internal fun isValidSuPath(path: String): Boolean =
 
 @StringRes
 internal fun suPathErrorResource(code: String): Int = when (code) {
-    "path_exists" -> R.string.su_compact_path_error_exists
-    "parent_unavailable" -> R.string.su_compact_path_error_parent
-    "invalid_path", "path_too_long" -> R.string.su_compact_path_invalid
-    "permission_denied" -> R.string.su_compact_path_error_permission
+    "path_exists" -> R.string.su_compat_path_error_exists
+    "parent_unavailable" -> R.string.su_compat_path_error_parent
+    "invalid_path", "path_too_long" -> R.string.su_compat_path_invalid
+    "permission_denied" -> R.string.su_compat_path_error_permission
     "unsupported" -> R.string.feature_status_unsupported_summary
-    "persistence_failed" -> R.string.su_compact_path_error_persistence
+    "persistence_failed" -> R.string.su_compat_path_error_persistence
     else -> R.string.setting_change_failed
 }
 
@@ -62,7 +62,7 @@ internal fun SuPathSetting(
     var showDialog by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Int?>(null) }
-    val title = stringResource(R.string.su_compact_path_title)
+    val title = stringResource(R.string.su_compat_path_title)
 
     LaunchedEffect(Unit) {
         path = withContext(Dispatchers.IO) {
@@ -90,7 +90,7 @@ internal fun SuPathSetting(
             title = { Text(title) },
             text = {
                 Column {
-                    Text(stringResource(R.string.su_compact_path_help))
+                    Text(stringResource(R.string.su_compat_path_help))
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = input,
@@ -101,7 +101,7 @@ internal fun SuPathSetting(
                         label = { Text(title) },
                         isError = !valid || error != null,
                         supportingText = {
-                            if (!valid) Text(stringResource(R.string.su_compact_path_invalid))
+                            if (!valid) Text(stringResource(R.string.su_compat_path_invalid))
                         },
                     )
                     error?.let { message ->
@@ -115,7 +115,7 @@ internal fun SuPathSetting(
                         enabled = !saving,
                         onClick = { input = DEFAULT_SU_PATH; error = null },
                     ) {
-                        Text(stringResource(R.string.su_compact_path_reset))
+                        Text(stringResource(R.string.su_compat_path_reset))
                     }
                 }
             },

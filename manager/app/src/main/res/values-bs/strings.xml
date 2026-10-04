@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Uključeno. Primjenjuje se nakon ponovnog pokretanja</string>
     <string name="settings_yukizygisk_toast_off">Isključeno. Primjenjuje se nakon ponovnog pokretanja</string>
     <string name="settings_yukizygisk_toast_failed">Prebacivanje nije uspjelo</string>
-    <string name="su_compact_off">Zatvori</string>
-    <string name="su_compact_traditional">Tradicionalno</string>
-    <string name="su_compact_ksm">Kasumi (eksperimentalno)</string>
-    <string name="su_compact_magisk_summary">Dijalog za dodjelu ovlasti</string>
+    <string name="su_compat_off">Zatvori</string>
+    <string name="su_compat_traditional">Tradicionalno</string>
+    <string name="su_compat_ksm">Kasumi (eksperimentalno)</string>
+    <string name="su_compat_magisk_summary">Dijalog za dodjelu ovlasti</string>
     <string name="settings_uts_view">Prikaz UTS</string>
     <string name="settings_uts_view_summary">Upravlja identitetom jezgre pri ranom pokretanju, globalno tijekom rada i u opsegu denylist.</string>
     <string name="uts_view_title">Prikaz UTS</string>

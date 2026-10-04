@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Chemin su personnalisé</string>
-    <string name="su_compact_path_help">Uniquement en mode Kasumi. Le dossier parent doit exister ; les fichiers existants ne seront pas écrasés.</string>
-    <string name="su_compact_path_invalid">Saisissez un chemin absolu valide.</string>
-    <string name="su_compact_path_reset">Rétablir le chemin par défaut</string>
-    <string name="su_compact_path_error_exists">Ce chemin existe déjà. Choisissez un autre chemin.</string>
-    <string name="su_compact_path_error_parent">Le dossier parent est introuvable ou ne correspond pas à un dossier.</string>
-    <string name="su_compact_path_error_permission">Les autorisations sont insuffisantes pour appliquer ce chemin.</string>
-    <string name="su_compact_path_error_persistence">Impossible d’enregistrer la configuration. Vérifiez l’espace disponible et les autorisations, puis réessayez.</string>
+    <string name="su_compat_path_title">Chemin su personnalisé</string>
+    <string name="su_compat_path_help">Uniquement en mode Kasumi. Le dossier parent doit exister ; les fichiers existants ne seront pas écrasés.</string>
+    <string name="su_compat_path_invalid">Saisissez un chemin absolu valide.</string>
+    <string name="su_compat_path_reset">Rétablir le chemin par défaut</string>
+    <string name="su_compat_path_error_exists">Ce chemin existe déjà. Choisissez un autre chemin.</string>
+    <string name="su_compat_path_error_parent">Le dossier parent est introuvable ou ne correspond pas à un dossier.</string>
+    <string name="su_compat_path_error_permission">Les autorisations sont insuffisantes pour appliquer ce chemin.</string>
+    <string name="su_compat_path_error_persistence">Impossible d’enregistrer la configuration. Vérifiez l’espace disponible et les autorisations, puis réessayez.</string>
 </resources>

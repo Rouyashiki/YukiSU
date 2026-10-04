@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">مسار su مخصص</string>
-    <string name="su_compact_path_help">يُطبّق في وضع Kasumi فقط. يجب أن يكون المجلد الأب موجودًا؛ لن تُستبدل الملفات الموجودة.</string>
-    <string name="su_compact_path_invalid">أدخل مسارًا مطلقًا صالحًا.</string>
-    <string name="su_compact_path_reset">استعادة المسار الافتراضي</string>
-    <string name="su_compact_path_error_exists">هذا المسار موجود بالفعل. اختر مسارًا آخر.</string>
-    <string name="su_compact_path_error_parent">المجلد الأب غير موجود أو ليس مجلدًا.</string>
-    <string name="su_compact_path_error_permission">الأذونات غير كافية لتطبيق هذا المسار.</string>
-    <string name="su_compact_path_error_persistence">تعذّر حفظ الإعدادات. تحقق من مساحة التخزين والأذونات ثم حاول مجددًا.</string>
+    <string name="su_compat_path_title">مسار su مخصص</string>
+    <string name="su_compat_path_help">يُطبّق في وضع Kasumi فقط. يجب أن يكون المجلد الأب موجودًا؛ لن تُستبدل الملفات الموجودة.</string>
+    <string name="su_compat_path_invalid">أدخل مسارًا مطلقًا صالحًا.</string>
+    <string name="su_compat_path_reset">استعادة المسار الافتراضي</string>
+    <string name="su_compat_path_error_exists">هذا المسار موجود بالفعل. اختر مسارًا آخر.</string>
+    <string name="su_compat_path_error_parent">المجلد الأب غير موجود أو ليس مجلدًا.</string>
+    <string name="su_compat_path_error_permission">الأذونات غير كافية لتطبيق هذا المسار.</string>
+    <string name="su_compat_path_error_persistence">تعذّر حفظ الإعدادات. تحقق من مساحة التخزين والأذونات ثم حاول مجددًا.</string>
 </resources>

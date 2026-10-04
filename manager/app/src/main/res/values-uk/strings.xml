@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Увімкнено. Набуде чинності після перезавантаження</string>
     <string name="settings_yukizygisk_toast_off">Вимкнено. Набуде чинності після перезавантаження</string>
     <string name="settings_yukizygisk_toast_failed">Не вдалося перемкнути</string>
-    <string name="su_compact_off">Закрити</string>
-    <string name="su_compact_traditional">Традиційний</string>
-    <string name="su_compact_ksm">Kasumi (експериментально)</string>
-    <string name="su_compact_magisk_summary">Діалог надання прав</string>
+    <string name="su_compat_off">Закрити</string>
+    <string name="su_compat_traditional">Традиційний</string>
+    <string name="su_compat_ksm">Kasumi (експериментально)</string>
+    <string name="su_compat_magisk_summary">Діалог надання прав</string>
     <string name="settings_uts_view">Подання UTS</string>
     <string name="settings_uts_view_summary">Керування ідентичністю ядра на ранньому етапі завантаження, глобально під час роботи та в області denylist.</string>
     <string name="uts_view_title">Подання UTS</string>

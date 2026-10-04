@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Açıldı. Yenidən başladıqdan sonra qüvvəyə minir</string>
     <string name="settings_yukizygisk_toast_off">Söndürüldü. Yenidən başladıqdan sonra qüvvəyə minir</string>
     <string name="settings_yukizygisk_toast_failed">Dəyişdirilə bilmədi</string>
-    <string name="su_compact_off">Bağla</string>
-    <string name="su_compact_traditional">Ənənəvi</string>
-    <string name="su_compact_ksm">Kasumi (təcrübi)</string>
-    <string name="su_compact_magisk_summary">İcazə dialoqu</string>
+    <string name="su_compat_off">Bağla</string>
+    <string name="su_compat_traditional">Ənənəvi</string>
+    <string name="su_compat_ksm">Kasumi (təcrübi)</string>
+    <string name="su_compat_magisk_summary">İcazə dialoqu</string>
     <string name="settings_uts_view">UTS görünüşü</string>
     <string name="settings_uts_view_summary">Erkən yüklənmədə, icra zamanı qlobal olaraq və denylist əhatəsində nüvə kimliyini idarə edir.</string>
     <string name="uts_view_title">UTS görünüşü</string>

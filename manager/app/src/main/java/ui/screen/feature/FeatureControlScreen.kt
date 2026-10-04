@@ -61,9 +61,9 @@ private class FeatureToggleState(initialChecked: Boolean) {
     var saving by mutableStateOf(false)
 }
 
-private val suCompactController = SuCompactController(
+private val suCompatController = SuCompatController(
     read = {
-        SuCompactSnapshot(
+        SuCompatSnapshot(
             traditional = getFeatureValueOrNull(Natives.FEATURE_SU_COMPAT) ?: true,
             ksm = getFeatureValue(Natives.FEATURE_KASUMI_SUCOMPAT),
             magisk = getFeatureValue(Natives.FEATURE_MAGISK_COMPAT),
@@ -140,10 +140,10 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
     val snackbarHost = rememberSnackbarController()
 
     val selinuxHide = rememberFeatureToggleState(Natives.FEATURE_SELINUX_HIDE)
-    var suCompact by remember { mutableStateOf(suCompactController.read()) }
-    var requestedSuCompact by remember { mutableStateOf<SuCompactMode?>(null) }
+    var suCompat by remember { mutableStateOf(suCompatController.read()) }
+    var requestedSuCompat by remember { mutableStateOf<SuCompatMode?>(null) }
     var suPathSaving by remember { mutableStateOf(false) }
-    val suCompactSupported = remember { getFeatureStatus(Natives.FEATURE_SU_COMPAT) == "supported" }
+    val suCompatSupported = remember { getFeatureStatus(Natives.FEATURE_SU_COMPAT) == "supported" }
     val ksmSupported = remember { getFeatureStatus(Natives.FEATURE_KASUMI_SUCOMPAT) == "supported" }
     val kasumi = rememberFeatureToggleState(Natives.FEATURE_KASUMI)
     val kasumiSupported = remember { getFeatureValueOrNull(Natives.FEATURE_KASUMI) != null }
@@ -170,22 +170,22 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
     val yukiZygiskDisabledMessage = stringResource(R.string.settings_yukizygisk_toast_off)
     val yukiZygiskFailedMessage = stringResource(R.string.settings_yukizygisk_toast_failed)
 
-    fun updateSuCompact(mode: SuCompactMode? = null, magisk: Boolean? = null) {
+    fun updateSuCompat(mode: SuCompatMode? = null, magisk: Boolean? = null) {
         if (magiskCompat.saving || kasumi.saving || suPathSaving) return
         magiskCompat.saving = true
-        requestedSuCompact = mode
+        requestedSuCompat = mode
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             val success = withContext(NonCancellable) {
                 try {
                     withContext(Dispatchers.IO) {
-                        if (mode != null) suCompactController.select(mode)
-                        else suCompactController.setMagisk(magisk ?: false)
+                        if (mode != null) suCompatController.select(mode)
+                        else suCompatController.setMagisk(magisk ?: false)
                     }
                 } finally {
-                    suCompact = suCompactController.read()
-                    magiskCompat.checked = suCompact.magisk
+                    suCompat = suCompatController.read()
+                    magiskCompat.checked = suCompat.magisk
                     magiskCompat.saving = false
-                    requestedSuCompact = null
+                    requestedSuCompat = null
                 }
             }
             if (!success) snackbarHost.showSnackbar(failedMessage)
@@ -364,20 +364,20 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                                 relatedStates = listOf(magiskCompat),
                                 onRuntimeSettled = {
                                     kasumiInitialized = Natives.kasumiIsInitialized()
-                                    suCompact = suCompactController.read()
-                                    magiskCompat.checked = suCompact.magisk
+                                    suCompat = suCompatController.read()
+                                    magiskCompat.checked = suCompat.magisk
                                 },
                                 onFailure = { snackbarHost.showSnackbar(failedMessage) },
                             )
                         },
                     )
 
-                    SuCompactSelector(
-                        selected = requestedSuCompact ?: suCompact.mode,
-                        enabled = suCompactSupported && !magiskCompat.saving && !kasumi.saving && !suPathSaving,
+                    SuCompatSelector(
+                        selected = requestedSuCompat ?: suCompat.mode,
+                        enabled = suCompatSupported && !magiskCompat.saving && !kasumi.saving && !suPathSaving,
                         ksmSupported = ksmSupported && (!kasumiSupported || kasumiInitialized),
                         onSelect = { mode ->
-                            if (mode != suCompact.mode) updateSuCompact(mode = mode)
+                            if (mode != suCompat.mode) updateSuCompat(mode = mode)
                         },
                     )
 
@@ -391,12 +391,12 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     FeatureSwitchItem(
                         featureId = Natives.FEATURE_MAGISK_COMPAT,
                         icon = Icons.Filled.Security,
-                        title = stringResource(R.string.su_compact_magisk_title),
-                        summary = stringResource(R.string.su_compact_magisk_summary),
+                        title = stringResource(R.string.su_compat_magisk_title),
+                        summary = stringResource(R.string.su_compat_magisk_summary),
                         state = magiskCompat,
-                        enabled = suCompact.mode == SuCompactMode.KSM && !kasumi.saving && !suPathSaving &&
+                        enabled = suCompat.mode == SuCompatMode.KSM && !kasumi.saving && !suPathSaving &&
                             (!kasumiSupported || kasumiInitialized),
-                        onChange = { enabled -> updateSuCompact(magisk = enabled) },
+                        onChange = { enabled -> updateSuCompat(magisk = enabled) },
                     )
 
                     FeatureSwitchItem(

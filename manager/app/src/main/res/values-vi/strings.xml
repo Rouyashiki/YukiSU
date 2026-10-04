@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">Cập nhật</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">Đóng</string>
+    <string name="su_compat_off">Đóng</string>
     <string name="uts_view_value_yes">Có</string>
     <string name="uts_view_value_no">Không</string>
     <string name="uts_view_refresh">Làm mới</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">Đã bật, có hiệu lực sau khi khởi động lại</string>
     <string name="settings_yukizygisk_toast_off">Đã tắt, có hiệu lực sau khi khởi động lại</string>
     <string name="settings_yukizygisk_toast_failed">Không thể chuyển đổi</string>
-    <string name="su_compact_traditional">Truyền thống</string>
-    <string name="su_compact_ksm">Kasumi (thử nghiệm)</string>
-    <string name="su_compact_magisk_summary">Hộp thoại cấp quyền</string>
+    <string name="su_compat_traditional">Truyền thống</string>
+    <string name="su_compat_ksm">Kasumi (thử nghiệm)</string>
+    <string name="su_compat_magisk_summary">Hộp thoại cấp quyền</string>
     <string name="settings_uts_view">Khung nhìn UTS</string>
     <string name="settings_uts_view_summary">Quản lý thông tin định danh nhân ở giai đoạn khởi động sớm, toàn cục lúc chạy và trong phạm vi denylist.</string>
     <string name="uts_view_title">Khung nhìn UTS</string>

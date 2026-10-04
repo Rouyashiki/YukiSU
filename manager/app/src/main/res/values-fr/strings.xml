@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Activé. Prend effet après redémarrage.</string>
     <string name="settings_yukizygisk_toast_off">Désactivé. Prend effet après redémarrage.</string>
     <string name="settings_yukizygisk_toast_failed">Échec du changement</string>
-    <string name="su_compact_off">Fermer</string>
-    <string name="su_compact_traditional">Traditionnel</string>
-    <string name="su_compact_ksm">Kasumi (expérimental)</string>
-    <string name="su_compact_magisk_summary">Fenêtre d’autorisation</string>
+    <string name="su_compat_off">Fermer</string>
+    <string name="su_compat_traditional">Traditionnel</string>
+    <string name="su_compat_ksm">Kasumi (expérimental)</string>
+    <string name="su_compat_magisk_summary">Fenêtre d’autorisation</string>
     <string name="settings_uts_view">Vue UTS</string>
     <string name="settings_uts_view_summary">Gérer l’identité du noyau au démarrage précoce, globalement à l’exécution et dans la portée de la liste d’exclusion.</string>
     <string name="uts_view_title">Vue UTS</string>

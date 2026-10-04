@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">কাস্টম su পাথ</string>
-    <string name="su_compact_path_help">শুধু Kasumi মোডে প্রযোজ্য। মূল ফোল্ডারটি থাকতে হবে; বিদ্যমান ফাইল প্রতিস্থাপন করা হবে না।</string>
-    <string name="su_compact_path_invalid">একটি বৈধ পরম পাথ লিখুন।</string>
-    <string name="su_compact_path_reset">ডিফল্ট পাথ পুনরুদ্ধার</string>
-    <string name="su_compact_path_error_exists">এই পাথটি ইতিমধ্যে আছে। অন্য একটি পাথ বেছে নিন।</string>
-    <string name="su_compact_path_error_parent">মূল ফোল্ডারটি নেই অথবা এটি একটি ফোল্ডার নয়।</string>
-    <string name="su_compact_path_error_permission">এই পাথটি প্রয়োগ করার যথেষ্ট অনুমতি নেই।</string>
-    <string name="su_compact_path_error_persistence">কনফিগারেশন সংরক্ষণ করা যায়নি। স্টোরেজের জায়গা ও অনুমতি যাচাই করে আবার চেষ্টা করুন।</string>
+    <string name="su_compat_path_title">কাস্টম su পাথ</string>
+    <string name="su_compat_path_help">শুধু Kasumi মোডে প্রযোজ্য। মূল ফোল্ডারটি থাকতে হবে; বিদ্যমান ফাইল প্রতিস্থাপন করা হবে না।</string>
+    <string name="su_compat_path_invalid">একটি বৈধ পরম পাথ লিখুন।</string>
+    <string name="su_compat_path_reset">ডিফল্ট পাথ পুনরুদ্ধার</string>
+    <string name="su_compat_path_error_exists">এই পাথটি ইতিমধ্যে আছে। অন্য একটি পাথ বেছে নিন।</string>
+    <string name="su_compat_path_error_parent">মূল ফোল্ডারটি নেই অথবা এটি একটি ফোল্ডার নয়।</string>
+    <string name="su_compat_path_error_permission">এই পাথটি প্রয়োগ করার যথেষ্ট অনুমতি নেই।</string>
+    <string name="su_compat_path_error_persistence">কনফিগারেশন সংরক্ষণ করা যায়নি। স্টোরেজের জায়গা ও অনুমতি যাচাই করে আবার চেষ্টা করুন।</string>
 </resources>

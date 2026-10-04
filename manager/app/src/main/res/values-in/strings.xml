@@ -513,7 +513,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">Membarui</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">Tutup</string>
+    <string name="su_compat_off">Tutup</string>
     <string name="uts_view_value_yes">Iya</string>
     <string name="uts_view_value_no">Tidak</string>
     <string name="uts_view_refresh">Muat ulang</string>
@@ -607,9 +607,9 @@
     <string name="settings_yukizygisk_toast_on">Diaktifkan, berlaku setelah mulai ulang</string>
     <string name="settings_yukizygisk_toast_off">Dinonaktifkan, berlaku setelah mulai ulang</string>
     <string name="settings_yukizygisk_toast_failed">Gagal beralih</string>
-    <string name="su_compact_traditional">Tradisional</string>
-    <string name="su_compact_ksm">Kasumi (eksperimental)</string>
-    <string name="su_compact_magisk_summary">Dialog pemberian izin</string>
+    <string name="su_compat_traditional">Tradisional</string>
+    <string name="su_compat_ksm">Kasumi (eksperimental)</string>
+    <string name="su_compat_magisk_summary">Dialog pemberian izin</string>
     <string name="settings_uts_view">Tampilan UTS</string>
     <string name="settings_uts_view_summary">Kelola identitas kernel saat boot awal, secara global saat runtime, dan dalam cakupan denylist.</string>
     <string name="uts_view_title">Tampilan UTS</string>

@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Iespējots; stājas spēkā pēc restartēšanas</string>
     <string name="settings_yukizygisk_toast_off">Atspējots; stājas spēkā pēc restartēšanas</string>
     <string name="settings_yukizygisk_toast_failed">Pārslēgšana neizdevās</string>
-    <string name="su_compact_off">Aizvērt</string>
-    <string name="su_compact_traditional">Tradicionāls</string>
-    <string name="su_compact_ksm">Kasumi (eksperimentāls)</string>
-    <string name="su_compact_magisk_summary">Atļaujas pieprasījuma uznirstošais logs</string>
+    <string name="su_compat_off">Aizvērt</string>
+    <string name="su_compat_traditional">Tradicionāls</string>
+    <string name="su_compat_ksm">Kasumi (eksperimentāls)</string>
+    <string name="su_compat_magisk_summary">Atļaujas pieprasījuma uznirstošais logs</string>
     <string name="settings_uts_view">UTS skats</string>
     <string name="settings_uts_view_summary">Pārvaldīt kodola identitāti agrīnās palaišanas laikā, globāli izpildlaikā un aizliegumu saraksta tvērumā.</string>
     <string name="uts_view_title">UTS skats</string>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">自訂 su 路徑</string>
-    <string name="su_compact_path_help">僅在 Kasumi 模式下生效。父目錄必須存在，現有檔案不會被覆寫。</string>
-    <string name="su_compact_path_invalid">請輸入有效的絕對路徑。</string>
-    <string name="su_compact_path_reset">還原預設路徑</string>
-    <string name="su_compact_path_error_exists">此路徑已存在，請使用其他路徑。</string>
-    <string name="su_compact_path_error_parent">父目錄不存在或不是目錄，請檢查路徑。</string>
-    <string name="su_compact_path_error_permission">權限不足，無法套用此路徑。</string>
-    <string name="su_compact_path_error_persistence">設定儲存失敗，請檢查儲存空間及存取權限後重試。</string>
+    <string name="su_compat_path_title">自訂 su 路徑</string>
+    <string name="su_compat_path_help">僅在 Kasumi 模式下生效。父目錄必須存在，現有檔案不會被覆寫。</string>
+    <string name="su_compat_path_invalid">請輸入有效的絕對路徑。</string>
+    <string name="su_compat_path_reset">還原預設路徑</string>
+    <string name="su_compat_path_error_exists">此路徑已存在，請使用其他路徑。</string>
+    <string name="su_compat_path_error_parent">父目錄不存在或不是目錄，請檢查路徑。</string>
+    <string name="su_compat_path_error_permission">權限不足，無法套用此路徑。</string>
+    <string name="su_compat_path_error_persistence">設定儲存失敗，請檢查儲存空間及存取權限後重試。</string>
 </resources>

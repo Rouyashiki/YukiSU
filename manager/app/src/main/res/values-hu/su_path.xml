@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Egyéni su útvonal</string>
-    <string name="su_compact_path_help">Csak Kasumi módban érvényes. A szülőkönyvtárnak léteznie kell; a meglévő fájlok nem lesznek felülírva.</string>
-    <string name="su_compact_path_invalid">Adj meg egy érvényes abszolút útvonalat.</string>
-    <string name="su_compact_path_reset">Alapértelmezett útvonal visszaállítása</string>
-    <string name="su_compact_path_error_exists">Ez az útvonal már létezik. Válassz másik útvonalat.</string>
-    <string name="su_compact_path_error_parent">A szülőkönyvtár nem létezik, vagy nem könyvtár.</string>
-    <string name="su_compact_path_error_permission">Nincs elegendő jogosultság az útvonal alkalmazásához.</string>
-    <string name="su_compact_path_error_persistence">A beállítások mentése sikertelen. Ellenőrizd a tárhelyet és a jogosultságokat, majd próbáld újra.</string>
+    <string name="su_compat_path_title">Egyéni su útvonal</string>
+    <string name="su_compat_path_help">Csak Kasumi módban érvényes. A szülőkönyvtárnak léteznie kell; a meglévő fájlok nem lesznek felülírva.</string>
+    <string name="su_compat_path_invalid">Adj meg egy érvényes abszolút útvonalat.</string>
+    <string name="su_compat_path_reset">Alapértelmezett útvonal visszaállítása</string>
+    <string name="su_compat_path_error_exists">Ez az útvonal már létezik. Válassz másik útvonalat.</string>
+    <string name="su_compat_path_error_parent">A szülőkönyvtár nem létezik, vagy nem könyvtár.</string>
+    <string name="su_compat_path_error_permission">Nincs elegendő jogosultság az útvonal alkalmazásához.</string>
+    <string name="su_compat_path_error_persistence">A beállítások mentése sikertelen. Ellenőrizd a tárhelyet és a jogosultságokat, majd próbáld újra.</string>
 </resources>

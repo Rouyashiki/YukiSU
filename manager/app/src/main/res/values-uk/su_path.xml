@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Власний шлях su</string>
-    <string name="su_compact_path_help">Діє лише в режимі Kasumi. Батьківський каталог має існувати; наявні файли не буде перезаписано.</string>
-    <string name="su_compact_path_invalid">Введіть коректний абсолютний шлях.</string>
-    <string name="su_compact_path_reset">Відновити типовий шлях</string>
-    <string name="su_compact_path_error_exists">Цей шлях уже існує. Виберіть інший шлях.</string>
-    <string name="su_compact_path_error_parent">Батьківський каталог не існує або не є каталогом.</string>
-    <string name="su_compact_path_error_permission">Недостатньо прав для застосування цього шляху.</string>
-    <string name="su_compact_path_error_persistence">Не вдалося зберегти налаштування. Перевірте вільне місце та права доступу й повторіть спробу.</string>
+    <string name="su_compat_path_title">Власний шлях su</string>
+    <string name="su_compat_path_help">Діє лише в режимі Kasumi. Батьківський каталог має існувати; наявні файли не буде перезаписано.</string>
+    <string name="su_compat_path_invalid">Введіть коректний абсолютний шлях.</string>
+    <string name="su_compat_path_reset">Відновити типовий шлях</string>
+    <string name="su_compat_path_error_exists">Цей шлях уже існує. Виберіть інший шлях.</string>
+    <string name="su_compat_path_error_parent">Батьківський каталог не існує або не є каталогом.</string>
+    <string name="su_compat_path_error_permission">Недостатньо прав для застосування цього шляху.</string>
+    <string name="su_compat_path_error_persistence">Не вдалося зберегти налаштування. Перевірте вільне місце та права доступу й повторіть спробу.</string>
 </resources>

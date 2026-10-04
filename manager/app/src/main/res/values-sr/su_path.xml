@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Прилагођена su путања</string>
-    <string name="su_compact_path_help">Примењује се само у Kasumi режиму. Надређени директоријум мора постојати; постојеће датотеке неће бити преписане.</string>
-    <string name="su_compact_path_invalid">Унесите исправну апсолутну путању.</string>
-    <string name="su_compact_path_reset">Врати подразумевану путању</string>
-    <string name="su_compact_path_error_exists">Ова путања већ постоји. Изаберите другу путању.</string>
-    <string name="su_compact_path_error_parent">Надређени директоријум не постоји или није директоријум.</string>
-    <string name="su_compact_path_error_permission">Немате довољно дозвола за примену ове путање.</string>
-    <string name="su_compact_path_error_persistence">Није могуће сачувати подешавања. Проверите простор за складиштење и дозволе, па покушајте поново.</string>
+    <string name="su_compat_path_title">Прилагођена su путања</string>
+    <string name="su_compat_path_help">Примењује се само у Kasumi режиму. Надређени директоријум мора постојати; постојеће датотеке неће бити преписане.</string>
+    <string name="su_compat_path_invalid">Унесите исправну апсолутну путању.</string>
+    <string name="su_compat_path_reset">Врати подразумевану путању</string>
+    <string name="su_compat_path_error_exists">Ова путања већ постоји. Изаберите другу путању.</string>
+    <string name="su_compat_path_error_parent">Надређени директоријум не постоји или није директоријум.</string>
+    <string name="su_compat_path_error_permission">Немате довољно дозвола за примену ове путање.</string>
+    <string name="su_compat_path_error_persistence">Није могуће сачувати подешавања. Проверите простор за складиштење и дозволе, па покушајте поново.</string>
 </resources>

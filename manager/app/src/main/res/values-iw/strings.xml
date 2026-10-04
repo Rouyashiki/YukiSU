@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">הופעל. ייכנס לתוקף לאחר הפעלה מחדש</string>
     <string name="settings_yukizygisk_toast_off">כובה. ייכנס לתוקף לאחר הפעלה מחדש</string>
     <string name="settings_yukizygisk_toast_failed">ההחלפה נכשלה</string>
-    <string name="su_compact_off">סגור</string>
-    <string name="su_compact_traditional">מסורתי</string>
-    <string name="su_compact_ksm">Kasumi (ניסיוני)</string>
-    <string name="su_compact_magisk_summary">חלון בקשת הרשאה</string>
+    <string name="su_compat_off">סגור</string>
+    <string name="su_compat_traditional">מסורתי</string>
+    <string name="su_compat_ksm">Kasumi (ניסיוני)</string>
+    <string name="su_compat_magisk_summary">חלון בקשת הרשאה</string>
     <string name="settings_uts_view">תצוגת UTS</string>
     <string name="settings_uts_view_summary">ניהול זהות הליבה באתחול מוקדם, באופן כללי בזמן ריצה ובתחום denylist.</string>
     <string name="uts_view_title">תצוגת UTS</string>

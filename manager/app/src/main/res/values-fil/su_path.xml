@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Pasadyang path ng su</string>
-    <string name="su_compact_path_help">Nalalapat lang sa Kasumi mode. Dapat umiiral ang parent directory; hindi papatungan ang mga umiiral na file.</string>
-    <string name="su_compact_path_invalid">Maglagay ng wastong absolute path.</string>
-    <string name="su_compact_path_reset">Ibalik ang default na path</string>
-    <string name="su_compact_path_error_exists">Umiiral na ang path na ito. Pumili ng ibang path.</string>
-    <string name="su_compact_path_error_parent">Hindi umiiral ang parent directory o hindi ito isang directory.</string>
-    <string name="su_compact_path_error_permission">Kulang ang pahintulot upang ilapat ang path na ito.</string>
-    <string name="su_compact_path_error_persistence">Hindi mai-save ang configuration. Suriin ang espasyo sa storage at mga pahintulot, at subukang muli.</string>
+    <string name="su_compat_path_title">Pasadyang path ng su</string>
+    <string name="su_compat_path_help">Nalalapat lang sa Kasumi mode. Dapat umiiral ang parent directory; hindi papatungan ang mga umiiral na file.</string>
+    <string name="su_compat_path_invalid">Maglagay ng wastong absolute path.</string>
+    <string name="su_compat_path_reset">Ibalik ang default na path</string>
+    <string name="su_compat_path_error_exists">Umiiral na ang path na ito. Pumili ng ibang path.</string>
+    <string name="su_compat_path_error_parent">Hindi umiiral ang parent directory o hindi ito isang directory.</string>
+    <string name="su_compat_path_error_permission">Kulang ang pahintulot upang ilapat ang path na ito.</string>
+    <string name="su_compat_path_error_persistence">Hindi mai-save ang configuration. Suriin ang espasyo sa storage at mga pahintulot, at subukang muli.</string>
 </resources>

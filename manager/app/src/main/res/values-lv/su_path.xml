@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Pielāgots su ceļš</string>
-    <string name="su_compact_path_help">Attiecas tikai uz Kasumi režīmu. Vecākmapei jāpastāv; esošie faili netiks pārrakstīti.</string>
-    <string name="su_compact_path_invalid">Ievadiet derīgu absolūto ceļu.</string>
-    <string name="su_compact_path_reset">Atjaunot noklusējuma ceļu</string>
-    <string name="su_compact_path_error_exists">Šis ceļš jau pastāv. Izvēlieties citu ceļu.</string>
-    <string name="su_compact_path_error_parent">Vecākmape nepastāv vai nav mape.</string>
-    <string name="su_compact_path_error_permission">Nepietiek atļauju šī ceļa piemērošanai.</string>
-    <string name="su_compact_path_error_persistence">Neizdevās saglabāt konfigurāciju. Pārbaudiet brīvo vietu un atļaujas un mēģiniet vēlreiz.</string>
+    <string name="su_compat_path_title">Pielāgots su ceļš</string>
+    <string name="su_compat_path_help">Attiecas tikai uz Kasumi režīmu. Vecākmapei jāpastāv; esošie faili netiks pārrakstīti.</string>
+    <string name="su_compat_path_invalid">Ievadiet derīgu absolūto ceļu.</string>
+    <string name="su_compat_path_reset">Atjaunot noklusējuma ceļu</string>
+    <string name="su_compat_path_error_exists">Šis ceļš jau pastāv. Izvēlieties citu ceļu.</string>
+    <string name="su_compat_path_error_parent">Vecākmape nepastāv vai nav mape.</string>
+    <string name="su_compat_path_error_permission">Nepietiek atļauju šī ceļa piemērošanai.</string>
+    <string name="su_compat_path_error_persistence">Neizdevās saglabāt konfigurāciju. Pārbaudiet brīvo vietu un atļaujas un mēģiniet vēlreiz.</string>
 </resources>

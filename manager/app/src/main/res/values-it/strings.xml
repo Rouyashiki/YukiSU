@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Attivato. Ha effetto dopo il riavvio.</string>
     <string name="settings_yukizygisk_toast_off">Disattivato. Ha effetto dopo il riavvio.</string>
     <string name="settings_yukizygisk_toast_failed">Cambio non riuscito</string>
-    <string name="su_compact_off">Chiudi</string>
-    <string name="su_compact_traditional">Tradizionale</string>
-    <string name="su_compact_ksm">Kasumi (sperimentale)</string>
-    <string name="su_compact_magisk_summary">Finestra di autorizzazione</string>
+    <string name="su_compat_off">Chiudi</string>
+    <string name="su_compat_traditional">Tradizionale</string>
+    <string name="su_compat_ksm">Kasumi (sperimentale)</string>
+    <string name="su_compat_magisk_summary">Finestra di autorizzazione</string>
     <string name="settings_uts_view">Vista UTS</string>
     <string name="settings_uts_view_summary">Gestisci l’identità del kernel all’avvio anticipato, globalmente durante l’esecuzione e nell’ambito della lista di esclusione.</string>
     <string name="uts_view_title">Vista UTS</string>

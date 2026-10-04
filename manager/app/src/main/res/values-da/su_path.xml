@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Tilpasset su-sti</string>
-    <string name="su_compact_path_help">Gælder kun i Kasumi-tilstand. Den overordnede mappe skal findes; eksisterende filer overskrives ikke.</string>
-    <string name="su_compact_path_invalid">Indtast en gyldig absolut sti.</string>
-    <string name="su_compact_path_reset">Gendan standardsti</string>
-    <string name="su_compact_path_error_exists">Denne sti findes allerede. Vælg en anden sti.</string>
-    <string name="su_compact_path_error_parent">Den overordnede mappe findes ikke eller er ikke en mappe.</string>
-    <string name="su_compact_path_error_permission">Utilstrækkelig tilladelse til at anvende denne sti.</string>
-    <string name="su_compact_path_error_persistence">Konfigurationen kunne ikke gemmes. Kontrollér lagerplads og tilladelser, og prøv igen.</string>
+    <string name="su_compat_path_title">Tilpasset su-sti</string>
+    <string name="su_compat_path_help">Gælder kun i Kasumi-tilstand. Den overordnede mappe skal findes; eksisterende filer overskrives ikke.</string>
+    <string name="su_compat_path_invalid">Indtast en gyldig absolut sti.</string>
+    <string name="su_compat_path_reset">Gendan standardsti</string>
+    <string name="su_compat_path_error_exists">Denne sti findes allerede. Vælg en anden sti.</string>
+    <string name="su_compat_path_error_parent">Den overordnede mappe findes ikke eller er ikke en mappe.</string>
+    <string name="su_compat_path_error_permission">Utilstrækkelig tilladelse til at anvende denne sti.</string>
+    <string name="su_compat_path_error_persistence">Konfigurationen kunne ikke gemmes. Kontrollér lagerplads og tilladelser, og prøv igen.</string>
 </resources>

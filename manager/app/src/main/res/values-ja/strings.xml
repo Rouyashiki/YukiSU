@@ -511,7 +511,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">更新</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">閉じる</string>
+    <string name="su_compat_off">閉じる</string>
     <string name="uts_view_value_yes">はい</string>
     <string name="uts_view_value_no">いいえ</string>
     <string name="uts_view_refresh">更新</string>
@@ -605,9 +605,9 @@
     <string name="settings_yukizygisk_toast_on">有効にしました。再起動後に反映されます</string>
     <string name="settings_yukizygisk_toast_off">無効にしました。再起動後に反映されます</string>
     <string name="settings_yukizygisk_toast_failed">切り替えに失敗しました</string>
-    <string name="su_compact_traditional">従来方式</string>
-    <string name="su_compact_ksm">Kasumi（実験的な機能）</string>
-    <string name="su_compact_magisk_summary">権限許可ダイアログ</string>
+    <string name="su_compat_traditional">従来方式</string>
+    <string name="su_compat_ksm">Kasumi（実験的な機能）</string>
+    <string name="su_compat_magisk_summary">権限許可ダイアログ</string>
     <string name="settings_uts_view">UTS ビュー</string>
     <string name="settings_uts_view_summary">起動初期、実行時のグローバル、および denylist の範囲におけるカーネル識別情報を管理します。</string>
     <string name="uts_view_title">UTS ビュー</string>

@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Açıldı. Yeniden başlatınca uygulanır</string>
     <string name="settings_yukizygisk_toast_off">Kapatıldı. Yeniden başlatınca uygulanır</string>
     <string name="settings_yukizygisk_toast_failed">Değiştirilemedi</string>
-    <string name="su_compact_off">Kapat</string>
-    <string name="su_compact_traditional">Geleneksel</string>
-    <string name="su_compact_ksm">Kasumi (deneysel)</string>
-    <string name="su_compact_magisk_summary">Yetkilendirme iletişim kutusu</string>
+    <string name="su_compat_off">Kapat</string>
+    <string name="su_compat_traditional">Geleneksel</string>
+    <string name="su_compat_ksm">Kasumi (deneysel)</string>
+    <string name="su_compat_magisk_summary">Yetkilendirme iletişim kutusu</string>
     <string name="settings_uts_view">UTS görünümü</string>
     <string name="settings_uts_view_summary">Erken açılışta, çalışma zamanında genel olarak ve denylist kapsamında çekirdek kimliğini yönetir.</string>
     <string name="uts_view_title">UTS görünümü</string>

@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">Update</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">Isara</string>
+    <string name="su_compat_off">Isara</string>
     <string name="uts_view_value_yes">Oo</string>
     <string name="uts_view_value_no">Hindi</string>
     <string name="uts_view_refresh">I-refresh</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">Pinagana, magkakabisa pagkatapos mag-restart</string>
     <string name="settings_yukizygisk_toast_off">Hindi pinagana, magkakabisa pagkatapos mag-restart</string>
     <string name="settings_yukizygisk_toast_failed">Hindi napalitan</string>
-    <string name="su_compact_traditional">Tradisyonal</string>
-    <string name="su_compact_ksm">Kasumi (eksperimental)</string>
-    <string name="su_compact_magisk_summary">Dialog ng pagbibigay ng pahintulot</string>
+    <string name="su_compat_traditional">Tradisyonal</string>
+    <string name="su_compat_ksm">Kasumi (eksperimental)</string>
+    <string name="su_compat_magisk_summary">Dialog ng pagbibigay ng pahintulot</string>
     <string name="settings_uts_view">View ng UTS</string>
     <string name="settings_uts_view_summary">Pamahalaan ang pagkakakilanlan ng kernel sa maagang boot, sa pangkalahatang runtime, at sa saklaw ng denylist.</string>
     <string name="uts_view_title">View ng UTS</string>

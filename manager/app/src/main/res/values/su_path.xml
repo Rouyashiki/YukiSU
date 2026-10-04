@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Custom su path</string>
-    <string name="su_compact_path_help">Applies only in Kasumi mode. The parent directory must exist; existing files will not be overwritten.</string>
-    <string name="su_compact_path_invalid">Enter a valid absolute path.</string>
-    <string name="su_compact_path_reset">Restore default path</string>
-    <string name="su_compact_path_error_exists">This path already exists. Choose a different path.</string>
-    <string name="su_compact_path_error_parent">The parent directory does not exist or is not a directory.</string>
-    <string name="su_compact_path_error_permission">Insufficient permission to apply this path.</string>
-    <string name="su_compact_path_error_persistence">Could not save the configuration. Check storage space and permissions, then try again.</string>
+    <string name="su_compat_path_title">Custom su path</string>
+    <string name="su_compat_path_help">Applies only in Kasumi mode. The parent directory must exist; existing files will not be overwritten.</string>
+    <string name="su_compat_path_invalid">Enter a valid absolute path.</string>
+    <string name="su_compat_path_reset">Restore default path</string>
+    <string name="su_compat_path_error_exists">This path already exists. Choose a different path.</string>
+    <string name="su_compat_path_error_parent">The parent directory does not exist or is not a directory.</string>
+    <string name="su_compat_path_error_permission">Insufficient permission to apply this path.</string>
+    <string name="su_compat_path_error_persistence">Could not save the configuration. Check storage space and permissions, then try again.</string>
 </resources>

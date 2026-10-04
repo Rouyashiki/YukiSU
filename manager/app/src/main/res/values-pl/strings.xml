@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Włączono; zmiana wymaga ponownego uruchomienia</string>
     <string name="settings_yukizygisk_toast_off">Wyłączono; zmiana wymaga ponownego uruchomienia</string>
     <string name="settings_yukizygisk_toast_failed">Nie udało się przełączyć</string>
-    <string name="su_compact_off">Zamknij</string>
-    <string name="su_compact_traditional">Tradycyjny</string>
-    <string name="su_compact_ksm">Kasumi (eksperymentalny)</string>
-    <string name="su_compact_magisk_summary">Okno przyznawania uprawnień</string>
+    <string name="su_compat_off">Zamknij</string>
+    <string name="su_compat_traditional">Tradycyjny</string>
+    <string name="su_compat_ksm">Kasumi (eksperymentalny)</string>
+    <string name="su_compat_magisk_summary">Okno przyznawania uprawnień</string>
     <string name="settings_uts_view">Widok UTS</string>
     <string name="settings_uts_view_summary">Zarządzaj tożsamością jądra we wczesnej fazie rozruchu, globalnie podczas działania i w zakresie listy blokowanych.</string>
     <string name="uts_view_title">Widok UTS</string>

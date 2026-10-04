@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Įjungta; įsigalios paleidus iš naujo</string>
     <string name="settings_yukizygisk_toast_off">Išjungta; įsigalios paleidus iš naujo</string>
     <string name="settings_yukizygisk_toast_failed">Nepavyko perjungti</string>
-    <string name="su_compact_off">Uždaryti</string>
-    <string name="su_compact_traditional">Tradicinis</string>
-    <string name="su_compact_ksm">Kasumi (eksperimentinis)</string>
-    <string name="su_compact_magisk_summary">Leidimo suteikimo iškylantysis langas</string>
+    <string name="su_compat_off">Uždaryti</string>
+    <string name="su_compat_traditional">Tradicinis</string>
+    <string name="su_compat_ksm">Kasumi (eksperimentinis)</string>
+    <string name="su_compat_magisk_summary">Leidimo suteikimo iškylantysis langas</string>
     <string name="settings_uts_view">UTS rodinys</string>
     <string name="settings_uts_view_summary">Valdyti branduolio tapatybę ankstyvojo paleidimo metu, visuotinai vykdymo metu ir draudimų sąrašo srityje.</string>
     <string name="uts_view_title">UTS rodinys</string>

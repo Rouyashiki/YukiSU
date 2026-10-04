@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">Activat. Se aplică după repornire.</string>
     <string name="settings_yukizygisk_toast_off">Dezactivat. Se aplică după repornire.</string>
     <string name="settings_yukizygisk_toast_failed">Comutarea a eșuat</string>
-    <string name="su_compact_off">Închide</string>
-    <string name="su_compact_traditional">Tradițional</string>
-    <string name="su_compact_ksm">Kasumi (experimental)</string>
-    <string name="su_compact_magisk_summary">Fereastră de autorizare</string>
+    <string name="su_compat_off">Închide</string>
+    <string name="su_compat_traditional">Tradițional</string>
+    <string name="su_compat_ksm">Kasumi (experimental)</string>
+    <string name="su_compat_magisk_summary">Fereastră de autorizare</string>
     <string name="settings_uts_view">Vizualizare UTS</string>
     <string name="settings_uts_view_summary">Gestionează identitatea nucleului la pornirea timpurie, global în timpul execuției și în domeniul listei de refuz.</string>
     <string name="uts_view_title">Vizualizare UTS</string>

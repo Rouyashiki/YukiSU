@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Ruta de su personalizada</string>
-    <string name="su_compact_path_help">Só se aplica no modo Kasumi. O directorio pai debe existir; non se sobrescribirán os ficheiros existentes.</string>
-    <string name="su_compact_path_invalid">Introduce unha ruta absoluta válida.</string>
-    <string name="su_compact_path_reset">Restaurar a ruta predeterminada</string>
-    <string name="su_compact_path_error_exists">Esta ruta xa existe. Escolle outra ruta.</string>
-    <string name="su_compact_path_error_parent">O directorio pai non existe ou non é un directorio.</string>
-    <string name="su_compact_path_error_permission">Non tes permisos suficientes para aplicar esta ruta.</string>
-    <string name="su_compact_path_error_persistence">Non se puido gardar a configuración. Comproba o espazo dispoñible e os permisos e téntao de novo.</string>
+    <string name="su_compat_path_title">Ruta de su personalizada</string>
+    <string name="su_compat_path_help">Só se aplica no modo Kasumi. O directorio pai debe existir; non se sobrescribirán os ficheiros existentes.</string>
+    <string name="su_compat_path_invalid">Introduce unha ruta absoluta válida.</string>
+    <string name="su_compat_path_reset">Restaurar a ruta predeterminada</string>
+    <string name="su_compat_path_error_exists">Esta ruta xa existe. Escolle outra ruta.</string>
+    <string name="su_compat_path_error_parent">O directorio pai non existe ou non é un directorio.</string>
+    <string name="su_compat_path_error_permission">Non tes permisos suficientes para aplicar esta ruta.</string>
+    <string name="su_compat_path_error_persistence">Non se puido gardar a configuración. Comproba o espazo dispoñible e os permisos e téntao de novo.</string>
 </resources>

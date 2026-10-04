@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Własna ścieżka su</string>
-    <string name="su_compact_path_help">Działa tylko w trybie Kasumi. Katalog nadrzędny musi istnieć; istniejące pliki nie zostaną nadpisane.</string>
-    <string name="su_compact_path_invalid">Wpisz prawidłową ścieżkę bezwzględną.</string>
-    <string name="su_compact_path_reset">Przywróć domyślną ścieżkę</string>
-    <string name="su_compact_path_error_exists">Ta ścieżka już istnieje. Wybierz inną ścieżkę.</string>
-    <string name="su_compact_path_error_parent">Katalog nadrzędny nie istnieje lub nie jest katalogiem.</string>
-    <string name="su_compact_path_error_permission">Brak uprawnień do zastosowania tej ścieżki.</string>
-    <string name="su_compact_path_error_persistence">Nie udało się zapisać konfiguracji. Sprawdź wolne miejsce i uprawnienia, a następnie spróbuj ponownie.</string>
+    <string name="su_compat_path_title">Własna ścieżka su</string>
+    <string name="su_compat_path_help">Działa tylko w trybie Kasumi. Katalog nadrzędny musi istnieć; istniejące pliki nie zostaną nadpisane.</string>
+    <string name="su_compat_path_invalid">Wpisz prawidłową ścieżkę bezwzględną.</string>
+    <string name="su_compat_path_reset">Przywróć domyślną ścieżkę</string>
+    <string name="su_compat_path_error_exists">Ta ścieżka już istnieje. Wybierz inną ścieżkę.</string>
+    <string name="su_compat_path_error_parent">Katalog nadrzędny nie istnieje lub nie jest katalogiem.</string>
+    <string name="su_compat_path_error_permission">Brak uprawnień do zastosowania tej ścieżki.</string>
+    <string name="su_compat_path_error_persistence">Nie udało się zapisać konfiguracji. Sprawdź wolne miejsce i uprawnienia, a następnie spróbuj ponownie.</string>
 </resources>

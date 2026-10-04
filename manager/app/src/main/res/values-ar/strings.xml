@@ -578,10 +578,10 @@
     <string name="settings_yukizygisk_toast_on">فُعّل. يسري بعد إعادة التشغيل</string>
     <string name="settings_yukizygisk_toast_off">أُوقف. يسري بعد إعادة التشغيل</string>
     <string name="settings_yukizygisk_toast_failed">فشل التبديل</string>
-    <string name="su_compact_off">إغلاق</string>
-    <string name="su_compact_traditional">تقليدي</string>
-    <string name="su_compact_ksm">Kasumi (تجريبي)</string>
-    <string name="su_compact_magisk_summary">نافذة منح الصلاحيات</string>
+    <string name="su_compat_off">إغلاق</string>
+    <string name="su_compat_traditional">تقليدي</string>
+    <string name="su_compat_ksm">Kasumi (تجريبي)</string>
+    <string name="su_compat_magisk_summary">نافذة منح الصلاحيات</string>
     <string name="settings_uts_view">عرض UTS</string>
     <string name="settings_uts_view_summary">إدارة هوية النواة في الإقلاع المبكر، وعلى المستوى العام أثناء التشغيل، وفي نطاق denylist.</string>
     <string name="uts_view_title">عرض UTS</string>

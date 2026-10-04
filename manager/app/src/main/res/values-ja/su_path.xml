@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">su パスのカスタマイズ</string>
-    <string name="su_compact_path_help">Kasumi モードでのみ有効です。親ディレクトリが存在する必要があります。既存のファイルは上書きされません。</string>
-    <string name="su_compact_path_invalid">有効な絶対パスを入力してください。</string>
-    <string name="su_compact_path_reset">デフォルトのパスに戻す</string>
-    <string name="su_compact_path_error_exists">このパスは既に存在します。別のパスを指定してください。</string>
-    <string name="su_compact_path_error_parent">親ディレクトリが存在しないか、ディレクトリではありません。</string>
-    <string name="su_compact_path_error_permission">このパスを適用する権限がありません。</string>
-    <string name="su_compact_path_error_persistence">設定を保存できませんでした。空き容量とアクセス権限を確認して、再試行してください。</string>
+    <string name="su_compat_path_title">su パスのカスタマイズ</string>
+    <string name="su_compat_path_help">Kasumi モードでのみ有効です。親ディレクトリが存在する必要があります。既存のファイルは上書きされません。</string>
+    <string name="su_compat_path_invalid">有効な絶対パスを入力してください。</string>
+    <string name="su_compat_path_reset">デフォルトのパスに戻す</string>
+    <string name="su_compat_path_error_exists">このパスは既に存在します。別のパスを指定してください。</string>
+    <string name="su_compat_path_error_parent">親ディレクトリが存在しないか、ディレクトリではありません。</string>
+    <string name="su_compat_path_error_permission">このパスを適用する権限がありません。</string>
+    <string name="su_compat_path_error_persistence">設定を保存できませんでした。空き容量とアクセス権限を確認して、再試行してください。</string>
 </resources>

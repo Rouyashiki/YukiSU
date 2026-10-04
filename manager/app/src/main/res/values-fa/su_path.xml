@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">مسیر سفارشی su</string>
-    <string name="su_compact_path_help">فقط در حالت Kasumi اعمال می‌شود. پوشهٔ والد باید موجود باشد؛ فایل‌های موجود بازنویسی نمی‌شوند.</string>
-    <string name="su_compact_path_invalid">یک مسیر مطلق معتبر وارد کنید.</string>
-    <string name="su_compact_path_reset">بازیابی مسیر پیش‌فرض</string>
-    <string name="su_compact_path_error_exists">این مسیر از قبل وجود دارد. مسیر دیگری انتخاب کنید.</string>
-    <string name="su_compact_path_error_parent">پوشهٔ والد وجود ندارد یا پوشه نیست.</string>
-    <string name="su_compact_path_error_permission">مجوز کافی برای اعمال این مسیر وجود ندارد.</string>
-    <string name="su_compact_path_error_persistence">ذخیرهٔ تنظیمات ممکن نشد. فضای ذخیره‌سازی و مجوزها را بررسی و دوباره تلاش کنید.</string>
+    <string name="su_compat_path_title">مسیر سفارشی su</string>
+    <string name="su_compat_path_help">فقط در حالت Kasumi اعمال می‌شود. پوشهٔ والد باید موجود باشد؛ فایل‌های موجود بازنویسی نمی‌شوند.</string>
+    <string name="su_compat_path_invalid">یک مسیر مطلق معتبر وارد کنید.</string>
+    <string name="su_compat_path_reset">بازیابی مسیر پیش‌فرض</string>
+    <string name="su_compat_path_error_exists">این مسیر از قبل وجود دارد. مسیر دیگری انتخاب کنید.</string>
+    <string name="su_compat_path_error_parent">پوشهٔ والد وجود ندارد یا پوشه نیست.</string>
+    <string name="su_compat_path_error_permission">مجوز کافی برای اعمال این مسیر وجود ندارد.</string>
+    <string name="su_compat_path_error_persistence">ذخیرهٔ تنظیمات ممکن نشد. فضای ذخیره‌سازی و مجوزها را بررسی و دوباره تلاش کنید.</string>
 </resources>

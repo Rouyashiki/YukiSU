@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Activado. Se aplica tras reiniciar.</string>
     <string name="settings_yukizygisk_toast_off">Desactivado. Se aplica tras reiniciar.</string>
     <string name="settings_yukizygisk_toast_failed">Error al cambiar</string>
-    <string name="su_compact_off">Cancelar</string>
-    <string name="su_compact_traditional">Tradicional</string>
-    <string name="su_compact_ksm">Kasumi (experimental)</string>
-    <string name="su_compact_magisk_summary">Ventana de autorización</string>
+    <string name="su_compat_off">Cancelar</string>
+    <string name="su_compat_traditional">Tradicional</string>
+    <string name="su_compat_ksm">Kasumi (experimental)</string>
+    <string name="su_compat_magisk_summary">Ventana de autorización</string>
     <string name="settings_uts_view">Vista UTS</string>
     <string name="settings_uts_view_summary">Gestionar la identidad del núcleo durante el arranque temprano, globalmente en ejecución y en el ámbito de la lista de denegación.</string>
     <string name="uts_view_title">Vista UTS</string>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">అనుకూల su పాత్</string>
-    <string name="su_compact_path_help">Kasumi మోడ్‌లో మాత్రమే వర్తిస్తుంది. పేరెంట్ డైరెక్టరీ ఉండాలి; ఇప్పటికే ఉన్న ఫైల్‌లు భర్తీ చేయబడవు.</string>
-    <string name="su_compact_path_invalid">చెల్లుబాటు అయ్యే పూర్తి పాత్‌ను నమోదు చేయండి.</string>
-    <string name="su_compact_path_reset">డిఫాల్ట్ పాత్‌ను పునరుద్ధరించు</string>
-    <string name="su_compact_path_error_exists">ఈ పాత్ ఇప్పటికే ఉంది. వేరే పాత్‌ను ఎంచుకోండి.</string>
-    <string name="su_compact_path_error_parent">పేరెంట్ డైరెక్టరీ లేదు లేదా అది డైరెక్టరీ కాదు.</string>
-    <string name="su_compact_path_error_permission">ఈ పాత్‌ను వర్తింపజేయడానికి తగిన అనుమతి లేదు.</string>
-    <string name="su_compact_path_error_persistence">కాన్ఫిగరేషన్‌ను సేవ్ చేయలేకపోయాం. నిల్వ స్థలం మరియు అనుమతులను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.</string>
+    <string name="su_compat_path_title">అనుకూల su పాత్</string>
+    <string name="su_compat_path_help">Kasumi మోడ్‌లో మాత్రమే వర్తిస్తుంది. పేరెంట్ డైరెక్టరీ ఉండాలి; ఇప్పటికే ఉన్న ఫైల్‌లు భర్తీ చేయబడవు.</string>
+    <string name="su_compat_path_invalid">చెల్లుబాటు అయ్యే పూర్తి పాత్‌ను నమోదు చేయండి.</string>
+    <string name="su_compat_path_reset">డిఫాల్ట్ పాత్‌ను పునరుద్ధరించు</string>
+    <string name="su_compat_path_error_exists">ఈ పాత్ ఇప్పటికే ఉంది. వేరే పాత్‌ను ఎంచుకోండి.</string>
+    <string name="su_compat_path_error_parent">పేరెంట్ డైరెక్టరీ లేదు లేదా అది డైరెక్టరీ కాదు.</string>
+    <string name="su_compat_path_error_permission">ఈ పాత్‌ను వర్తింపజేయడానికి తగిన అనుమతి లేదు.</string>
+    <string name="su_compat_path_error_persistence">కాన్ఫిగరేషన్‌ను సేవ్ చేయలేకపోయాం. నిల్వ స్థలం మరియు అనుమతులను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.</string>
 </resources>

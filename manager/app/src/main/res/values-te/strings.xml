@@ -509,7 +509,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">అప్‌డేట్</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">మూసివేయండి</string>
+    <string name="su_compat_off">మూసివేయండి</string>
     <string name="uts_view_value_yes">అవును</string>
     <string name="uts_view_value_no">కాదు</string>
     <string name="uts_view_refresh">రిఫ్రెష్ చేయండి</string>
@@ -603,9 +603,9 @@
     <string name="settings_yukizygisk_toast_on">ప్రారంభించబడింది, పునఃప్రారంభం తర్వాత అమలవుతుంది</string>
     <string name="settings_yukizygisk_toast_off">నిలిపివేయబడింది, పునఃప్రారంభం తర్వాత అమలవుతుంది</string>
     <string name="settings_yukizygisk_toast_failed">మార్చడం విఫలమైంది</string>
-    <string name="su_compact_traditional">సాంప్రదాయ</string>
-    <string name="su_compact_ksm">Kasumi (ప్రయోగాత్మక)</string>
-    <string name="su_compact_magisk_summary">అనుమతి మంజూరు డైలాగ్</string>
+    <string name="su_compat_traditional">సాంప్రదాయ</string>
+    <string name="su_compat_ksm">Kasumi (ప్రయోగాత్మక)</string>
+    <string name="su_compat_magisk_summary">అనుమతి మంజూరు డైలాగ్</string>
     <string name="settings_uts_view">UTS వీక్షణ</string>
     <string name="settings_uts_view_summary">ప్రారంభ బూట్, రన్‌టైమ్ గ్లోబల్, denylist పరిధిలో కెర్నల్ గుర్తింపును నిర్వహించండి.</string>
     <string name="uts_view_title">UTS వీక్షణ</string>

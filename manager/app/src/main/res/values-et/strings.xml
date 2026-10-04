@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Lubatud; jõustub pärast taaskäivitust</string>
     <string name="settings_yukizygisk_toast_off">Keelatud; jõustub pärast taaskäivitust</string>
     <string name="settings_yukizygisk_toast_failed">Lülitamine nurjus</string>
-    <string name="su_compact_off">Sulge</string>
-    <string name="su_compact_traditional">Traditsiooniline</string>
-    <string name="su_compact_ksm">Kasumi (eksperimentaalne)</string>
-    <string name="su_compact_magisk_summary">Õiguste andmise hüpikaken</string>
+    <string name="su_compat_off">Sulge</string>
+    <string name="su_compat_traditional">Traditsiooniline</string>
+    <string name="su_compat_ksm">Kasumi (eksperimentaalne)</string>
+    <string name="su_compat_magisk_summary">Õiguste andmise hüpikaken</string>
     <string name="settings_uts_view">UTS-vaade</string>
     <string name="settings_uts_view_summary">Halda tuuma identiteeti varasel käivitamisel, globaalselt käitusajal ja keelunimekirja piires.</string>
     <string name="uts_view_title">UTS-vaade</string>

@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Aktiveret. Træder i kraft efter genstart.</string>
     <string name="settings_yukizygisk_toast_off">Deaktiveret. Træder i kraft efter genstart.</string>
     <string name="settings_yukizygisk_toast_failed">Kunne ikke skifte</string>
-    <string name="su_compact_off">Luk</string>
-    <string name="su_compact_traditional">Traditionel</string>
-    <string name="su_compact_ksm">Kasumi (eksperimentel)</string>
-    <string name="su_compact_magisk_summary">Godkendelsesdialog</string>
+    <string name="su_compat_off">Luk</string>
+    <string name="su_compat_traditional">Traditionel</string>
+    <string name="su_compat_ksm">Kasumi (eksperimentel)</string>
+    <string name="su_compat_magisk_summary">Godkendelsesdialog</string>
     <string name="settings_uts_view">UTS-visning</string>
     <string name="settings_uts_view_summary">Administrer kerneidentiteter ved tidlig opstart, globalt under kørsel og inden for afvisningslistens område.</string>
     <string name="uts_view_title">UTS-visning</string>

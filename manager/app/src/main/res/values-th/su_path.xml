@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">เส้นทาง su ที่กำหนดเอง</string>
-    <string name="su_compact_path_help">ใช้ได้เฉพาะในโหมด Kasumi ต้องมีไดเรกทอรีหลักอยู่แล้ว และจะไม่เขียนทับไฟล์ที่มีอยู่</string>
-    <string name="su_compact_path_invalid">ป้อนเส้นทางแบบเต็มที่ถูกต้อง</string>
-    <string name="su_compact_path_reset">คืนค่าเส้นทางเริ่มต้น</string>
-    <string name="su_compact_path_error_exists">เส้นทางนี้มีอยู่แล้ว โปรดเลือกเส้นทางอื่น</string>
-    <string name="su_compact_path_error_parent">ไม่มีไดเรกทอรีหลักหรือเส้นทางหลักไม่ใช่ไดเรกทอรี</string>
-    <string name="su_compact_path_error_permission">สิทธิ์ไม่เพียงพอที่จะใช้เส้นทางนี้</string>
-    <string name="su_compact_path_error_persistence">บันทึกการตั้งค่าไม่ได้ โปรดตรวจสอบพื้นที่จัดเก็บและสิทธิ์ แล้วลองอีกครั้ง</string>
+    <string name="su_compat_path_title">เส้นทาง su ที่กำหนดเอง</string>
+    <string name="su_compat_path_help">ใช้ได้เฉพาะในโหมด Kasumi ต้องมีไดเรกทอรีหลักอยู่แล้ว และจะไม่เขียนทับไฟล์ที่มีอยู่</string>
+    <string name="su_compat_path_invalid">ป้อนเส้นทางแบบเต็มที่ถูกต้อง</string>
+    <string name="su_compat_path_reset">คืนค่าเส้นทางเริ่มต้น</string>
+    <string name="su_compat_path_error_exists">เส้นทางนี้มีอยู่แล้ว โปรดเลือกเส้นทางอื่น</string>
+    <string name="su_compat_path_error_parent">ไม่มีไดเรกทอรีหลักหรือเส้นทางหลักไม่ใช่ไดเรกทอรี</string>
+    <string name="su_compat_path_error_permission">สิทธิ์ไม่เพียงพอที่จะใช้เส้นทางนี้</string>
+    <string name="su_compat_path_error_persistence">บันทึกการตั้งค่าไม่ได้ โปรดตรวจสอบพื้นที่จัดเก็บและสิทธิ์ แล้วลองอีกครั้ง</string>
 </resources>

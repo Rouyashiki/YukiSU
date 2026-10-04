@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Pot su po meri</string>
-    <string name="su_compact_path_help">Velja samo v načinu Kasumi. Nadrejena mapa mora obstajati; obstoječe datoteke ne bodo prepisane.</string>
-    <string name="su_compact_path_invalid">Vnesite veljavno absolutno pot.</string>
-    <string name="su_compact_path_reset">Obnovi privzeto pot</string>
-    <string name="su_compact_path_error_exists">Ta pot že obstaja. Izberite drugo pot.</string>
-    <string name="su_compact_path_error_parent">Nadrejena mapa ne obstaja ali ni mapa.</string>
-    <string name="su_compact_path_error_permission">Za uporabo te poti ni dovolj dovoljenj.</string>
-    <string name="su_compact_path_error_persistence">Konfiguracije ni bilo mogoče shraniti. Preverite prostor za shranjevanje in dovoljenja ter poskusite znova.</string>
+    <string name="su_compat_path_title">Pot su po meri</string>
+    <string name="su_compat_path_help">Velja samo v načinu Kasumi. Nadrejena mapa mora obstajati; obstoječe datoteke ne bodo prepisane.</string>
+    <string name="su_compat_path_invalid">Vnesite veljavno absolutno pot.</string>
+    <string name="su_compat_path_reset">Obnovi privzeto pot</string>
+    <string name="su_compat_path_error_exists">Ta pot že obstaja. Izberite drugo pot.</string>
+    <string name="su_compat_path_error_parent">Nadrejena mapa ne obstaja ali ni mapa.</string>
+    <string name="su_compat_path_error_permission">Za uporabo te poti ni dovolj dovoljenj.</string>
+    <string name="su_compat_path_error_persistence">Konfiguracije ni bilo mogoče shraniti. Preverite prostor za shranjevanje in dovoljenja ter poskusite znova.</string>
 </resources>

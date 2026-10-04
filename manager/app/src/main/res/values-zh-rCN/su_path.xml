@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">自定义 su 路径</string>
-    <string name="su_compact_path_help">仅在 Kasumi 模式下生效。父目录必须存在，已有文件不会被覆盖。</string>
-    <string name="su_compact_path_invalid">请输入有效的绝对路径。</string>
-    <string name="su_compact_path_reset">恢复默认路径</string>
-    <string name="su_compact_path_error_exists">该路径已存在，请使用其他路径。</string>
-    <string name="su_compact_path_error_parent">父目录不存在或不是目录，请检查路径。</string>
-    <string name="su_compact_path_error_permission">权限不足，无法应用此路径。</string>
-    <string name="su_compact_path_error_persistence">配置保存失败，请检查存储空间及访问权限后重试。</string>
+    <string name="su_compat_path_title">自定义 su 路径</string>
+    <string name="su_compat_path_help">仅在 Kasumi 模式下生效。父目录必须存在，已有文件不会被覆盖。</string>
+    <string name="su_compat_path_invalid">请输入有效的绝对路径。</string>
+    <string name="su_compat_path_reset">恢复默认路径</string>
+    <string name="su_compat_path_error_exists">该路径已存在，请使用其他路径。</string>
+    <string name="su_compat_path_error_parent">父目录不存在或不是目录，请检查路径。</string>
+    <string name="su_compat_path_error_permission">权限不足，无法应用此路径。</string>
+    <string name="su_compat_path_error_persistence">配置保存失败，请检查存储空间及访问权限后重试。</string>
 </resources>

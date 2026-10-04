@@ -598,10 +598,10 @@
     <string name="settings_yukizygisk_toast_on">已開啟，重新啟動生效</string>
     <string name="settings_yukizygisk_toast_off">已關閉，重新啟動生效</string>
     <string name="settings_yukizygisk_toast_failed">切換失敗</string>
-    <string name="su_compact_off">關閉</string>
-    <string name="su_compact_traditional">傳統</string>
-    <string name="su_compact_ksm">Kasumi（實驗性功能）</string>
-    <string name="su_compact_magisk_summary">授權彈窗</string>
+    <string name="su_compat_off">關閉</string>
+    <string name="su_compat_traditional">傳統</string>
+    <string name="su_compat_ksm">Kasumi（實驗性功能）</string>
+    <string name="su_compat_magisk_summary">授權彈窗</string>
     <string name="settings_uts_view">UTS 檢視</string>
     <string name="settings_uts_view_summary">管理早期啟動、執行階段全域及 denylist 作用範圍的核心身分。</string>
     <string name="uts_view_title">UTS 檢視</string>

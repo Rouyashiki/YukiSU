@@ -576,10 +576,10 @@
     <string name="settings_yukizygisk_toast_on">Ativado. Entra em vigor após reiniciar.</string>
     <string name="settings_yukizygisk_toast_off">Desativado. Entra em vigor após reiniciar.</string>
     <string name="settings_yukizygisk_toast_failed">Falha ao alternar</string>
-    <string name="su_compact_off">Fechar</string>
-    <string name="su_compact_traditional">Tradicional</string>
-    <string name="su_compact_ksm">Kasumi (experimental)</string>
-    <string name="su_compact_magisk_summary">Janela de autorização</string>
+    <string name="su_compat_off">Fechar</string>
+    <string name="su_compat_traditional">Tradicional</string>
+    <string name="su_compat_ksm">Kasumi (experimental)</string>
+    <string name="su_compat_magisk_summary">Janela de autorização</string>
     <string name="settings_uts_view">Vista UTS</string>
     <string name="settings_uts_view_summary">Gerenciar a identidade do kernel na inicialização antecipada, globalmente em execução e no escopo da lista de negação.</string>
     <string name="uts_view_title">Vista UTS</string>

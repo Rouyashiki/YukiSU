@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">कस्टम su पथ</string>
-    <string name="su_compact_path_help">केवल Kasumi मोड में लागू होता है। मूल डायरेक्टरी मौजूद होनी चाहिए; मौजूदा फ़ाइलें बदली नहीं जाएँगी।</string>
-    <string name="su_compact_path_invalid">एक मान्य पूर्ण पथ दर्ज करें।</string>
-    <string name="su_compact_path_reset">डिफ़ॉल्ट पथ बहाल करें</string>
-    <string name="su_compact_path_error_exists">यह पथ पहले से मौजूद है। कोई दूसरा पथ चुनें।</string>
-    <string name="su_compact_path_error_parent">मूल डायरेक्टरी मौजूद नहीं है या यह डायरेक्टरी नहीं है।</string>
-    <string name="su_compact_path_error_permission">इस पथ को लागू करने के लिए पर्याप्त अनुमति नहीं है।</string>
-    <string name="su_compact_path_error_persistence">कॉन्फ़िगरेशन सहेजा नहीं जा सका। स्टोरेज की जगह और अनुमतियाँ जाँचकर फिर से प्रयास करें।</string>
+    <string name="su_compat_path_title">कस्टम su पथ</string>
+    <string name="su_compat_path_help">केवल Kasumi मोड में लागू होता है। मूल डायरेक्टरी मौजूद होनी चाहिए; मौजूदा फ़ाइलें बदली नहीं जाएँगी।</string>
+    <string name="su_compat_path_invalid">एक मान्य पूर्ण पथ दर्ज करें।</string>
+    <string name="su_compat_path_reset">डिफ़ॉल्ट पथ बहाल करें</string>
+    <string name="su_compat_path_error_exists">यह पथ पहले से मौजूद है। कोई दूसरा पथ चुनें।</string>
+    <string name="su_compat_path_error_parent">मूल डायरेक्टरी मौजूद नहीं है या यह डायरेक्टरी नहीं है।</string>
+    <string name="su_compat_path_error_permission">इस पथ को लागू करने के लिए पर्याप्त अनुमति नहीं है।</string>
+    <string name="su_compat_path_error_persistence">कॉन्फ़िगरेशन सहेजा नहीं जा सका। स्टोरेज की जगह और अनुमतियाँ जाँचकर फिर से प्रयास करें।</string>
 </resources>

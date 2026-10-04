@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">נתיב su מותאם אישית</string>
-    <string name="su_compact_path_help">חל רק במצב Kasumi. תיקיית האב חייבת להתקיים; קבצים קיימים לא יידרסו.</string>
-    <string name="su_compact_path_invalid">יש להזין נתיב מוחלט תקין.</string>
-    <string name="su_compact_path_reset">שחזור נתיב ברירת המחדל</string>
-    <string name="su_compact_path_error_exists">הנתיב הזה כבר קיים. יש לבחור נתיב אחר.</string>
-    <string name="su_compact_path_error_parent">תיקיית האב אינה קיימת או שאינה תיקייה.</string>
-    <string name="su_compact_path_error_permission">אין הרשאה מספקת להחלת הנתיב הזה.</string>
-    <string name="su_compact_path_error_persistence">לא ניתן לשמור את ההגדרות. יש לבדוק את שטח האחסון ואת ההרשאות ולנסות שוב.</string>
+    <string name="su_compat_path_title">נתיב su מותאם אישית</string>
+    <string name="su_compat_path_help">חל רק במצב Kasumi. תיקיית האב חייבת להתקיים; קבצים קיימים לא יידרסו.</string>
+    <string name="su_compat_path_invalid">יש להזין נתיב מוחלט תקין.</string>
+    <string name="su_compat_path_reset">שחזור נתיב ברירת המחדל</string>
+    <string name="su_compat_path_error_exists">הנתיב הזה כבר קיים. יש לבחור נתיב אחר.</string>
+    <string name="su_compat_path_error_parent">תיקיית האב אינה קיימת או שאינה תיקייה.</string>
+    <string name="su_compat_path_error_permission">אין הרשאה מספקת להחלת הנתיב הזה.</string>
+    <string name="su_compat_path_error_persistence">לא ניתן לשמור את ההגדרות. יש לבדוק את שטח האחסון ואת ההרשאות ולנסות שוב.</string>
 </resources>

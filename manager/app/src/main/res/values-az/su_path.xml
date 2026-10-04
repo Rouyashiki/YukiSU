@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Fərdi su yolu</string>
-    <string name="su_compact_path_help">Yalnız Kasumi rejimində tətbiq olunur. Üst qovluq mövcud olmalıdır; mövcud fayllar əvəz edilməyəcək.</string>
-    <string name="su_compact_path_invalid">Etibarlı mütləq yol daxil edin.</string>
-    <string name="su_compact_path_reset">Standart yolu bərpa et</string>
-    <string name="su_compact_path_error_exists">Bu yol artıq mövcuddur. Başqa yol seçin.</string>
-    <string name="su_compact_path_error_parent">Üst qovluq mövcud deyil və ya qovluq deyil.</string>
-    <string name="su_compact_path_error_permission">Bu yolu tətbiq etmək üçün icazə kifayət deyil.</string>
-    <string name="su_compact_path_error_persistence">Konfiqurasiya saxlanmadı. Yaddaş sahəsini və icazələri yoxlayıb yenidən cəhd edin.</string>
+    <string name="su_compat_path_title">Fərdi su yolu</string>
+    <string name="su_compat_path_help">Yalnız Kasumi rejimində tətbiq olunur. Üst qovluq mövcud olmalıdır; mövcud fayllar əvəz edilməyəcək.</string>
+    <string name="su_compat_path_invalid">Etibarlı mütləq yol daxil edin.</string>
+    <string name="su_compat_path_reset">Standart yolu bərpa et</string>
+    <string name="su_compat_path_error_exists">Bu yol artıq mövcuddur. Başqa yol seçin.</string>
+    <string name="su_compat_path_error_parent">Üst qovluq mövcud deyil və ya qovluq deyil.</string>
+    <string name="su_compat_path_error_permission">Bu yolu tətbiq etmək üçün icazə kifayət deyil.</string>
+    <string name="su_compat_path_error_persistence">Konfiqurasiya saxlanmadı. Yaddaş sahəsini və icazələri yoxlayıb yenidən cəhd edin.</string>
 </resources>

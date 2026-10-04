@@ -511,7 +511,7 @@
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_repository_update">อัปเดต</string>
     <string name="settings_yukizygisk">YukiZygisk</string>
-    <string name="su_compact_off">ปิด</string>
+    <string name="su_compat_off">ปิด</string>
     <string name="uts_view_value_yes">ใช่</string>
     <string name="uts_view_value_no">ไม่</string>
     <string name="uts_view_refresh">รีเฟรช</string>
@@ -605,9 +605,9 @@
     <string name="settings_yukizygisk_toast_on">เปิดแล้ว มีผลหลังรีสตาร์ต</string>
     <string name="settings_yukizygisk_toast_off">ปิดแล้ว มีผลหลังรีสตาร์ต</string>
     <string name="settings_yukizygisk_toast_failed">สลับไม่สำเร็จ</string>
-    <string name="su_compact_traditional">แบบดั้งเดิม</string>
-    <string name="su_compact_ksm">Kasumi (ฟีเจอร์ทดลอง)</string>
-    <string name="su_compact_magisk_summary">กล่องโต้ตอบอนุญาตสิทธิ์</string>
+    <string name="su_compat_traditional">แบบดั้งเดิม</string>
+    <string name="su_compat_ksm">Kasumi (ฟีเจอร์ทดลอง)</string>
+    <string name="su_compat_magisk_summary">กล่องโต้ตอบอนุญาตสิทธิ์</string>
     <string name="settings_uts_view">มุมมอง UTS</string>
     <string name="settings_uts_view_summary">จัดการข้อมูลประจำตัวของเคอร์เนลในช่วงบูตต้น ทั่วระบบขณะทำงาน และในขอบเขต denylist</string>
     <string name="uts_view_title">มุมมอง UTS</string>

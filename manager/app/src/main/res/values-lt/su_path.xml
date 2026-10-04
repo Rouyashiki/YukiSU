@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Pasirinktinis su kelias</string>
-    <string name="su_compact_path_help">Taikoma tik Kasumi režimu. Pirminis katalogas turi egzistuoti; esami failai nebus perrašyti.</string>
-    <string name="su_compact_path_invalid">Įveskite tinkamą absoliutųjį kelią.</string>
-    <string name="su_compact_path_reset">Atkurti numatytąjį kelią</string>
-    <string name="su_compact_path_error_exists">Šis kelias jau egzistuoja. Pasirinkite kitą kelią.</string>
-    <string name="su_compact_path_error_parent">Pirminis katalogas neegzistuoja arba nėra katalogas.</string>
-    <string name="su_compact_path_error_permission">Nepakanka leidimų šiam keliui pritaikyti.</string>
-    <string name="su_compact_path_error_persistence">Nepavyko išsaugoti konfigūracijos. Patikrinkite laisvą vietą ir leidimus, tada bandykite dar kartą.</string>
+    <string name="su_compat_path_title">Pasirinktinis su kelias</string>
+    <string name="su_compat_path_help">Taikoma tik Kasumi režimu. Pirminis katalogas turi egzistuoti; esami failai nebus perrašyti.</string>
+    <string name="su_compat_path_invalid">Įveskite tinkamą absoliutųjį kelią.</string>
+    <string name="su_compat_path_reset">Atkurti numatytąjį kelią</string>
+    <string name="su_compat_path_error_exists">Šis kelias jau egzistuoja. Pasirinkite kitą kelią.</string>
+    <string name="su_compat_path_error_parent">Pirminis katalogas neegzistuoja arba nėra katalogas.</string>
+    <string name="su_compat_path_error_permission">Nepakanka leidimų šiam keliui pritaikyti.</string>
+    <string name="su_compat_path_error_persistence">Nepavyko išsaugoti konfigūracijos. Patikrinkite laisvą vietą ir leidimus, tada bandykite dar kartą.</string>
 </resources>

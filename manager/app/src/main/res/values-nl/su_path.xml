@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Aangepast su-pad</string>
-    <string name="su_compact_path_help">Geldt alleen in Kasumi-modus. De bovenliggende map moet bestaan; bestaande bestanden worden niet overschreven.</string>
-    <string name="su_compact_path_invalid">Voer een geldig absoluut pad in.</string>
-    <string name="su_compact_path_reset">Standaardpad herstellen</string>
-    <string name="su_compact_path_error_exists">Dit pad bestaat al. Kies een ander pad.</string>
-    <string name="su_compact_path_error_parent">De bovenliggende map bestaat niet of is geen map.</string>
-    <string name="su_compact_path_error_permission">Onvoldoende rechten om dit pad toe te passen.</string>
-    <string name="su_compact_path_error_persistence">De configuratie kon niet worden opgeslagen. Controleer de opslagruimte en rechten en probeer het opnieuw.</string>
+    <string name="su_compat_path_title">Aangepast su-pad</string>
+    <string name="su_compat_path_help">Geldt alleen in Kasumi-modus. De bovenliggende map moet bestaan; bestaande bestanden worden niet overschreven.</string>
+    <string name="su_compat_path_invalid">Voer een geldig absoluut pad in.</string>
+    <string name="su_compat_path_reset">Standaardpad herstellen</string>
+    <string name="su_compat_path_error_exists">Dit pad bestaat al. Kies een ander pad.</string>
+    <string name="su_compat_path_error_parent">De bovenliggende map bestaat niet of is geen map.</string>
+    <string name="su_compat_path_error_permission">Onvoldoende rechten om dit pad toe te passen.</string>
+    <string name="su_compat_path_error_persistence">De configuratie kon niet worden opgeslagen. Controleer de opslagruimte en rechten en probeer het opnieuw.</string>
 </resources>

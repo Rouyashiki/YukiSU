@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Đường dẫn su tùy chỉnh</string>
-    <string name="su_compact_path_help">Chỉ áp dụng trong chế độ Kasumi. Thư mục cha phải tồn tại; các tệp hiện có sẽ không bị ghi đè.</string>
-    <string name="su_compact_path_invalid">Nhập đường dẫn tuyệt đối hợp lệ.</string>
-    <string name="su_compact_path_reset">Khôi phục đường dẫn mặc định</string>
-    <string name="su_compact_path_error_exists">Đường dẫn này đã tồn tại. Hãy chọn đường dẫn khác.</string>
-    <string name="su_compact_path_error_parent">Thư mục cha không tồn tại hoặc không phải là thư mục.</string>
-    <string name="su_compact_path_error_permission">Không đủ quyền để áp dụng đường dẫn này.</string>
-    <string name="su_compact_path_error_persistence">Không thể lưu cấu hình. Kiểm tra dung lượng lưu trữ và quyền truy cập, rồi thử lại.</string>
+    <string name="su_compat_path_title">Đường dẫn su tùy chỉnh</string>
+    <string name="su_compat_path_help">Chỉ áp dụng trong chế độ Kasumi. Thư mục cha phải tồn tại; các tệp hiện có sẽ không bị ghi đè.</string>
+    <string name="su_compat_path_invalid">Nhập đường dẫn tuyệt đối hợp lệ.</string>
+    <string name="su_compat_path_reset">Khôi phục đường dẫn mặc định</string>
+    <string name="su_compat_path_error_exists">Đường dẫn này đã tồn tại. Hãy chọn đường dẫn khác.</string>
+    <string name="su_compat_path_error_parent">Thư mục cha không tồn tại hoặc không phải là thư mục.</string>
+    <string name="su_compat_path_error_permission">Không đủ quyền để áp dụng đường dẫn này.</string>
+    <string name="su_compat_path_error_persistence">Không thể lưu cấu hình. Kiểm tra dung lượng lưu trữ và quyền truy cập, rồi thử lại.</string>
 </resources>

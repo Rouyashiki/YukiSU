@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Benutzerdefinierter su-Pfad</string>
-    <string name="su_compact_path_help">Gilt nur im Kasumi-Modus. Das übergeordnete Verzeichnis muss existieren; vorhandene Dateien werden nicht überschrieben.</string>
-    <string name="su_compact_path_invalid">Gib einen gültigen absoluten Pfad ein.</string>
-    <string name="su_compact_path_reset">Standardpfad wiederherstellen</string>
-    <string name="su_compact_path_error_exists">Dieser Pfad existiert bereits. Wähle einen anderen Pfad.</string>
-    <string name="su_compact_path_error_parent">Das übergeordnete Verzeichnis existiert nicht oder ist kein Verzeichnis.</string>
-    <string name="su_compact_path_error_permission">Keine ausreichende Berechtigung, um diesen Pfad anzuwenden.</string>
-    <string name="su_compact_path_error_persistence">Die Konfiguration konnte nicht gespeichert werden. Prüfe Speicherplatz und Berechtigungen und versuche es erneut.</string>
+    <string name="su_compat_path_title">Benutzerdefinierter su-Pfad</string>
+    <string name="su_compat_path_help">Gilt nur im Kasumi-Modus. Das übergeordnete Verzeichnis muss existieren; vorhandene Dateien werden nicht überschrieben.</string>
+    <string name="su_compat_path_invalid">Gib einen gültigen absoluten Pfad ein.</string>
+    <string name="su_compat_path_reset">Standardpfad wiederherstellen</string>
+    <string name="su_compat_path_error_exists">Dieser Pfad existiert bereits. Wähle einen anderen Pfad.</string>
+    <string name="su_compat_path_error_parent">Das übergeordnete Verzeichnis existiert nicht oder ist kein Verzeichnis.</string>
+    <string name="su_compat_path_error_permission">Keine ausreichende Berechtigung, um diesen Pfad anzuwenden.</string>
+    <string name="su_compat_path_error_persistence">Die Konfiguration konnte nicht gespeichert werden. Prüfe Speicherplatz und Berechtigungen und versuche es erneut.</string>
 </resources>

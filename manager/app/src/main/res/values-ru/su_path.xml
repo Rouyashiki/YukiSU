@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="su_compact_path_title">Свой путь su</string>
-    <string name="su_compact_path_help">Действует только в режиме Kasumi. Родительский каталог должен существовать; существующие файлы не будут перезаписаны.</string>
-    <string name="su_compact_path_invalid">Введите допустимый абсолютный путь.</string>
-    <string name="su_compact_path_reset">Восстановить путь по умолчанию</string>
-    <string name="su_compact_path_error_exists">Этот путь уже существует. Выберите другой путь.</string>
-    <string name="su_compact_path_error_parent">Родительский каталог не существует или не является каталогом.</string>
-    <string name="su_compact_path_error_permission">Недостаточно прав для применения этого пути.</string>
-    <string name="su_compact_path_error_persistence">Не удалось сохранить настройки. Проверьте свободное место и права доступа, затем повторите попытку.</string>
+    <string name="su_compat_path_title">Свой путь su</string>
+    <string name="su_compat_path_help">Действует только в режиме Kasumi. Родительский каталог должен существовать; существующие файлы не будут перезаписаны.</string>
+    <string name="su_compat_path_invalid">Введите допустимый абсолютный путь.</string>
+    <string name="su_compat_path_reset">Восстановить путь по умолчанию</string>
+    <string name="su_compat_path_error_exists">Этот путь уже существует. Выберите другой путь.</string>
+    <string name="su_compat_path_error_parent">Родительский каталог не существует или не является каталогом.</string>
+    <string name="su_compat_path_error_permission">Недостаточно прав для применения этого пути.</string>
+    <string name="su_compat_path_error_persistence">Не удалось сохранить настройки. Проверьте свободное место и права доступа, затем повторите попытку.</string>
 </resources>
