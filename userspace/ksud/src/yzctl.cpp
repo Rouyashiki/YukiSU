@@ -468,8 +468,22 @@ json::Value build_status_json(const RuntimeSnapshot& snapshot, const ModuleInven
     root["native_modules"] = json::Value::array();
     root["native_injections"] = json::Value::array();
     root["crash_evidence"] = yukizygisk::crash::read_evidence(YUKIZYGISK_CURRENT_DIAGNOSTICS_DIR);
-    root["native_exit_evidence"] =
-        yukizygisk::crash::read_native_exits(YUKIZYGISK_CURRENT_DIAGNOSTICS_DIR);
+    root["exit_history_supported"] =
+        json::Value((snapshot.capabilities & YZ_RUNTIME_CAP_EXIT_HISTORY) != 0);
+    root["native_exit_evidence"] = json::Value::array();
+    root["native_exit_journal"] = json::Value::array();
+    for (const uint8_t abi : {uint8_t{1}, uint8_t{2}}) {
+        const auto document =
+            yukizygisk::crash::read_native_exit_document(YUKIZYGISK_CURRENT_DIAGNOSTICS_DIR, abi);
+        for (const auto& item : document.exits.a)
+            root["native_exit_evidence"].push_back(item);
+        if (document.journal_valid) {
+            auto journal = yukizygisk::crash::native_exit_journal_json(document.journal);
+            journal["abi_id"] = number(abi);
+            journal["abi"] = json::Value(abi_name(abi));
+            root["native_exit_journal"].push_back(journal);
+        }
+    }
     const bool protection = yukizygisk::settings::protection_enabled(YUKIZYGISK_CONFIG_PATH);
     root["crash_protection"] = protection;
     root["suspended_modules"] =

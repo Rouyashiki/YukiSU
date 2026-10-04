@@ -14,9 +14,12 @@ int yz_feature_enable_early(void)
 	if (!READ_ONCE(yukizygisk_enabled) && yz_early_native_active()) {
 		ret = yz_process_exit_enable();
 		if (!ret) {
+			yz_load_policy_enable();
 			ret = yz_exec_enable();
-			if (ret)
+			if (ret) {
+				yz_load_policy_disable();
 				yz_process_exit_disable();
+			}
 		}
 	}
 	mutex_unlock(&yz_feature_lock);
@@ -35,6 +38,7 @@ int yz_feature_set_enabled(bool enabled)
 		ret = yz_process_exit_enable();
 		if (ret)
 			goto out;
+		yz_load_policy_enable();
 		ret = yz_exec_enable();
 		if (ret)
 			goto undo_exit;
@@ -49,6 +53,7 @@ int yz_feature_set_enabled(bool enabled)
 	} else {
 		WRITE_ONCE(yukizygisk_enabled, false);
 		yz_early_native_disable();
+		yz_load_policy_disable();
 		yz_exec_disable();
 		yz_lifecycle_disable();
 		yz_process_exit_disable();
@@ -57,8 +62,10 @@ int yz_feature_set_enabled(bool enabled)
 	pr_info("yukizygisk: enabled=%d\n", enabled);
 	goto out;
 undo_exit:
-	if (!yz_early_native_active())
+	if (!yz_early_native_active()) {
+		yz_load_policy_disable();
 		yz_process_exit_disable();
+	}
 out:
 	mutex_unlock(&yz_feature_lock);
 	return ret;
@@ -66,6 +73,7 @@ out:
 
 void ksu_yukizygisk_init(void)
 {
+	yz_exit_history_init();
 	yz_events_init();
 	yz_fd_handoff_init();
 	yz_exec_init();
@@ -75,6 +83,8 @@ void ksu_yukizygisk_exit(void)
 {
 	yz_feature_set_enabled(false);
 	yz_exec_exit();
+	yz_load_policy_exit();
+	yz_exit_history_exit();
 	yz_events_exit();
 	yz_fd_handoff_exit();
 }

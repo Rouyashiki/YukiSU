@@ -27,6 +27,7 @@ struct NativeExitContext {
   uint8_t target_type = 0;
   uint8_t state = 0;
   std::vector<NativeModuleOutcome> modules;
+  bool modules_observed = false;
 };
 
 class Monitor {
@@ -44,8 +45,21 @@ public:
   void start(std::string directory, uint8_t abi);
   void on_exit(const yz_zygote_exit_event &event);
   void on_native_exit(const yz_target_exit_event &event,
-                      const NativeExitContext &context);
-  void flush_native() { save(true); }
+                      const NativeExitContext &context, uint64_t epoch = 0,
+                      uint64_t sequence = 0, bool batch = false);
+  void begin_native_batch() { drain(); }
+  void set_native_journal(const NativeExitJournalState &state) {
+    native_journal_ = state;
+    native_journal_present_ = true;
+    native_dirty_ = true;
+  }
+  [[nodiscard]] const NativeExitJournalState &native_journal() const {
+    return native_journal_;
+  }
+  bool flush_native() {
+    save(true);
+    return !native_dirty_;
+  }
   void drain();
   void tick();
   void set_protection_enabled(bool enabled) {
@@ -98,6 +112,8 @@ private:
   json::Value native_evidence_ = json::Value::array();
   bool dirty_ = false;
   bool native_dirty_ = false;
+  NativeExitJournalState native_journal_;
+  bool native_journal_present_ = false;
   Protection protection_;
 };
 

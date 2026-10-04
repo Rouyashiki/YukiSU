@@ -367,7 +367,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 		u8 compat_code[ARRAY_SIZE(compat_tmpl)];
 		struct yz_dlextinfo extinfo;
 		struct yz_compat_dlextinfo compat_extinfo;
-		struct ksu_file_load_policy native_policy = {};
+		struct ksu_file_load_policy *native_policy;
 		struct yz_early_packet_state early_packet;
 		unsigned long stub, dlopen_addr, dlsym_addr;
 		unsigned long redirected_entry;
@@ -401,20 +401,24 @@ static void yz_inject_tw_func(struct callback_head *cb)
 						  : YZ_NATIVE_CORE64_PATH);
 		else
 			core_path = compat ? YZ_CORE32_PATH : YZ_CORE64_PATH;
+		native_policy = yz_native_policy_begin();
+		if (IS_ERR(native_policy))
+			goto out;
 		yz_cache_name(loader_name, sizeof(loader_name));
 		yz_cache_name(core_name, sizeof(core_name));
 		if (yuki)
 			loader_fd = yz_stage_fd(loader_path, loader_name,
-						&native_policy);
+						native_policy);
 		else if (native)
-			loader_fd = yz_stage_file_fd(core_path, &native_policy);
+			loader_fd = yz_stage_file_fd(core_path, native_policy);
 		else
 			loader_fd =
-			    yz_stage_fd(core_path, core_name, &native_policy);
+			    yz_stage_fd(core_path, core_name, native_policy);
 		if (loader_fd < 0) {
 			pr_info("yukizygisk: loader staging failed pid=%d "
 				"target=%s err=%d\n",
 				current->pid, socket_name, loader_fd);
+			yz_restore_native_policy_state(native_policy);
 			goto out;
 		}
 		if (yuki) {
@@ -427,7 +431,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 				"target=%s err=%d\n",
 				current->pid, socket_name, core_fd);
 			yz_close_current_fd(loader_fd);
-			yz_restore_native_policy_state(&native_policy);
+			yz_restore_native_policy_state(native_policy);
 			goto out;
 		}
 
@@ -446,14 +450,14 @@ static void yz_inject_tw_func(struct callback_head *cb)
 				yz_close_current_fd(loader_fd);
 				if (yuki)
 					yz_close_current_fd(core_fd);
-				yz_restore_native_policy_state(&native_policy);
+				yz_restore_native_policy_state(native_policy);
 				goto out;
 			}
 			early_packet_arg = early_packet.packet_fd + 1;
 		}
 		{
 			int ret = ksu_file_load_policy_allow_execmem_current(
-			    &native_policy);
+			    native_policy);
 
 			if (ret < 0) {
 				pr_info("yukizygisk: execmem policy update "
@@ -463,7 +467,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 				if (yuki)
 					yz_close_current_fd(core_fd);
 				yz_close_early_packet_state(&early_packet);
-				yz_restore_native_policy_state(&native_policy);
+				yz_restore_native_policy_state(native_policy);
 				goto out;
 			}
 		}
@@ -479,7 +483,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 			if (yuki)
 				yz_close_current_fd(core_fd);
 			yz_close_early_packet_state(&early_packet);
-			yz_restore_native_policy_state(&native_policy);
+			yz_restore_native_policy_state(native_policy);
 			goto out;
 		}
 
@@ -568,7 +572,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 			if (yuki)
 				yz_close_current_fd(core_fd);
 			yz_close_early_packet_state(&early_packet);
-			yz_restore_native_policy_state(&native_policy);
+			yz_restore_native_policy_state(native_policy);
 			goto out;
 		}
 		{
@@ -581,7 +585,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 				if (yuki)
 					yz_close_current_fd(core_fd);
 				yz_close_early_packet_state(&early_packet);
-				yz_restore_native_policy_state(&native_policy);
+				yz_restore_native_policy_state(native_policy);
 				goto out;
 			}
 		}
@@ -604,14 +608,13 @@ static void yz_inject_tw_func(struct callback_head *cb)
 			if (yuki)
 				yz_close_current_fd(core_fd);
 			yz_close_early_packet_state(&early_packet);
-			yz_restore_native_policy_state(&native_policy);
+			yz_restore_native_policy_state(native_policy);
 		} else {
 			runtime_redirected = true;
 			yz_runtime_set_state((u32)current->tgid,
 					     runtime_generation,
 					     YZ_RUNTIME_STATE_REDIRECTED);
-			yz_publish_native_policy_state(current->tgid,
-						       &native_policy);
+			yz_publish_native_policy_state(native_policy);
 		}
 	}
 out:
@@ -657,7 +660,7 @@ void yz_tango_linker_offsets(u64 *dlopen, u64 *dlsym)
 
 int yz_tango_prepare(u32 *generation)
 {
-	struct ksu_file_load_policy policy = {};
+	struct ksu_file_load_policy *policy;
 	char socket_name[YZ_ZYGOTE_NAME_MAX];
 	char process[YZ_RUNTIME_PROCESS_MAX];
 	int fd;
@@ -677,21 +680,27 @@ int yz_tango_prepare(u32 *generation)
 				     YZ_RUNTIME_STATE_SAFEMODE);
 		return -ECANCELED;
 	}
-	fd = yz_stage_fd(YZ_CORE32_PATH, YZ_VMA_NAME, &policy);
+	policy = yz_native_policy_begin();
+	if (IS_ERR(policy)) {
+		yz_runtime_set_state(current->tgid, *generation,
+				     YZ_RUNTIME_STATE_FAILED);
+		return PTR_ERR(policy);
+	}
+	fd = yz_stage_fd(YZ_CORE32_PATH, YZ_VMA_NAME, policy);
 	if (fd < 0) {
-		yz_restore_native_policy_state(&policy);
+		yz_restore_native_policy_state(policy);
 		yz_runtime_set_state(current->tgid, *generation,
 				     YZ_RUNTIME_STATE_FAILED);
 		return fd;
 	}
-	if (ksu_file_load_policy_allow_execmem_current(&policy)) {
+	if (ksu_file_load_policy_allow_execmem_current(policy)) {
 		yz_close_current_fd(fd);
-		yz_restore_native_policy_state(&policy);
+		yz_restore_native_policy_state(policy);
 		yz_runtime_set_state(current->tgid, *generation,
 				     YZ_RUNTIME_STATE_FAILED);
 		return -EACCES;
 	}
-	yz_publish_native_policy_state(current->tgid, &policy);
+	yz_publish_native_policy_state(policy);
 	return fd;
 }
 

@@ -35,5 +35,6 @@ int ksu_yukizygisk_get_safemode(struct yz_safemode_status_cmd *cmd);
 int ksu_yukizygisk_get_runtime(struct yz_runtime_record *entries, u32 capacity,
 			       struct yz_runtime_query_cmd *query);
 int ksu_yukizygisk_report_runtime(const struct yz_runtime_report_cmd *report);
+int ksu_yukizygisk_get_exit_history_fd(void __user *arg);
 
 #endif

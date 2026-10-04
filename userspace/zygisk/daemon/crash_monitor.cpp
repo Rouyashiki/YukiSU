@@ -119,9 +119,12 @@ void Monitor::start(std::string directory, uint8_t abi) {
         evidence_.a.size() < kMaxEvidence)
       evidence_.push_back(item);
   }
-  for (const auto &item : read_native_exits(directory_).a) {
-    if (item.at("abi_id").u32_or(0) != abi_)
-      continue;
+  const auto native = read_native_exit_document(directory_, abi_);
+  native_journal_ = native.journal;
+  native_journal_present_ = native.journal_valid;
+  native_evidence_ = json::Value::array();
+  native_exits_.clear();
+  for (const auto &item : native.exits.a) {
     native_evidence_.push_back(item);
     native_exits_.push_back(
         {item.at("pid").u32_or(0), item.at("generation").u32_or(0),
@@ -351,7 +354,8 @@ void Monitor::on_exit(const yz_zygote_exit_event &event) {
 }
 
 void Monitor::on_native_exit(const yz_target_exit_event &event,
-                             const NativeExitContext &context) {
+                             const NativeExitContext &context, uint64_t epoch,
+                             uint64_t sequence, bool batch) {
   const uint64_t now = now_ns();
   if (event.event.type != YZ_EV_TARGET_EXIT ||
       event.kind != YZ_RUNTIME_KIND_NATIVE || event.abi != abi_ ||
@@ -359,17 +363,29 @@ void Monitor::on_native_exit(const yz_target_exit_event &event,
       event.generation == 0 || event.start_boottime == 0 ||
       event.observed_boottime < event.start_boottime ||
       now < event.observed_boottime ||
-      now - event.observed_boottime > kWindowNs ||
-      event.event.appid > UINT16_MAX || (event.event.appid & 0x7f) == 0x7f)
+      (!epoch && now - event.observed_boottime > kWindowNs) ||
+      (epoch == 0) != (sequence == 0) || event.event.appid > UINT16_MAX ||
+      (event.event.appid & 0x7f) == 0x7f)
     return;
   const std::string key =
       native_exit_key(event.event.pid, event.generation, event.start_boottime);
   if (std::any_of(native_evidence_.a.begin(), native_evidence_.a.end(),
                   [&](const auto &item) {
-                    return item.at("key").string_or("") == key;
+                    const uint64_t saved_epoch =
+                        native_exit_time(item.at("journal_epoch"));
+                    if (epoch && saved_epoch)
+                      return saved_epoch == epoch &&
+                             native_exit_time(item.at("journal_sequence")) ==
+                                 sequence;
+                    return item.at("key").string_or("") == key &&
+                           native_exit_time(item.at("observed_boottime_ns")) ==
+                               event.observed_boottime &&
+                           item.at("wait_status").u32_or(UINT32_MAX) ==
+                               event.event.appid;
                   }))
     return;
-  drain();
+  if (!batch)
+    drain();
   const uint32_t signal = event.event.appid & 0x7f;
   const uint32_t exit_code = (event.event.appid >> 8) & 0xff;
   const char *reason = signal ? "signal" : exit_code ? "exit_error" : "normal";
@@ -395,6 +411,11 @@ void Monitor::on_native_exit(const yz_target_exit_event &event,
   item["core_dumped"] = signal != 0 && (event.event.appid & 0x80) != 0;
   item["injection_state"] = native_outcome(context.state);
   item["phase"] = native_phase(context.state);
+  item["modules_observed"] = context.modules_observed;
+  if (epoch) {
+    item["journal_epoch"] = std::to_string(epoch);
+    item["journal_sequence"] = std::to_string(sequence);
+  }
   item["modules"] = json::Value::array();
   for (const auto &module : context.modules) {
     if (!valid_id(module.id))
@@ -652,6 +673,8 @@ void Monitor::save(bool include_native) {
     root["version"] = 1;
     root["boot_id"] = boot_;
     root["exits"] = native_evidence_;
+    if (native_journal_present_)
+      root["journal"] = native_exit_journal_json(native_journal_);
     while (json::dump(root).size() > kMaxDocument) {
       const auto with_candidates =
           std::find_if(native_evidence_.a.begin(), native_evidence_.a.end(),
@@ -697,8 +720,7 @@ bool Monitor::save_document(const char *name, const json::Value &document) {
     if (ok)
       ok = renameat(directory, temporary.c_str(), directory, name) == 0;
     if (ok) {
-      (void)fsync(directory);
-      saved = true;
+      saved = fsync(directory) == 0;
     } else {
       (void)unlinkat(directory, temporary.c_str(), 0);
     }

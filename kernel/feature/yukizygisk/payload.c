@@ -103,8 +103,6 @@ int yz_stage_fd(const char *path, const char *name,
 		pr_info("yukizygisk: payload shmem creation failed name=%s "
 			"err=%ld\n",
 			name, err);
-		if (policy_state)
-			yz_restore_native_policy_state(policy_state);
 		kvfree(buf);
 		return err;
 	}
@@ -122,8 +120,6 @@ int yz_stage_fd(const char *path, const char *name,
 		pr_info("yukizygisk: payload staging incomplete path=%s "
 			"written=%zd size=%lld\n",
 			path, r, (long long)sz);
-		if (policy_state)
-			yz_restore_native_policy_state(policy_state);
 		fput(mfd);
 		return r < 0 ? (int)r : -EIO;
 	}
@@ -195,8 +191,6 @@ int yz_stage_file_fd(const char *path,
 
 	fd = get_unused_fd_flags(O_CLOEXEC);
 	if (fd < 0) {
-		if (policy_state)
-			yz_restore_native_policy_state(policy_state);
 		filp_close(file, NULL);
 		return fd;
 	}

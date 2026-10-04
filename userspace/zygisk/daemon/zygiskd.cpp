@@ -1,5 +1,6 @@
 #include "zygiskd.hpp"
 #include "crash_monitor.hpp"
+#include "exit_history.hpp"
 #include "log.hpp"
 #include "native_modules.hpp"
 #include "uapi/yukizygisk.h"
@@ -1053,10 +1054,14 @@ constexpr uint8_t kRuntimeAbi = YZ_RUNTIME_ABI_64;
 constexpr uint8_t kRuntimeAbi = YZ_RUNTIME_ABI_32;
 #endif
 
-struct RuntimeSnapshot {
-  std::vector<yz_runtime_record> records;
-  uint32_t capabilities = 0;
-};
+int open_exit_history(yz_exit_history_fd_cmd *command) {
+  return ksud::ksuctl(KSU_IOCTL_YZ_GET_EXIT_HISTORY_FD, command);
+}
+
+yukizygisk::history::Reader g_exit_history(kRuntimeAbi, g_crash_monitor,
+                                           open_exit_history);
+
+using RuntimeSnapshot = yukizygisk::history::RuntimeSnapshot;
 
 RuntimeSnapshot query_runtime_snapshot() {
   RuntimeSnapshot snapshot;
@@ -1080,52 +1085,7 @@ RuntimeSnapshot query_runtime_snapshot() {
 yukizygisk::crash::NativeExitContext
 native_exit_context(const yz_target_exit_event &event,
                     const RuntimeSnapshot &snapshot) {
-  yukizygisk::crash::NativeExitContext context;
-  const yz_runtime_record *base = nullptr;
-  for (const auto &record : snapshot.records) {
-    if (record.pid == event.event.pid &&
-        record.generation == event.generation &&
-        record.kind == YZ_RUNTIME_KIND_NATIVE && record.abi == event.abi &&
-        record.module_id[0] == '\0' &&
-        record.state == YZ_RUNTIME_STATE_EXITED) {
-      base = &record;
-      break;
-    }
-  }
-  if (base == nullptr)
-    return context;
-  context.process.assign(base->process,
-                         strnlen(base->process, sizeof(base->process)));
-  context.target.assign(base->target,
-                        strnlen(base->target, sizeof(base->target)));
-  context.target_type = base->target_type;
-  const auto saved_state = [&](const yz_runtime_record &record) -> uint8_t {
-    if ((snapshot.capabilities & YZ_RUNTIME_CAP_INJECTION_STATE) == 0)
-      return 0;
-    const auto state = static_cast<uint8_t>(
-        (record.flags & YZ_RUNTIME_F_INJECTION_STATE_MASK) >>
-        YZ_RUNTIME_F_INJECTION_STATE_SHIFT);
-    return state >= YZ_RUNTIME_STATE_DETECTED &&
-                   state <= YZ_RUNTIME_STATE_SAFEMODE
-               ? state
-               : 0;
-  };
-  context.state = saved_state(*base);
-  for (const auto &record : snapshot.records) {
-    if (record.pid != event.event.pid ||
-        record.generation != event.generation ||
-        record.kind != YZ_RUNTIME_KIND_NATIVE || record.abi != event.abi ||
-        record.module_id[0] == '\0' ||
-        record.state != YZ_RUNTIME_STATE_EXITED ||
-        record.target_type != base->target_type ||
-        strncmp(record.target, base->target, sizeof(record.target)) != 0)
-      continue;
-    context.modules.push_back(
-        {std::string(record.module_id,
-                     strnlen(record.module_id, sizeof(record.module_id))),
-         saved_state(record)});
-  }
-  return context;
+  return yukizygisk::history::native_context(event, snapshot);
 }
 
 bool report_runtime(pid_t pid, uint8_t kind, uint32_t generation,
@@ -1233,16 +1193,19 @@ struct HyosControlSessionContext {
   pid_t parent_pid;
   uint32_t parent_generation;
   pid_t child_pid = -1;
+  uint64_t parent_epoch = 0;
 };
 
 std::vector<HyosControlSessionContext> g_hyos_sessions;
 
-void cancel_unbound_hyos_sessions(const yz_target_exit_event &event) {
+void cancel_unbound_hyos_sessions(const yz_target_exit_event &event,
+                                  uint64_t epoch = 0) {
   for (size_t index = g_hyos_sessions.size(); index > 0; --index) {
     const auto &context = g_hyos_sessions[index - 1];
     if (context.child_pid > 0 ||
         static_cast<uint32_t>(context.parent_pid) != event.event.pid ||
-        context.parent_generation != event.generation)
+        context.parent_generation != event.generation ||
+        context.parent_epoch != epoch)
       continue;
     close(context.session);
     g_hyos_sessions.erase(g_hyos_sessions.begin() +
@@ -1366,7 +1329,8 @@ void open_hyos_control_session(int client, pid_t parent_pid,
     send_fd(client, -1);
     return;
   }
-  g_hyos_sessions.push_back({sockets[0], parent_pid, parent_generation, -1});
+  g_hyos_sessions.push_back(
+      {sockets[0], parent_pid, parent_generation, -1, g_exit_history.epoch()});
   g_hyos_catalog_frozen = true;
   const bool sent = send_fd_nonblocking(client, sockets[1]);
   close(sockets[1]);
@@ -1847,7 +1811,8 @@ int nl_listen() {
   return fd;
 }
 
-void handle_target_exit(const yz_target_exit_event &event) {
+void handle_target_exit(const yz_target_exit_event &event,
+                        const RuntimeSnapshot *snapshot = nullptr) {
   DLOGI("target exited pid=%u generation=%u kind=%u status=%u", event.event.pid,
         event.generation, event.kind, event.event.appid);
   if (event.kind != YZ_RUNTIME_KIND_NATIVE || event.abi != kRuntimeAbi ||
@@ -1857,7 +1822,23 @@ void handle_target_exit(const yz_target_exit_event &event) {
     return;
   cancel_unbound_hyos_sessions(event);
   g_crash_monitor.on_native_exit(
-      event, native_exit_context(event, query_runtime_snapshot()));
+      event,
+      native_exit_context(event,
+                          snapshot ? *snapshot : query_runtime_snapshot()),
+      0, 0, snapshot != nullptr);
+}
+
+std::vector<yz_target_exit_event> g_legacy_native_exits;
+
+void flush_legacy_native_exits() {
+  if (g_legacy_native_exits.empty())
+    return;
+  const auto snapshot = query_runtime_snapshot();
+  g_crash_monitor.begin_native_batch();
+  for (const auto &event : g_legacy_native_exits)
+    handle_target_exit(event, &snapshot);
+  g_legacy_native_exits.clear();
+  g_crash_monitor.flush_native();
 }
 
 bool nl_receive_one(int fd) {
@@ -1867,8 +1848,13 @@ bool nl_receive_one(int fd) {
   const ssize_t got =
       recvfrom(fd, buf, sizeof(buf), MSG_DONTWAIT,
                reinterpret_cast<sockaddr *>(&sender), &sender_length);
-  if (got <= 0)
+  if (got <= 0) {
+    if (got < 0 && errno == ENOBUFS) {
+      DLOGI("netlink overflow; exit history remains readable");
+      return true;
+    }
     return got < 0 && errno == EINTR;
+  }
   if (sender_length != sizeof(sender) || sender.nl_family != AF_NETLINK ||
       sender.nl_pid != 0)
     return true;
@@ -1892,7 +1878,11 @@ bool nl_receive_one(int fd) {
       if (nlh->nlmsg_len >= NLMSG_LENGTH(sizeof(yz_target_exit_event))) {
         yz_target_exit_event event{};
         memcpy(&event, ev, sizeof(event));
-        handle_target_exit(event);
+        if (!g_exit_history.enabled()) {
+          if (g_legacy_native_exits.size() == YZ_EXIT_HISTORY_MAX)
+            flush_legacy_native_exits();
+          g_legacy_native_exits.push_back(event);
+        }
       }
     } else if (ev->type == YZ_EV_ZYGOTE_EXIT) {
       if (nlh->nlmsg_len >= NLMSG_LENGTH(sizeof(yz_zygote_exit_event))) {
@@ -1908,7 +1898,7 @@ bool nl_receive_one(int fd) {
 void nl_drain(int fd) {
   while (nl_receive_one(fd)) {
   }
-  g_crash_monitor.flush_native();
+  flush_legacy_native_exits();
 }
 
 uint64_t resolve_linker_sym(const char *path, const char *want) {
@@ -2044,6 +2034,8 @@ int run_daemon() {
     return 1;
   }
   g_crash_monitor.start(ksud::YUKIZYGISK_CURRENT_DIAGNOSTICS_DIR, kRuntimeAbi);
+  g_exit_history.start(true);
+  g_exit_history.drain(query_runtime_snapshot, cancel_unbound_hyos_sessions);
   DLOGI("zygiskd up: unix @%s, netlink proto=%d", zygiskd::kSocketName,
         YZ_NETLINK_PROTO);
   notify_ready(ready_fd, true);
@@ -2051,6 +2043,7 @@ int run_daemon() {
   for (;;) {
     reap_terminating_companions();
     g_crash_monitor.tick();
+    g_exit_history.retry();
     std::vector<pollfd> poll_fds;
     std::vector<uint32_t> module_companion_indices;
     std::vector<uint32_t> native_companion_indices;
@@ -2062,10 +2055,16 @@ int run_daemon() {
     poll_fds.push_back({nlfd, POLLIN, 0});
     const size_t tombstone_watch_index = poll_fds.size();
     poll_fds.push_back({g_crash_monitor.fd(), POLLIN, 0});
+    const size_t history_index = poll_fds.size();
+    poll_fds.push_back({g_exit_history.fd(), POLLIN, 0});
     const size_t hyos_session_offset = poll_fds.size();
     for (const auto &session : g_hyos_sessions)
       poll_fds.push_back({session.session, POLLIN, 0});
     int poll_timeout = g_crash_monitor.timeout_ms();
+    const int history_timeout = g_exit_history.timeout_ms();
+    if (history_timeout >= 0)
+      poll_timeout = poll_timeout < 0 ? history_timeout
+                                      : std::min(poll_timeout, history_timeout);
     const auto now = std::chrono::steady_clock::now();
     const size_t module_companion_offset = poll_fds.size();
     for (uint32_t index = 0; index < g_companions.size(); ++index) {
@@ -2116,8 +2115,8 @@ int run_daemon() {
       DLOGE("poll failed: %s; exiting", strerror(errno));
       return 1;
     }
-    if ((poll_fds[0].revents | poll_fds[1].revents) &
-        (POLLERR | POLLHUP | POLLNVAL)) {
+    if ((poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) ||
+        (poll_fds[1].revents & (POLLHUP | POLLNVAL))) {
       DLOGE("daemon channel failed; exiting");
       return 1;
     }
@@ -2148,6 +2147,11 @@ int run_daemon() {
 
     // Apply crash decisions before serving new module image requests.
     nl_drain(nlfd);
+    if (poll_fds[history_index].revents & POLLNVAL)
+      g_exit_history.fail(EBADF);
+    else if (poll_fds[history_index].revents & (POLLIN | POLLERR | POLLHUP))
+      g_exit_history.drain(query_runtime_snapshot,
+                           cancel_unbound_hyos_sessions);
     if (poll_fds[tombstone_watch_index].revents != 0)
       g_crash_monitor.drain();
     if (poll_fds[0].revents & POLLIN) {

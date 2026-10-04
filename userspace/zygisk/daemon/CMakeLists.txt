@@ -21,6 +21,7 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE
 
 add_executable(${ZYGISKD_TARGET}
     crash_monitor.cpp
+    exit_history.cpp
     log.cpp
     zygiskd.cpp
     standalone.cpp

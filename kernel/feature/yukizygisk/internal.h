@@ -77,9 +77,21 @@ bool yz_process_exit_active(void);
 bool yz_runtime_on_exit(struct task_struct *task);
 void yz_runtime_reconcile(void);
 bool yz_runtime_take_exit(struct yz_target_exit_event *event);
+void yz_exit_history_init(void);
+void yz_exit_history_exit(void);
+void yz_exit_history_set_active(bool active);
+void yz_exit_history_wake_readers(void);
+void yz_exit_history_flush(void);
+void yz_exit_history_append(const struct yz_runtime_record *record,
+			    u64 start_boottime, u64 observed_boottime,
+			    u32 status);
 void yz_lifecycle_on_exit(struct task_struct *task);
 void yz_load_policy_reap(void);
-bool yz_load_policy_has_owner(struct task_struct *task);
+bool yz_load_policy_on_exit(struct task_struct *task);
+void yz_load_policy_drain_exits(void);
+void yz_load_policy_enable(void);
+void yz_load_policy_disable(void);
+void yz_load_policy_exit(void);
 int yz_lifecycle_enable(void);
 void yz_lifecycle_disable(void);
 void yz_fd_handoff_init(void);
@@ -98,9 +110,10 @@ void yz_copy_name(char *dst, size_t dst_len, const char *src);
 bool yz_match_live_native_target(const char *filename, char *label,
 				 size_t label_len, u8 *target_type);
 
+/* A successful begin is consumed exactly once by publish or restore. */
+struct ksu_file_load_policy *yz_native_policy_begin(void);
 void yz_restore_native_policy_state(struct ksu_file_load_policy *state);
-void yz_publish_native_policy_state(pid_t tgid,
-				    struct ksu_file_load_policy *state);
+void yz_publish_native_policy_state(struct ksu_file_load_policy *state);
 void yz_cleanup_module_policies(void);
 
 bool yz_safemode_is_active(void);

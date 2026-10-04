@@ -112,6 +112,9 @@ static void yz_runtime_exit_slot_locked(struct yz_runtime_slot *slot,
 	slot->exit_boottime = ktime_get_boottime_ns();
 	slot->exit_pending = !slot->record.module_id[0];
 	yz_runtime_mark_exited_locked(&slot->record);
+	if (slot->exit_pending)
+		yz_exit_history_append(&slot->record, slot->start_boottime,
+				       slot->exit_boottime, slot->exit_status);
 	yz_runtime_advance_locked();
 }
 
@@ -411,6 +414,7 @@ int ksu_yukizygisk_get_runtime(struct yz_runtime_record *entries, u32 capacity,
 	spin_unlock_irqrestore(&yz_runtime_lock, irqflags);
 
 	yz_safemode_fill_runtime_query(query);
+	query->capabilities |= YZ_RUNTIME_CAP_EXIT_HISTORY;
 	return 0;
 }
 

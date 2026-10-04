@@ -238,6 +238,51 @@ enum yz_runtime_abi {
 #define YZ_RUNTIME_CAP_MODULE_IMAGE_POLICY (1U << 0)
 #define YZ_RUNTIME_CAP_ZYGOTE_MODULE_REPORT (1U << 1)
 #define YZ_RUNTIME_CAP_INJECTION_STATE (1U << 2)
+#define YZ_RUNTIME_CAP_EXIT_HISTORY (1U << 3)
+
+#define YZ_EXIT_HISTORY_VERSION 1
+#define YZ_EXIT_HISTORY_MAX 128
+#define YZ_EXIT_HISTORY_BATCH_MAX 32
+#define YZ_EXIT_HISTORY_F_RESET (1U << 0)
+#define YZ_EXIT_HISTORY_F_OVERFLOW (1U << 1)
+
+struct yz_exit_history_record {
+  __aligned_u64 sequence;
+  struct yz_target_exit_event event;
+  __u32 runtime_flags;
+  __u8 injection_state;
+  __u8 target_type;
+  __u8 reserved[2];
+  char process[YZ_RUNTIME_PROCESS_MAX];
+  char target[YZ_NATIVE_TARGET_VALUE_MAX];
+};
+
+struct yz_exit_history_header {
+  __u32 version;
+  __u32 record_size;
+  __u32 count;
+  __u32 flags;
+  __aligned_u64 epoch;
+  __aligned_u64 oldest_sequence;
+  __aligned_u64 newest_sequence;
+  __aligned_u64 next_sequence;
+  __aligned_u64 lost_first;
+  __aligned_u64 lost_last;
+  __aligned_u64 coverage_generation;
+  __u32 observer_active;
+  __u32 reserved;
+};
+
+/* Each successful read returns one header followed by count records. */
+struct yz_exit_history_fd_cmd {
+  __aligned_u64 epoch;
+  __aligned_u64 after_sequence;
+  __s32 fd;
+  __u32 flags;
+};
+
+#define KSU_IOCTL_YZ_GET_EXIT_HISTORY_FD                                       \
+  _IOC(_IOC_READ | _IOC_WRITE, 'K', 65, 0)
 
 struct yz_runtime_record {
   __u32 pid;
