@@ -25,7 +25,6 @@
 #include <string_view>
 #include <vector>
 
-#include "miniz.h"
 #ifdef __ANDROID__
 #include <sys/system_properties.h>
 #endif  // #ifdef __ANDROID__
@@ -703,68 +702,22 @@ bool touch_file(const std::filesystem::path& path) {
     return close(fd) == 0 && ok;
 }
 
-namespace {
-
-// miniz is built with MINIZ_NO_STDIO, so it has no FILE* entry point; feed it a
-// pread callback the way the AnyKernel3 flasher already does.
-struct ZipFd {
-    int fd = -1;
-};
-
-size_t zip_pread(void* opaque, mz_uint64 offset, void* buffer, size_t size) {
-    auto* self = static_cast<ZipFd*>(opaque);
-    size_t total = 0;
-    while (total < size) {
-        const ssize_t count = pread(self->fd, static_cast<char*>(buffer) + total, size - total,
-                                    static_cast<off_t>(offset + total));
-        if (count > 0) {
-            total += static_cast<size_t>(count);
-            continue;
-        }
-        if (count < 0 && errno == EINTR)
-            continue;
-        break;
-    }
-    return total;
-}
-
-}  // namespace
-
 std::optional<std::string> read_zip_entry(const std::string& zip_path, const char* entry_name) {
-    ZipFd source{open(zip_path.c_str(), O_RDONLY | O_CLOEXEC)};
-    if (source.fd < 0) {
-        LOGE("zip: cannot open %s: %s", zip_path.c_str(), strerror(errno));
-        return std::nullopt;
-    }
     struct stat status{};
-    if (fstat(source.fd, &status) != 0 || !S_ISREG(status.st_mode) || status.st_size <= 0) {
+    if (stat(zip_path.c_str(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_size <= 0) {
         LOGE("zip: %s is not a non-empty regular file", zip_path.c_str());
-        close(source.fd);
         return std::nullopt;
     }
 
-    mz_zip_archive archive{};
-    archive.m_pRead = &zip_pread;
-    archive.m_pIO_opaque = &source;
-    if (!mz_zip_reader_init(&archive, static_cast<mz_uint64>(status.st_size), 0)) {
-        LOGE("zip: %s is not a valid archive: %s", zip_path.c_str(),
-             mz_zip_get_error_string(mz_zip_get_last_error(&archive)));
-        close(source.fd);
+    const std::string absolute_path = std::filesystem::absolute(zip_path).string();
+    auto result = exec_command({BUSYBOX_PATH, "unzip", "-p", absolute_path, entry_name},
+                               std::chrono::seconds(30));
+    if (result.exit_code != 0 || result.stdout_str.empty()) {
+        LOGE("zip: cannot read %s from %s: %s", entry_name, zip_path.c_str(),
+             result.stderr_str.c_str());
         return std::nullopt;
     }
-
-    size_t size = 0;
-    void* data = mz_zip_reader_extract_file_to_heap(&archive, entry_name, &size, 0);
-    std::optional<std::string> out;
-    if (data != nullptr) {
-        out.emplace(static_cast<const char*>(data), size);
-        mz_free(data);
-    } else {
-        LOGE("zip: %s has no readable %s", zip_path.c_str(), entry_name);
-    }
-    mz_zip_reader_end(&archive);
-    close(source.fd);
-    return out;
+    return std::move(result.stdout_str);
 }
 
 bool append_file(const std::filesystem::path& path, const std::string& content) {

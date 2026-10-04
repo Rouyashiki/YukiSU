@@ -50,15 +50,14 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
 import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.isExpressiveUi
+import com.anatdx.yukisu.ui.util.module.ModuleArchive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.zip.ZipFile
 import ui.screen.partition.PartitionManagerHelper
 import ui.screen.partition.formatSize
 import ui.screen.partition.stageAk3Package
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
-import java.util.zip.ZipInputStream
 
 enum class ZipType {
     MODULE,
@@ -92,96 +91,52 @@ data class Ak3FlashOptions(
 
 object ZipFileDetector {
 
-    fun detectZipType(context: Context, uri: Uri): ZipType {
-        return try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                ZipInputStream(inputStream).use { zipStream ->
-                    var hasModuleProp = false
-                    var hasToolsFolder = false
-                    var hasAnykernelSh = false
+    private fun detectZipType(zip: ZipFile): ZipType {
+        var hasModuleProp = false
+        var hasToolsFolder = false
+        var hasAnykernelSh = false
 
-                    var entry = zipStream.nextEntry
-                    while (entry != null) {
-                        val entryName = entry.name
-                            .replace('\\', '/')
-                            .trimStart('/')
-                            .lowercase()
-
-                        when {
-                            entryName == "module.prop" || entryName.endsWith("/module.prop") -> {
-                                hasModuleProp = true
-                            }
-
-                            entryName == "tools" ||
-                                entryName.startsWith("tools/") ||
-                                entryName.contains("/tools/") -> {
-                                hasToolsFolder = true
-                            }
-
-                            entryName == "anykernel.sh" || entryName.endsWith("/anykernel.sh") -> {
-                                hasAnykernelSh = true
-                            }
-                        }
-
-                        zipStream.closeEntry()
-                        entry = zipStream.nextEntry
-                    }
-
-                    when {
-                        hasModuleProp -> ZipType.MODULE
-                        hasToolsFolder && hasAnykernelSh -> ZipType.KERNEL
-                        else -> ZipType.UNKNOWN
-                    }
+        for (entry in zip.entries.asSequence()) {
+            val entryName = entry.name.replace('\\', '/').trimStart('/').lowercase()
+            when {
+                entryName == "module.prop" || entryName.endsWith("/module.prop") -> {
+                    hasModuleProp = true
                 }
-            } ?: ZipType.UNKNOWN
-        } catch (_: Exception) {
-            ZipType.UNKNOWN
+
+                entryName == "tools" ||
+                    entryName.startsWith("tools/") ||
+                    entryName.contains("/tools/") -> {
+                    hasToolsFolder = true
+                }
+
+                entryName == "anykernel.sh" || entryName.endsWith("/anykernel.sh") -> {
+                    hasAnykernelSh = true
+                }
+            }
+        }
+
+        return when {
+            hasModuleProp -> ZipType.MODULE
+            hasToolsFolder && hasAnykernelSh -> ZipType.KERNEL
+            else -> ZipType.UNKNOWN
         }
     }
 
-    fun parseModuleInfo(context: Context, uri: Uri): ZipFileInfo {
-        var zipInfo = ZipFileInfo(uri = uri, type = ZipType.MODULE)
-
-        try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                ZipInputStream(inputStream).use { zipStream ->
-                    var entry = zipStream.nextEntry
-                    while (entry != null) {
-                        val entryName = entry.name.replace('\\', '/').lowercase()
-                        if (entryName == "module.prop" || entryName.endsWith("/module.prop")) {
-                            val reader = BufferedReader(InputStreamReader(zipStream))
-                            val props = mutableMapOf<String, String>()
-
-                            var line = reader.readLine()
-                            while (line != null) {
-                                if ('=' in line && !line.startsWith("#")) {
-                                    val parts = line.split("=", limit = 2)
-                                    if (parts.size == 2) {
-                                        props[parts[0].trim()] = parts[1].trim()
-                                    }
-                                }
-                                line = reader.readLine()
-                            }
-
-                            zipInfo = zipInfo.copy(
-                                name = props["name"] ?: context.getString(R.string.unknown_module),
-                                version = props["version"].orEmpty(),
-                                versionCode = props["versionCode"].orEmpty(),
-                                author = props["author"].orEmpty(),
-                                description = props["description"].orEmpty(),
-                            )
-                            break
-                        }
-                        zipStream.closeEntry()
-                        entry = zipStream.nextEntry
-                    }
-                }
-            }
+    private fun parseModuleInfo(context: Context, uri: Uri, zip: ZipFile): ZipFileInfo {
+        val zipInfo = ZipFileInfo(uri = uri, type = ZipType.MODULE)
+        return try {
+            val props = ModuleArchive.readProperties(zip)
+            zipInfo.copy(
+                name = props["name"] ?: context.getString(R.string.unknown_module),
+                version = props["version"].orEmpty(),
+                versionCode = props["versionCode"].orEmpty(),
+                author = props["author"].orEmpty(),
+                description = props["description"].orEmpty(),
+            )
         } catch (_: Exception) {
             // Keep the package recognizable even if optional metadata is malformed.
+            zipInfo
         }
-
-        return zipInfo
     }
 
     private suspend fun parseKernelInfo(context: Context, uri: Uri): ZipFileInfo {
@@ -216,8 +171,16 @@ object ZipFileDetector {
         zipUris: List<Uri>,
     ): List<ZipFileInfo> = withContext(Dispatchers.IO) {
         val detected = zipUris.mapNotNull { uri ->
-            when (detectZipType(context, uri)) {
-                ZipType.MODULE -> parseModuleInfo(context, uri)
+            val info = runCatching {
+                ModuleArchive.withZip(context, uri) { zip ->
+                    when (val type = detectZipType(zip)) {
+                        ZipType.MODULE -> parseModuleInfo(context, uri, zip)
+                        else -> ZipFileInfo(uri = uri, type = type)
+                    }
+                }
+            }.getOrNull() ?: return@mapNotNull null
+            when (info.type) {
+                ZipType.MODULE -> info
                 ZipType.KERNEL -> runCatching {
                     parseKernelInfo(context, uri)
                 }.getOrNull()

@@ -719,10 +719,6 @@ int module_install(const std::string& zip_path) {
         return 1;
     }
 
-    // module.prop is read straight out of the archive. The previous flow shelled
-    // out to `unzip` to drop it in /dev, parsed it back off disk, and needed two
-    // more `rm -rf` calls to clean up after itself: three processes and a temp
-    // directory to read a few hundred bytes miniz already had in hand.
     const auto prop_text = read_zip_entry(zip_path, "module.prop");
     if (!prop_text) {
         printf("! Unable to read module.prop from zip file\n");
