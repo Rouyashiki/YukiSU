@@ -834,6 +834,11 @@
     <string name="yukizygisk_native_mode_module">按模块</string>
     <string name="yukizygisk_native_mode_process">按进程</string>
     <string name="yukizygisk_native_process_detail">%1$s · pid %2$d</string>
+    <string name="yukizygisk_process_running">运行中</string>
+    <string name="yukizygisk_process_exited">已退出</string>
+    <string name="yukizygisk_process_unknown">存活状态未知</string>
+    <string name="yukizygisk_native_injection_unknown">注入结果未知</string>
+    <string name="yukizygisk_native_target_detail">%1$s：%2$s · %3$s</string>
     <string name="yukizygisk_zygote_unsupported_message">暂不支持 32 位 Zygote。</string>
     <string name="yukizygisk_zygote_crashed_message">Zygote 连续崩溃，安全模式已在本次开机停止注入。</string>
     <string name="yukizygisk_zygote_failed_message">安全模式已启用，当前未注入。</string>
@@ -855,9 +860,7 @@
     <string name="yukizygisk_native_module_unsupported_message">暂不支持 32 位 Native 模块。</string>
     <string name="yukizygisk_native_module_failed_message">已观察到目标进程，但模块注入未完成。</string>
     <string name="yukizygisk_native_module_unknown_message">本次开机尚未观察到目标进程。</string>
-    <string name="yukizygisk_native_scope_status">%1$s</string>
     <string name="yukizygisk_native_scope_process">%1$s（pid %2$d）</string>
-    <string name="yukizygisk_native_scope_injected">已注入：%1$s</string>
     <string name="yukizygisk_native_scope_injected_no_process">已注入</string>
     <string name="yukizygisk_native_scope_unobserved">未观测到</string>
     <string name="yukizygisk_native_scope_failed">注入失败</string>

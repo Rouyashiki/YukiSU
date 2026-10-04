@@ -839,6 +839,11 @@
     <string name="yukizygisk_native_mode_module" tools:ignore="MissingTranslation">By module</string>
     <string name="yukizygisk_native_mode_process" tools:ignore="MissingTranslation">By process</string>
     <string name="yukizygisk_native_process_detail" tools:ignore="MissingTranslation">%1$s · pid %2$d</string>
+    <string name="yukizygisk_process_running" tools:ignore="MissingTranslation">Running</string>
+    <string name="yukizygisk_process_exited" tools:ignore="MissingTranslation">Exited</string>
+    <string name="yukizygisk_process_unknown" tools:ignore="MissingTranslation">Process state unknown</string>
+    <string name="yukizygisk_native_injection_unknown" tools:ignore="MissingTranslation">Injection result unknown</string>
+    <string name="yukizygisk_native_target_detail" tools:ignore="MissingTranslation">%1$s: %2$s · %3$s</string>
     <string name="yukizygisk_zygote_unsupported_message" tools:ignore="MissingTranslation">32-bit Zygote is not supported.</string>
     <string name="yukizygisk_zygote_crashed_message" tools:ignore="MissingTranslation">Zygote crashed repeatedly; safe mode stopped injection for this boot.</string>
     <string name="yukizygisk_zygote_failed_message" tools:ignore="MissingTranslation">Safe mode enabled; not injected.</string>
@@ -860,9 +865,7 @@
     <string name="yukizygisk_native_module_unsupported_message" tools:ignore="MissingTranslation">32-bit Native module is not supported.</string>
     <string name="yukizygisk_native_module_failed_message" tools:ignore="MissingTranslation">The target was observed, but module injection did not complete.</string>
     <string name="yukizygisk_native_module_unknown_message" tools:ignore="MissingTranslation">The target process has not been observed during this boot.</string>
-    <string name="yukizygisk_native_scope_status" tools:ignore="MissingTranslation">%1$s</string>
     <string name="yukizygisk_native_scope_process" tools:ignore="MissingTranslation">%1$s (pid %2$d)</string>
-    <string name="yukizygisk_native_scope_injected" tools:ignore="MissingTranslation">Injected: %1$s</string>
     <string name="yukizygisk_native_scope_injected_no_process" tools:ignore="MissingTranslation">Injected</string>
     <string name="yukizygisk_native_scope_unobserved" tools:ignore="MissingTranslation">Not observed</string>
     <string name="yukizygisk_native_scope_failed" tools:ignore="MissingTranslation">Injection failed</string>

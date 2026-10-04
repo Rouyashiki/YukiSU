@@ -156,6 +156,12 @@ private enum class MonitorState {
     Unknown,
 }
 
+private enum class ProcessState {
+    Running,
+    Exited,
+    Unknown,
+}
+
 private enum class NativeMonitorMode {
     Module,
     Process,
@@ -174,6 +180,23 @@ private fun parseMonitorState(value: String): MonitorState = when (value) {
     "failed" -> MonitorState.Failed
     else -> MonitorState.Unknown
 }
+
+private fun parseInjectionState(record: JSONObject): MonitorState =
+    parseMonitorState(record.optString("injection_state", record.optString("state", "unknown")))
+
+private fun parseProcessState(record: JSONObject): ProcessState =
+    when (record.optString("process_state", "")) {
+        "running" -> ProcessState.Running
+        "exited" -> ProcessState.Exited
+        "" -> when {
+            record.optString("state") == "exited" -> ProcessState.Exited
+            record.optInt("pid", 0) > 0 && record.optString("state") in
+                setOf("detected", "redirected", "prepared", "injected", "failed", "safemode") ->
+                ProcessState.Running
+            else -> ProcessState.Unknown
+        }
+        else -> ProcessState.Unknown
+    }
 
 private data class ZygoteMonitorEntry(
     val pid: Int,
@@ -195,20 +218,31 @@ private data class NativeModuleEntry(
 
 private data class NativeInjection(
     val pid: Int,
+    val generation: Int,
     val process: String,
     val module: String,
     val targetType: String,
     val target: String,
     val abi: String,
     val state: MonitorState,
+    val processState: ProcessState,
 )
 
 private data class NativeProcessEntry(
     val pid: Int,
+    val generation: Int,
     val process: String,
     val abi: String,
     val modules: List<String>,
     val state: MonitorState,
+    val processState: ProcessState,
+)
+
+private data class NativeProcessIdentity(
+    val pid: Int,
+    val generation: Int,
+    val process: String,
+    val abi: String,
 )
 
 private data class NativeModuleMonitorEntry(
@@ -229,6 +263,10 @@ private data class NativeModuleScope(
 private data class NativeModuleTarget(
     val process: String,
     val pid: Int,
+    val generation: Int,
+    val abi: String,
+    val state: MonitorState,
+    val processState: ProcessState,
 )
 
 private data class CrashEvidence(
@@ -254,6 +292,20 @@ private fun aggregateMonitorState(states: List<MonitorState>): MonitorState = wh
     else -> MonitorState.Unknown
 }
 
+private fun processStateLabel(state: ProcessState): Int = when (state) {
+    ProcessState.Running -> R.string.yukizygisk_process_running
+    ProcessState.Exited -> R.string.yukizygisk_process_exited
+    ProcessState.Unknown -> R.string.yukizygisk_process_unknown
+}
+
+private fun injectionStateLabel(state: MonitorState): Int = when (state) {
+    MonitorState.Injected -> R.string.yukizygisk_native_scope_injected_no_process
+    MonitorState.Unsupported32 -> R.string.yukizygisk_native_scope_unsupported
+    MonitorState.Crashed -> R.string.yukizygisk_native_scope_crashed
+    MonitorState.Failed -> R.string.yukizygisk_native_scope_failed
+    MonitorState.Unknown -> R.string.yukizygisk_native_injection_unknown
+}
+
 private fun buildNativeModuleRows(
     modules: List<NativeModuleEntry>,
     injections: List<NativeInjection>,
@@ -271,14 +323,19 @@ private fun buildNativeModuleRows(
                     NativeModuleTarget(
                         process = nativeProcessDisplayName(it.process.ifBlank { it.target }),
                         pid = it.pid,
+                        generation = it.generation,
+                        abi = it.abi,
+                        state = it.state,
+                        processState = it.processState,
                     )
                 }
-                .distinctBy { it.pid }
-                .sortedWith(compareBy<NativeModuleTarget> { it.process }.thenBy { it.pid })
+                .distinctBy { NativeProcessIdentity(it.pid, it.generation, it.process, it.abi) }
+                .sortedWith(compareBy<NativeModuleTarget> { it.process }
+                    .thenBy { it.pid }.thenBy { it.generation })
             NativeModuleScope(
                 targetType = entry.targetType,
                 target = entry.target,
-                state = aggregateMonitorState(scopeEntries.map { it.state }),
+                state = aggregateMonitorState(scopeEntries.map { it.state } + targets.map { it.state }),
                 targets = targets,
             )
         }
@@ -291,6 +348,24 @@ private fun buildNativeModuleRows(
         )
     }
 }
+
+private fun buildNativeProcessRows(injections: List<NativeInjection>): List<NativeProcessEntry> =
+    injections.groupBy { NativeProcessIdentity(it.pid, it.generation, it.process, it.abi) }
+        .map { (_, rows) ->
+            val first = rows.first()
+            NativeProcessEntry(
+                pid = first.pid,
+                generation = first.generation,
+                process = nativeProcessDisplayName(first.process.ifEmpty { first.target }),
+                abi = first.abi,
+                modules = rows.map { it.module }.distinct(),
+                state = aggregateMonitorState(rows.map { it.state }),
+                processState = rows.map { it.processState }.distinct().singleOrNull()
+                    ?: ProcessState.Unknown,
+            )
+        }
+        .sortedWith(compareBy<NativeProcessEntry> { it.process }
+            .thenBy { it.pid }.thenBy { it.generation })
 
 private data class YzStatus(
     val zygotes: List<ZygoteMonitorEntry>,
@@ -318,6 +393,7 @@ private data class RuntimeMonitorEntry(
     val abi: String,
     val module: String,
     val state: MonitorState,
+    val processState: ProcessState,
 )
 
 private fun zygoteModules(
@@ -328,7 +404,8 @@ private fun zygoteModules(
 ): List<String> = runtime.filter {
     it.kind == "zygote" && it.pid == pid && it.generation == generation &&
         pid > 0 && generation != 0 && it.abi == abi &&
-        it.module.isNotBlank() && it.state == MonitorState.Injected
+        it.module.isNotBlank() && it.state == MonitorState.Injected &&
+        it.processState != ProcessState.Exited
 }.map { it.module }.distinct()
 
 private fun parseYzStatus(json: String): YzStatus? = runCatching {
@@ -342,7 +419,8 @@ private fun parseYzStatus(json: String): YzStatus? = runCatching {
                 kind = r.optString("kind", ""),
                 abi = r.optString("abi", "unknown"),
                 module = r.optString("module", ""),
-                state = parseMonitorState(r.optString("state", "unknown")),
+                state = parseInjectionState(r),
+                processState = parseProcessState(r),
             )
         }
     } ?: emptyList()
@@ -373,7 +451,7 @@ private fun parseYzStatus(json: String): YzStatus? = runCatching {
                 pid = z.optInt("pid", 0),
                 name = z.optString("target").ifBlank { z.optString("name", "zygote") },
                 abi = z.optString("abi", "unknown"),
-                state = parseMonitorState(z.optString("state", "unknown")),
+                state = parseInjectionState(z),
                 generation = z.optInt("generation", 0),
                 modules = zygoteModules(
                     runtime, z.optInt("pid", 0), z.optInt("generation", 0), z.optString("abi"),
@@ -400,12 +478,14 @@ private fun parseYzStatus(json: String): YzStatus? = runCatching {
             val n = a.getJSONObject(i)
             NativeInjection(
                 pid = n.optInt("pid", 0),
+                generation = n.optInt("generation", 0),
                 process = n.optString("process", ""),
                 module = n.optString("module", ""),
                 targetType = n.optString("target_type", "name"),
                 target = n.optString("target", ""),
                 abi = n.optString("abi", "unknown"),
-                state = parseMonitorState(n.optString("state", "unknown")),
+                state = parseInjectionState(n),
+                processState = parseProcessState(n),
             )
         }
     } ?: emptyList()
@@ -494,6 +574,7 @@ private fun zygiskModuleState(
         }
         val records = runtime.filter {
             it.kind == "zygote" && it.module == moduleId && it.abi == abi &&
+                it.processState != ProcessState.Exited &&
                 matchingZygotes.any { z ->
                     z.moduleMonitorAvailable && z.generation != 0 &&
                         z.pid == it.pid && z.generation == it.generation
@@ -710,22 +791,7 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
                     buildNativeModuleRows(nativeModules, nativeInjections, crashEvidence)
                 }
                 val processRows = remember(nativeInjections) {
-                    nativeInjections
-                        .groupBy { it.pid to it.process }
-                        .map { (_, rows) ->
-                            val first = rows.first()
-                            val state = aggregateMonitorState(rows.map { it.state })
-                            NativeProcessEntry(
-                                pid = first.pid,
-                                process = nativeProcessDisplayName(
-                                    first.process.ifEmpty { first.target }
-                                ),
-                                abi = first.abi,
-                                modules = rows.map { it.module }.distinct(),
-                                state = state,
-                            )
-                        }
-                        .sortedWith(compareBy<NativeProcessEntry> { it.process }.thenBy { it.pid })
+                    buildNativeProcessRows(nativeInjections)
                 }
 
                 if (nativeMonitorMode == NativeMonitorMode.Module && moduleRows.isEmpty()) {
@@ -1050,10 +1116,10 @@ private fun NativeProcessMonitorRow(process: NativeProcessEntry, onStatusClick: 
                     R.string.yukizygisk_native_process_detail,
                     process.abi,
                     process.pid,
-                ),
+                ) + "\n" + stringResource(processStateLabel(process.processState)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         },
@@ -1246,37 +1312,48 @@ private fun nativeProcessDialog(process: NativeProcessEntry): MonitorDialogState
             stringResource(R.string.yukizygisk_native_process_unsupported_message)
         MonitorState.Crashed -> stringResource(R.string.yukizygisk_native_process_failed_message)
         MonitorState.Failed -> stringResource(R.string.yukizygisk_native_process_failed_message)
-        MonitorState.Unknown -> stringResource(R.string.yukizygisk_native_process_unknown_message)
+        MonitorState.Unknown -> stringResource(
+            if (process.pid > 0) R.string.yukizygisk_native_injection_unknown
+            else R.string.yukizygisk_native_process_unknown_message
+        )
     }
-    return MonitorDialogState(process.process, appendDetail(base, modules))
+    val identity = resources.getString(
+        R.string.yukizygisk_native_process_detail, process.abi, process.pid
+    )
+    return MonitorDialogState(
+        process.process,
+        listOf(base, identity, resources.getString(processStateLabel(process.processState)), modules)
+            .filter(String::isNotBlank).joinToString("\n"),
+    )
 }
 
 @Composable
 private fun nativeModuleDialog(module: NativeModuleMonitorEntry): MonitorDialogState {
     val resources = LocalResources.current
     val scopes = module.scopes.joinToString("\n") { scope ->
-        val status = when (scope.state) {
-            MonitorState.Injected -> {
-                val processes = scope.targets.joinToString(", ") {
-                    resources.getString(R.string.yukizygisk_native_scope_process, it.process, it.pid)
-                }
-                if (processes.isBlank()) {
-                    resources.getString(R.string.yukizygisk_native_scope_injected_no_process)
-                } else {
-                    resources.getString(R.string.yukizygisk_native_scope_injected, processes)
-                }
-            }
-            MonitorState.Unsupported32 ->
-                resources.getString(R.string.yukizygisk_native_scope_unsupported)
-            MonitorState.Crashed -> resources.getString(R.string.yukizygisk_native_scope_crashed)
-            MonitorState.Failed -> resources.getString(R.string.yukizygisk_native_scope_failed)
-            MonitorState.Unknown -> resources.getString(R.string.yukizygisk_native_scope_unobserved)
+        val status = resources.getString(
+            if (scope.state == MonitorState.Unknown && scope.targets.isEmpty())
+                R.string.yukizygisk_native_scope_unobserved
+            else injectionStateLabel(scope.state)
+        )
+        val targets = scope.targets.joinToString("\n") {
+            val identity = resources.getString(
+                R.string.yukizygisk_native_scope_process, it.process, it.pid
+            ) + " · " + it.abi
+            resources.getString(
+                R.string.yukizygisk_native_target_detail,
+                identity,
+                resources.getString(injectionStateLabel(it.state)),
+                resources.getString(processStateLabel(it.processState)),
+            )
         }
-        val target = nativeProcessDisplayName(scope.target)
-        val detail = if (scope.targets.isEmpty() && target.isNotBlank()) "$target: $status" else status
-        resources.getString(R.string.yukizygisk_native_scope_status, detail)
+        if (targets.isBlank()) {
+            if (scope.target.isNotBlank()) "${scope.target}: $status" else status
+        } else {
+            targets
+        }
     }
-    val base = when (module.state) {
+    val base = if (module.scopes.any { it.targets.isNotEmpty() }) "" else when (module.state) {
         MonitorState.Injected -> stringResource(R.string.yukizygisk_native_module_injected_message)
         MonitorState.Unsupported32 ->
             stringResource(R.string.yukizygisk_native_module_unsupported_message)
@@ -1286,12 +1363,10 @@ private fun nativeModuleDialog(module: NativeModuleMonitorEntry): MonitorDialogS
     }
     return MonitorDialogState(
         module.name,
-        appendDetail(appendDetail(base, scopes), crashEvidenceMessage(module.crashEvidence)),
+        listOf(base, scopes, crashEvidenceMessage(module.crashEvidence))
+            .filter(String::isNotBlank).joinToString("\n"),
     )
 }
-
-private fun appendDetail(base: String, detail: String): String =
-    if (detail.isBlank()) base else "$base\n$detail"
 
 @Composable
 private fun Modifier.monitorGroup(): Modifier = if (isExpressiveUi) {
