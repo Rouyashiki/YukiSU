@@ -163,9 +163,13 @@ static bool repair_tool_links(void) {
 
   static const char *const applets[] = {"ksud", "magiskboot", "bootctl",
                                         "resetprop", "yzctl"};
+  const bool yukizygisk_enabled = query_feature(KSU_FEATURE_YUKIZYGISK) > 0;
   bool success = true;
   for (size_t index = 0; index < sizeof(applets) / sizeof(applets[0]);
        ++index) {
+    if (strcmp(applets[index], "yzctl") == 0 && !yukizygisk_enabled) {
+      continue;
+    }
     char temporary[NAME_MAX];
     int length =
         snprintf(temporary, sizeof(temporary), ".%s.yukisu.tmp.%ld.%ld",
