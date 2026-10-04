@@ -1077,6 +1077,57 @@ RuntimeSnapshot query_runtime_snapshot() {
   return snapshot;
 }
 
+yukizygisk::crash::NativeExitContext
+native_exit_context(const yz_target_exit_event &event,
+                    const RuntimeSnapshot &snapshot) {
+  yukizygisk::crash::NativeExitContext context;
+  const yz_runtime_record *base = nullptr;
+  for (const auto &record : snapshot.records) {
+    if (record.pid == event.event.pid &&
+        record.generation == event.generation &&
+        record.kind == YZ_RUNTIME_KIND_NATIVE && record.abi == event.abi &&
+        record.module_id[0] == '\0' &&
+        record.state == YZ_RUNTIME_STATE_EXITED) {
+      base = &record;
+      break;
+    }
+  }
+  if (base == nullptr)
+    return context;
+  context.process.assign(base->process,
+                         strnlen(base->process, sizeof(base->process)));
+  context.target.assign(base->target,
+                        strnlen(base->target, sizeof(base->target)));
+  context.target_type = base->target_type;
+  const auto saved_state = [&](const yz_runtime_record &record) -> uint8_t {
+    if ((snapshot.capabilities & YZ_RUNTIME_CAP_INJECTION_STATE) == 0)
+      return 0;
+    const auto state = static_cast<uint8_t>(
+        (record.flags & YZ_RUNTIME_F_INJECTION_STATE_MASK) >>
+        YZ_RUNTIME_F_INJECTION_STATE_SHIFT);
+    return state >= YZ_RUNTIME_STATE_DETECTED &&
+                   state <= YZ_RUNTIME_STATE_SAFEMODE
+               ? state
+               : 0;
+  };
+  context.state = saved_state(*base);
+  for (const auto &record : snapshot.records) {
+    if (record.pid != event.event.pid ||
+        record.generation != event.generation ||
+        record.kind != YZ_RUNTIME_KIND_NATIVE || record.abi != event.abi ||
+        record.module_id[0] == '\0' ||
+        record.state != YZ_RUNTIME_STATE_EXITED ||
+        record.target_type != base->target_type ||
+        strncmp(record.target, base->target, sizeof(record.target)) != 0)
+      continue;
+    context.modules.push_back(
+        {std::string(record.module_id,
+                     strnlen(record.module_id, sizeof(record.module_id))),
+         saved_state(record)});
+  }
+  return context;
+}
+
 bool report_runtime(pid_t pid, uint8_t kind, uint32_t generation,
                     const char *module_id = nullptr,
                     uint8_t module_state = YZ_RUNTIME_STATE_INJECTED) {
@@ -1185,6 +1236,21 @@ struct HyosControlSessionContext {
 };
 
 std::vector<HyosControlSessionContext> g_hyos_sessions;
+
+void cancel_unbound_hyos_sessions(const yz_target_exit_event &event) {
+  for (size_t index = g_hyos_sessions.size(); index > 0; --index) {
+    const auto &context = g_hyos_sessions[index - 1];
+    if (context.child_pid > 0 ||
+        static_cast<uint32_t>(context.parent_pid) != event.event.pid ||
+        context.parent_generation != event.generation)
+      continue;
+    close(context.session);
+    g_hyos_sessions.erase(g_hyos_sessions.begin() +
+                          static_cast<ptrdiff_t>(index - 1));
+    DLOGI("HyperOS unbound session cancelled: parent=%u generation=%u",
+          event.event.pid, event.generation);
+  }
+}
 
 pid_t process_parent_pid(pid_t pid) {
   char path[64];
@@ -1781,6 +1847,19 @@ int nl_listen() {
   return fd;
 }
 
+void handle_target_exit(const yz_target_exit_event &event) {
+  DLOGI("target exited pid=%u generation=%u kind=%u status=%u", event.event.pid,
+        event.generation, event.kind, event.event.appid);
+  if (event.kind != YZ_RUNTIME_KIND_NATIVE || event.abi != kRuntimeAbi ||
+      event.event.pid == 0 || event.event.pid > INT32_MAX ||
+      event.generation == 0 || event.start_boottime == 0 ||
+      event.observed_boottime < event.start_boottime)
+    return;
+  cancel_unbound_hyos_sessions(event);
+  g_crash_monitor.on_native_exit(
+      event, native_exit_context(event, query_runtime_snapshot()));
+}
+
 bool nl_receive_one(int fd) {
   alignas(nlmsghdr) char buf[4096];
   sockaddr_nl sender{};
@@ -1809,6 +1888,12 @@ bool nl_receive_one(int fd) {
         DLOGI("module rescan deferred until zygiskd restart");
     } else if (ev->type == YZ_EV_SAFEMODE) {
       DLOGI("safemode event pid=%u crashes=%u", ev->pid, ev->appid);
+    } else if (ev->type == YZ_EV_TARGET_EXIT) {
+      if (nlh->nlmsg_len >= NLMSG_LENGTH(sizeof(yz_target_exit_event))) {
+        yz_target_exit_event event{};
+        memcpy(&event, ev, sizeof(event));
+        handle_target_exit(event);
+      }
     } else if (ev->type == YZ_EV_ZYGOTE_EXIT) {
       if (nlh->nlmsg_len >= NLMSG_LENGTH(sizeof(yz_zygote_exit_event))) {
         yz_zygote_exit_event event{};
@@ -1823,6 +1908,7 @@ bool nl_receive_one(int fd) {
 void nl_drain(int fd) {
   while (nl_receive_one(fd)) {
   }
+  g_crash_monitor.flush_native();
 }
 
 uint64_t resolve_linker_sym(const char *path, const char *want) {

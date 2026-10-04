@@ -2,6 +2,7 @@
 
 #include "../crash_evidence.hpp"
 #include "../crash_protection.hpp"
+#include "../native_exit_evidence.hpp"
 #include "uapi/yukizygisk.h"
 
 #include <map>
@@ -13,6 +14,19 @@ struct Module {
   std::string path;
   std::string identity;
   bool zygisk = false;
+};
+
+struct NativeModuleOutcome {
+  std::string id;
+  uint8_t state = 0;
+};
+
+struct NativeExitContext {
+  std::string process;
+  std::string target;
+  uint8_t target_type = 0;
+  uint8_t state = 0;
+  std::vector<NativeModuleOutcome> modules;
 };
 
 class Monitor {
@@ -29,6 +43,9 @@ public:
   void set_modules(std::vector<Module> modules);
   void start(std::string directory, uint8_t abi);
   void on_exit(const yz_zygote_exit_event &event);
+  void on_native_exit(const yz_target_exit_event &event,
+                      const NativeExitContext &context);
+  void flush_native() { save(true); }
   void drain();
   void tick();
   void set_protection_enabled(bool enabled) {
@@ -59,7 +76,10 @@ private:
   void consume_closed(const std::string &name);
   void log(const std::string &message) const;
   void correlate(const Exit &event, const Candidate &candidate);
-  void save();
+  void correlate_native(const Candidate &candidate);
+  void reconcile_native_candidates();
+  void save(bool include_native = false);
+  bool save_document(const char *name, const json::Value &document);
   std::string directory_;
   std::string tombstones_;
   Logger logger_ = nullptr;
@@ -71,9 +91,13 @@ private:
   std::map<std::string, Stamp> stamps_;
   std::vector<Module> modules_;
   std::vector<Exit> exits_;
+  std::vector<Exit> native_exits_;
   std::vector<Candidate> candidates_;
+  std::vector<Candidate> native_candidates_;
   json::Value evidence_ = json::Value::array();
+  json::Value native_evidence_ = json::Value::array();
   bool dirty_ = false;
+  bool native_dirty_ = false;
   Protection protection_;
 };
 
