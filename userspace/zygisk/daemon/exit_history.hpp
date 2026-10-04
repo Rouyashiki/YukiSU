@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../daemon_health.hpp"
 #include "crash_monitor.hpp"
 
 namespace yukizygisk::history {
@@ -35,6 +36,7 @@ public:
     return epoch_confirmed_ ? state_.epoch : 0;
   }
   [[nodiscard]] int timeout_ms() const;
+  void health_snapshot(health::Snapshot &snapshot) const;
 
 private:
   bool validate(const yz_exit_history_header &header,
@@ -49,6 +51,10 @@ private:
   bool epoch_confirmed_ = false;
   uint64_t retry_at_ns_ = 0;
   unsigned failures_ = 0;
+  uint64_t total_failures_ = 0;
+  uint64_t newest_observed_ = 0;
+  uint64_t last_read_at_ns_ = 0;
+  uint64_t drains_ = 0;
 };
 
 } // namespace yukizygisk::history

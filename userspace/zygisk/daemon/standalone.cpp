@@ -104,6 +104,15 @@ bool uid_should_umount(uint32_t uid) {
 
 bool lsetfilecon(const std::filesystem::path &path,
                  const std::string &context) {
+  std::string current(context.size() + 1, '\0');
+  const ssize_t length = lgetxattr(path.c_str(), "security.selinux",
+                                   current.data(), current.size());
+  if (length >= 0 &&
+      (static_cast<size_t>(length) == context.size() ||
+       (static_cast<size_t>(length) == context.size() + 1 &&
+        current[context.size()] == '\0')) &&
+      memcmp(current.data(), context.data(), context.size()) == 0)
+    return true;
   return lsetxattr(path.c_str(), "security.selinux", context.c_str(),
                    context.size() + 1, 0) == 0;
 }

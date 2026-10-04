@@ -122,6 +122,8 @@ void Monitor::start(std::string directory, uint8_t abi) {
   const auto native = read_native_exit_document(directory_, abi_);
   native_journal_ = native.journal;
   native_journal_present_ = native.journal_valid;
+  committed_native_journal_ = native.journal;
+  committed_native_journal_present_ = native.journal_valid;
   native_evidence_ = json::Value::array();
   native_exits_.clear();
   for (const auto &item : native.exits.a) {
@@ -652,10 +654,30 @@ int Monitor::timeout_ms() const {
              : -1;
 }
 
+void Monitor::health_snapshot(health::Snapshot &snapshot) const {
+  if (committed_native_journal_present_) {
+    snapshot.flags |= health::CommittedValid;
+    snapshot.committed_epoch = committed_native_journal_.epoch;
+    snapshot.committed_cursor = committed_native_journal_.cursor;
+  }
+  if (native_dirty_) {
+    snapshot.flags |= health::PersistencePending;
+    snapshot.save_retry_at_ns = retry_ns_;
+  }
+  snapshot.save_error = native_save_error_;
+  snapshot.save_failures = native_save_failures_;
+  snapshot.last_saved_boottime_ns = native_saved_at_ns_;
+}
+
 void Monitor::save(bool include_native) {
   if (!dirty_ && !(include_native && native_dirty_))
     return;
   if (!current_boot(directory_, boot_)) {
+    if (include_native && native_dirty_) {
+      native_save_error_ = ESTALE;
+      if (native_save_failures_ != UINT64_MAX)
+        ++native_save_failures_;
+    }
     log("save deferred: boot identity mismatch");
     return;
   }
@@ -693,15 +715,26 @@ void Monitor::save(bool include_native) {
       root["exits"] = native_evidence_;
     }
     if (save_document(abi_ == 2 ? "native_exit64.json" : "native_exit32.json",
-                      root))
+                      root)) {
       native_dirty_ = false;
+      committed_native_journal_ = native_journal_;
+      committed_native_journal_present_ = native_journal_present_;
+      native_save_error_ = 0;
+      native_saved_at_ns_ = now_ns();
+    } else {
+      native_save_error_ = errno != 0 ? errno : EIO;
+      if (native_save_failures_ != UINT64_MAX)
+        ++native_save_failures_;
+    }
   }
 }
 
 bool Monitor::save_document(const char *name, const json::Value &document) {
   const std::string text = json::dump(document);
-  if (text.size() > kMaxDocument)
+  if (text.size() > kMaxDocument) {
+    errno = EFBIG;
     return false;
+  }
   const int directory =
       open(directory_.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
   if (directory < 0)
@@ -712,20 +745,38 @@ bool Monitor::save_document(const char *name, const json::Value &document) {
       directory, temporary.c_str(),
       O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0600);
   bool saved = false;
+  int error = 0;
   if (fd >= 0) {
     struct stat status{};
-    bool ok = fstat(fd, &status) == 0 && S_ISREG(status.st_mode) &&
-              status.st_uid == 0 && write_all(fd, text) && fsync(fd) == 0;
-    close(fd);
+    bool ok = fstat(fd, &status) == 0;
+    if (ok && (!S_ISREG(status.st_mode) || status.st_uid != 0)) {
+      errno = EACCES;
+      ok = false;
+    }
+    ok = ok && write_all(fd, text) && fsync(fd) == 0;
+    if (!ok)
+      error = errno;
+    if (close(fd) != 0 && ok) {
+      error = errno;
+      ok = false;
+    }
     if (ok)
       ok = renameat(directory, temporary.c_str(), directory, name) == 0;
     if (ok) {
       saved = fsync(directory) == 0;
+      if (!saved)
+        error = errno;
     } else {
+      if (error == 0)
+        error = errno;
       (void)unlinkat(directory, temporary.c_str(), 0);
     }
+  } else {
+    error = errno;
   }
   close(directory);
+  if (!saved)
+    errno = error != 0 ? error : EIO;
   return saved;
 }
 

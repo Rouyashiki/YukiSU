@@ -409,6 +409,7 @@ set(KSUD_OUR_SOURCES
     src/soft_reboot_waiter.cpp
     src/integrity_monitor.cpp
     src/yukizygisk_diagnostics.cpp
+    src/yukizygisk_daemon.cpp
     src/yukizygisk_snapshot.cpp
     src/yzctl.cpp
     src/late_load.cpp

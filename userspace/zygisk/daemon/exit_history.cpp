@@ -131,6 +131,7 @@ void Reader::retry() {
 void Reader::fail(int error) {
   if (!enabled_)
     return;
+  total_failures_ = add_saturated(total_failures_, 1);
   if (fd_ >= 0)
     close(fd_);
   fd_ = -1;
@@ -145,6 +146,25 @@ void Reader::fail(int error) {
   state_.last_error = error > 0 ? error : EIO;
   state_.observed_boottime_ns = now;
   monitor_.set_native_journal(state_);
+}
+
+void Reader::health_snapshot(health::Snapshot &snapshot) const {
+  snapshot.consumed_epoch = state_.epoch;
+  snapshot.consumed_cursor = state_.cursor;
+  snapshot.newest_observed = newest_observed_;
+  snapshot.read_retry_at_ns = retry_at_ns_;
+  snapshot.read_failures = total_failures_;
+  snapshot.last_read_boottime_ns = last_read_at_ns_;
+  snapshot.read_error = state_.last_error;
+  snapshot.history_drains = drains_;
+  if (enabled_)
+    snapshot.flags |= health::HistoryAvailable;
+  if (state_.reader_state == "active")
+    snapshot.reader_state = health::ReaderState::Active;
+  else if (state_.reader_state == "retrying")
+    snapshot.reader_state = health::ReaderState::Retrying;
+  else if (state_.reader_state == "unsupported")
+    snapshot.reader_state = health::ReaderState::Unsupported;
 }
 
 int Reader::timeout_ms() const {
@@ -240,6 +260,7 @@ bool Reader::validate(const yz_exit_history_header &header,
 void Reader::drain(RuntimeReader runtime, ExitHandler on_exit) {
   if (fd_ < 0)
     return;
+  drains_ = add_saturated(drains_, 1);
   struct Batch {
     yz_exit_history_header header;
     std::array<yz_exit_history_record, YZ_EXIT_HISTORY_BATCH_MAX> records;
@@ -293,6 +314,8 @@ void Reader::drain(RuntimeReader runtime, ExitHandler on_exit) {
                               record.sequence, true);
     }
     state_ = std::move(next);
+    newest_observed_ = batch.header.newest_sequence;
+    last_read_at_ns_ = state_.observed_boottime_ns;
     epoch_confirmed_ = true;
     failures_ = 0;
     monitor_.set_native_journal(state_);

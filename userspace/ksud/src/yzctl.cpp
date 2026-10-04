@@ -9,6 +9,7 @@
 #include "userspace/zygisk/daemon/native_modules.hpp"
 #include "userspace/zygisk/native_exit_evidence.hpp"
 #include "utils.hpp"
+#include "yukizygisk_daemon.hpp"
 #include "yukizygisk_snapshot.hpp"
 
 #include "uapi/yukizygisk.h"
@@ -472,6 +473,9 @@ json::Value build_status_json(const RuntimeSnapshot& snapshot, const ModuleInven
         json::Value((snapshot.capabilities & YZ_RUNTIME_CAP_EXIT_HISTORY) != 0);
     root["native_exit_evidence"] = json::Value::array();
     root["native_exit_journal"] = json::Value::array();
+    root["native_exit_journal_source"] = "persisted";
+    root["kernel_health"] = yukizygisk_kernel_health(snapshot.capabilities);
+    root["daemon_health"] = yukizygisk_daemon_health();
     for (const uint8_t abi : {uint8_t{1}, uint8_t{2}}) {
         const auto document =
             yukizygisk::crash::read_native_exit_document(YUKIZYGISK_CURRENT_DIAGNOSTICS_DIR, abi);
@@ -566,6 +570,7 @@ void print_usage(FILE* stream) {
     (void)fprintf(stream, "Usage: yzctl <command>\n\n");
     (void)fprintf(stream, "Commands:\n");
     (void)fprintf(stream, "  status [--json]    Read the kernel runtime snapshot\n");
+    (void)fprintf(stream, "  ensure-daemon [--abi 32|64|all]  Start missing required daemons\n");
     (void)fprintf(stream, "  reload             Notify daemons to reload configuration\n");
     (void)fprintf(stream, "  config get         Read configuration as JSON\n");
     (void)fprintf(stream,
@@ -677,6 +682,24 @@ int yzctl_run(const std::vector<std::string>& args) {
             print_human_status(snapshot);
         }
         return 0;
+    }
+
+    if (args[0] == "ensure-daemon") {
+        uint32_t abi = 0;
+        if (args.size() == 3 && args[1] == "--abi") {
+            if (args[2] == "32")
+                abi = YZ_RUNTIME_ABI_32;
+            else if (args[2] == "64")
+                abi = YZ_RUNTIME_ABI_64;
+            else if (args[2] != "all") {
+                (void)fprintf(stderr, "yzctl: ABI must be 32, 64 or all\n");
+                return 1;
+            }
+        } else if (args.size() != 1) {
+            (void)fprintf(stderr, "yzctl: expected ensure-daemon [--abi 32|64|all]\n");
+            return 1;
+        }
+        return ensure_yukizygisk_daemons(abi);
     }
 
     if (args[0] == "reload") {
