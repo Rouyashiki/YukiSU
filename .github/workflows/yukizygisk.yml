@@ -39,9 +39,7 @@ jobs:
       - name: Setup Android SDK and pinned NDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            ndk;30.0.16248370
+          packages: platform-tools ndk;30.0.16248370
 
       - name: Select pinned NDK
         shell: bash
