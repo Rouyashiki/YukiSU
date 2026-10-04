@@ -54,6 +54,7 @@ internal fun suPathErrorResource(code: String): Int = when (code) {
 @Composable
 internal fun SuPathSetting(
     enabled: Boolean,
+    refreshKey: Int,
     onSavingChange: (Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -64,7 +65,7 @@ internal fun SuPathSetting(
     var error by remember { mutableStateOf<Int?>(null) }
     val title = stringResource(R.string.su_compat_path_title)
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         path = withContext(Dispatchers.IO) {
             runCatching { Natives.getSuPath()?.toString(Charsets.UTF_8) }.getOrNull()
         }

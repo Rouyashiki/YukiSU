@@ -165,7 +165,34 @@ void close_su_view_after_path_failure() {
          "configuration");
 }
 
+int disable_kasumi_sucompat() {
+    const auto [magisk, magisk_supported] = get_feature(KSU_FEATURE_MAGISK_COMPAT);
+    const auto [kasumi, kasumi_supported] = get_feature(KSU_FEATURE_KASUMI_SUCOMPAT);
+    if (magisk_supported && magisk != 0 && set_feature(KSU_FEATURE_MAGISK_COMPAT, 0) < 0)
+        return 1;
+    kill_msud_locked();
+    if (((kasumi_supported && kasumi != 0) || (magisk_supported && magisk != 0)) &&
+        set_feature(KSU_FEATURE_SU_COMPAT, 1) < 0)
+        return 1;
+    if (reset_su_path_locked() != 0) {
+        LOGE("Failed to reset the su path while disabling Kasumi");
+        return 1;
+    }
+    return 0;
+}
+
 int apply_sucompat_config(std::map<uint32_t, uint64_t>& features) {
+    const auto [kasumi_enabled, kasumi_supported] = get_feature(KSU_FEATURE_KASUMI);
+    if (kasumi_supported && kasumi_enabled == 0 &&
+        (features.count(KSU_FEATURE_SU_COMPAT) || features.count(KSU_FEATURE_KASUMI_SUCOMPAT) ||
+         features.count(KSU_FEATURE_MAGISK_COMPAT))) {
+        if (disable_kasumi_sucompat() != 0)
+            return -1;
+        if (features[KSU_FEATURE_KASUMI_SUCOMPAT] != 0 || features[KSU_FEATURE_MAGISK_COMPAT] != 0)
+            features[KSU_FEATURE_SU_COMPAT] = 1;
+        features[KSU_FEATURE_KASUMI_SUCOMPAT] = 0;
+        features[KSU_FEATURE_MAGISK_COMPAT] = 0;
+    }
     const bool requested_ksm =
         (features.count(KSU_FEATURE_KASUMI_SUCOMPAT) &&
          features.at(KSU_FEATURE_KASUMI_SUCOMPAT) != 0) ||
@@ -409,16 +436,20 @@ int feature_save_config_locked() {
 }
 
 int feature_set_impl(const std::string& id, uint32_t feature_id, uint64_t value) {
+    const auto [kasumi_enabled, kasumi_supported] = get_feature(KSU_FEATURE_KASUMI);
+    if (value != 0 &&
+        (feature_id == KSU_FEATURE_MAGISK_COMPAT || feature_id == KSU_FEATURE_KASUMI_SUCOMPAT) &&
+        kasumi_supported && (kasumi_enabled == 0 || !kagami::kasumi::is_available())) {
+        LOGE("Kasumi is disabled or not initialized; enable the kasumi feature first");
+        return 1;
+    }
     if (value != 0 &&
         (feature_id == KSU_FEATURE_MAGISK_COMPAT || feature_id == KSU_FEATURE_KASUMI_SUCOMPAT) &&
         restore_su_path() != 0) {
         LOGE("Failed to restore su path before enabling KSM");
         return 1;
     }
-    if (value != 0 &&
-        (feature_id == KSU_FEATURE_MAGISK_COMPAT || feature_id == KSU_FEATURE_KASUMI_SUCOMPAT) &&
-        get_feature(KSU_FEATURE_KASUMI).second && !kagami::kasumi::is_available()) {
-        LOGE("Kasumi is not initialized; enable the kasumi feature first");
+    if (feature_id == KSU_FEATURE_KASUMI && value == 0 && disable_kasumi_sucompat() != 0) {
         return 1;
     }
     if (feature_id == KSU_FEATURE_MAGISK_COMPAT && value != 0 &&
@@ -458,6 +489,67 @@ int feature_set_impl(const std::string& id, uint32_t feature_id, uint64_t value)
     printf("Feature '%s' set to %" PRIu64 " (%s)\n", feature_id_to_name(feature_id), value,
            value != 0 ? "enabled" : "disabled");
     return 0;
+}
+
+bool restore_config_file(const std::string& path, const std::optional<std::string>& previous) {
+    if (previous)
+        return write_file_atomic(path, *previous) && sync_feature_directory();
+    return (unlink(path.c_str()) == 0 || errno == ENOENT) && sync_feature_directory();
+}
+
+int feature_update_locked(const std::string& id, uint32_t feature_id, uint64_t value,
+                          bool persist) {
+    const bool disabling_kasumi = feature_id == KSU_FEATURE_KASUMI && value == 0;
+    const bool coupled = is_sucompat_feature_id(feature_id) || disabling_kasumi;
+    auto previous_sucompat = get_current_feature_values();
+    const auto previous_feature = get_feature(feature_id);
+    const auto previous_text_config = read_file(FEATURE_CONFIG_PATH);
+    const auto previous_binary_config = read_file(get_feature_config_path());
+    const auto previous_path_file =
+        disabling_kasumi ? read_file(SU_PATH_CONFIG_PATH) : std::nullopt;
+    ksu_su_path_config previous_path{};
+    bool restore_path = false;
+    if (disabling_kasumi) {
+        const int ret = get_su_path_config(&previous_path);
+        if (ret != 0 && ret != -ENOTTY && ret != -EOPNOTSUPP)
+            return 1;
+        restore_path = ret == 0;
+        previous_path.flags = 0;
+    }
+
+    const auto restore_runtime = [&] {
+        if (disabling_kasumi && previous_feature.second)
+            (void)set_feature(feature_id, previous_feature.first);
+        else if (!coupled && previous_feature.second)
+            (void)feature_set_impl(id, feature_id, previous_feature.first);
+        if (restore_path) {
+            const bool file_restored = restore_config_file(SU_PATH_CONFIG_PATH, previous_path_file);
+            if (set_su_path_config(previous_path) != 0 || !file_restored) {
+                LOGE("Failed to restore the previous su path after disabling Kasumi failed");
+                close_su_view_after_path_failure();
+                return;
+            }
+        }
+        if (coupled)
+            (void)apply_sucompat_config(previous_sucompat);
+    };
+
+    if (feature_set_impl(id, feature_id, value) != 0) {
+        if (coupled)
+            restore_runtime();
+        return 1;
+    }
+    if (!persist || feature_save_config_locked() == 0)
+        return 0;
+
+    LOGW("Failed to persist feature %s; restoring previous runtime state", id.c_str());
+    restore_runtime();
+    const bool text_restored = restore_config_file(FEATURE_CONFIG_PATH, previous_text_config);
+    const bool binary_restored =
+        restore_config_file(get_feature_config_path(), previous_binary_config);
+    if (!text_restored || !binary_restored)
+        LOGW("Failed to restore the previous feature configuration files");
+    return 1;
 }
 
 }  // namespace
@@ -501,6 +593,8 @@ int feature_set(const std::string& id, uint64_t value) {
     if (!transition.locked()) {
         return 1;
     }
+    if (feature_id == KSU_FEATURE_KASUMI && value == 0)
+        return feature_update_locked(id, feature_id, value, false);
     return feature_set_impl(id, feature_id, value);
 }
 
@@ -516,39 +610,7 @@ int feature_set_and_save(const std::string& id, uint64_t value) {
         return 1;
     }
 
-    const bool coupled = is_sucompat_feature_id(feature_id);
-    auto previous_sucompat = get_current_feature_values();
-    const auto [previous_value, previous_supported] = get_feature(feature_id);
-    const auto previous_text_config = read_file(FEATURE_CONFIG_PATH);
-    const auto previous_binary_config = read_file(get_feature_config_path());
-    if (feature_set_impl(id, feature_id, value) != 0) {
-        if (coupled) {
-            apply_sucompat_config(previous_sucompat);
-        }
-        return 1;
-    }
-    if (feature_save_config_locked() == 0) {
-        return 0;
-    }
-
-    LOGW("Failed to persist feature %s; restoring previous runtime state", id.c_str());
-    if (coupled) {
-        apply_sucompat_config(previous_sucompat);
-    } else if (previous_supported) {
-        (void)feature_set_impl(id, feature_id, previous_value);
-    }
-    const auto restore_file = [](const std::string& path, const auto& previous) {
-        if (previous) {
-            return write_file_atomic(path, *previous) && sync_feature_directory();
-        }
-        return unlink(path.c_str()) == 0 || errno == ENOENT;
-    };
-    const bool text_restored = restore_file(FEATURE_CONFIG_PATH, previous_text_config);
-    const bool binary_restored = restore_file(get_feature_config_path(), previous_binary_config);
-    if (!text_restored || !binary_restored) {
-        LOGW("Failed to restore the previous feature configuration files");
-    }
-    return 1;
+    return feature_update_locked(id, feature_id, value, true);
 }
 
 void feature_list() {

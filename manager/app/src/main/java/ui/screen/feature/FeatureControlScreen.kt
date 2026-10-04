@@ -143,11 +143,13 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
     var suCompat by remember { mutableStateOf(suCompatController.read()) }
     var requestedSuCompat by remember { mutableStateOf<SuCompatMode?>(null) }
     var suPathSaving by remember { mutableStateOf(false) }
+    var suPathRevision by remember { mutableIntStateOf(0) }
     val suCompatSupported = remember { getFeatureStatus(Natives.FEATURE_SU_COMPAT) == "supported" }
     val ksmSupported = remember { getFeatureStatus(Natives.FEATURE_KASUMI_SUCOMPAT) == "supported" }
     val kasumi = rememberFeatureToggleState(Natives.FEATURE_KASUMI)
     val kasumiSupported = remember { getFeatureValueOrNull(Natives.FEATURE_KASUMI) != null }
     var kasumiInitialized by remember { mutableStateOf(Natives.kasumiIsInitialized()) }
+    val kasumiAvailable = !kasumiSupported || (kasumi.checked && kasumiInitialized)
     val kernelUmountDisabled = rememberFeatureToggleState(
         Natives.FEATURE_KERNEL_UMOUNT,
         displayInverted = true
@@ -366,6 +368,7 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                                     kasumiInitialized = Natives.kasumiIsInitialized()
                                     suCompat = suCompatController.read()
                                     magiskCompat.checked = suCompat.magisk
+                                    suPathRevision++
                                 },
                                 onFailure = { snackbarHost.showSnackbar(failedMessage) },
                             )
@@ -375,7 +378,7 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     SuCompatSelector(
                         selected = requestedSuCompat ?: suCompat.mode,
                         enabled = suCompatSupported && !magiskCompat.saving && !kasumi.saving && !suPathSaving,
-                        ksmSupported = ksmSupported && (!kasumiSupported || kasumiInitialized),
+                        ksmSupported = ksmSupported && kasumiAvailable,
                         onSelect = { mode ->
                             if (mode != suCompat.mode) updateSuCompat(mode = mode)
                         },
@@ -383,7 +386,9 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
 
                     if (ksmSupported) {
                         SuPathSetting(
-                            enabled = !magiskCompat.saving && !kasumi.saving,
+                            enabled = kasumiAvailable && suCompat.mode == SuCompatMode.KSM &&
+                                !magiskCompat.saving && !kasumi.saving,
+                            refreshKey = suPathRevision,
                             onSavingChange = { suPathSaving = it },
                         )
                     }
@@ -394,8 +399,8 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                         title = stringResource(R.string.su_compat_magisk_title),
                         summary = stringResource(R.string.su_compat_magisk_summary),
                         state = magiskCompat,
-                        enabled = suCompat.mode == SuCompatMode.KSM && !kasumi.saving && !suPathSaving &&
-                            (!kasumiSupported || kasumiInitialized),
+                        enabled = kasumiAvailable && suCompat.mode == SuCompatMode.KSM &&
+                            !kasumi.saving && !suPathSaving,
                         onChange = { enabled -> updateSuCompat(magisk = enabled) },
                     )
 

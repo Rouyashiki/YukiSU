@@ -20,8 +20,6 @@
 namespace ksud {
 namespace {
 
-constexpr const char* kSuPathFile = "/data/adb/ksu/su_path";
-
 class Fd {
 public:
     explicit Fd(int fd) : fd_(fd) {}
@@ -55,7 +53,7 @@ ksu_su_path_config path_config(const std::string& path) {
 }
 
 int read_path(std::string& path) {
-    const Fd fd(open(kSuPathFile, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
+    const Fd fd(open(SU_PATH_CONFIG_PATH, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
     if (fd.get() < 0) {
         if (errno != ENOENT)
             return -errno;
@@ -102,15 +100,15 @@ int write_all(int fd, const std::string& data) {
     return 0;
 }
 
-int save_path(const std::string& path, bool* persistence_error = nullptr) {
+int save_path_locked(const std::string& path, bool* persistence_error = nullptr) {
     if (persistence_error != nullptr)
         *persistence_error = false;
     int ret = validate_su_path(path);
     if (ret)
         return ret;
-    const SucompatTransitionLock transition;
-    if (!transition.locked())
-        return -EBUSY;
+    const auto [kasumi, supported] = get_feature(KSU_FEATURE_KASUMI);
+    if (path != KSU_SU_PATH_DEFAULT && supported && kasumi == 0)
+        return -EOPNOTSUPP;
     ksu_su_path_config previous{};
     ret = get_su_path_config(&previous);
     if (ret)
@@ -125,7 +123,7 @@ int save_path(const std::string& path, bool* persistence_error = nullptr) {
     if (directory.get() < 0)
         return -errno;
 
-    std::string temporary = std::string(kSuPathFile) + ".tmp.XXXXXX";
+    std::string temporary = std::string(SU_PATH_CONFIG_PATH) + ".tmp.XXXXXX";
     const Fd fd(mkostemp(temporary.data(), O_CLOEXEC));
     if (fd.get() < 0)
         return -errno;
@@ -149,7 +147,7 @@ int save_path(const std::string& path, bool* persistence_error = nullptr) {
     }
     if (persistence_error != nullptr)
         *persistence_error = true;
-    if (rename(temporary.c_str(), kSuPathFile) != 0) {
+    if (rename(temporary.c_str(), SU_PATH_CONFIG_PATH) != 0) {
         ret = -errno;
         previous.flags = 0;
         if (set_su_path_config(previous) != 0)
@@ -164,6 +162,13 @@ int save_path(const std::string& path, bool* persistence_error = nullptr) {
         return ret;
     }
     return 0;
+}
+
+int save_path(const std::string& path, bool* persistence_error = nullptr) {
+    const SucompatTransitionLock transition;
+    if (!transition.locked())
+        return -EBUSY;
+    return save_path_locked(path, persistence_error);
 }
 
 const char* save_error_code(int result, bool persistence_error) {
@@ -198,6 +203,16 @@ const char* save_error_code(int result, bool persistence_error) {
 }
 
 }  // namespace
+
+int reset_su_path_locked() {
+    ksu_su_path_config current{};
+    const int ret = get_su_path_config(&current);
+    if (ret == -ENOTTY || ret == -EOPNOTSUPP)
+        return 0;
+    if (ret)
+        return ret;
+    return save_path_locked(KSU_SU_PATH_DEFAULT);
+}
 
 int restore_su_path(bool* custom) {
     if (custom != nullptr)
