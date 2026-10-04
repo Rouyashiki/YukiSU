@@ -13,6 +13,7 @@ enum yz_event_type {
   YZ_EV_RELOAD = 2,
   YZ_EV_SAFEMODE = 3,
   YZ_EV_ZYGOTE_EXIT = 5,
+  YZ_EV_TARGET_EXIT = 7,
 };
 
 struct yz_event {
@@ -29,6 +30,17 @@ struct yz_zygote_exit_event {
   __aligned_u64 observed_boottime;
   __u8 abi;
   __u8 reserved[7];
+};
+
+/* Process-group exit observation; appid carries the observed wait status. */
+struct yz_target_exit_event {
+  struct yz_event event;
+  __u32 generation;
+  __aligned_u64 start_boottime;
+  __aligned_u64 observed_boottime;
+  __u8 abi;
+  __u8 kind;
+  __u8 reserved[6];
 };
 
 #define YZ_MAX_MODULE_FDS 8
@@ -218,9 +230,14 @@ enum yz_runtime_abi {
 };
 
 #define YZ_RUNTIME_F_EARLY_NATIVE (1U << 0)
+/* Saved pre-exit state; meaningful with YZ_RUNTIME_CAP_INJECTION_STATE. */
+#define YZ_RUNTIME_F_INJECTION_STATE_SHIFT 8
+#define YZ_RUNTIME_F_INJECTION_STATE_MASK                                      \
+  (7U << YZ_RUNTIME_F_INJECTION_STATE_SHIFT)
 
 #define YZ_RUNTIME_CAP_MODULE_IMAGE_POLICY (1U << 0)
 #define YZ_RUNTIME_CAP_ZYGOTE_MODULE_REPORT (1U << 1)
+#define YZ_RUNTIME_CAP_INJECTION_STATE (1U << 2)
 
 struct yz_runtime_record {
   __u32 pid;

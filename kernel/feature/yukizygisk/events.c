@@ -54,23 +54,33 @@ void yz_emit_safemode(u32 pid, u32 crashes)
 	yz_emit_event(YZ_EV_SAFEMODE, pid, crashes);
 }
 
-void yz_emit_zygote_exit(const struct yz_zygote_exit_event *event)
+static void yz_emit_exit(const void *event, size_t size)
 {
 	struct sk_buff *skb;
 	struct nlmsghdr *nlh;
 
 	if (!yz_event_sock)
 		return;
-	skb = nlmsg_new(sizeof(*event), GFP_KERNEL);
+	skb = nlmsg_new(size, GFP_KERNEL);
 	if (!skb)
 		return;
-	nlh = nlmsg_put(skb, 0, 0, YZ_NL_MSG_EVENT, sizeof(*event), 0);
+	nlh = nlmsg_put(skb, 0, 0, YZ_NL_MSG_EVENT, size, 0);
 	if (!nlh) {
 		nlmsg_free(skb);
 		return;
 	}
-	memcpy(nlmsg_data(nlh), event, sizeof(*event));
+	memcpy(nlmsg_data(nlh), event, size);
 	nlmsg_multicast(yz_event_sock, skb, 0, YZ_NL_GROUP_EVENTS, GFP_KERNEL);
+}
+
+void yz_emit_zygote_exit(const struct yz_zygote_exit_event *event)
+{
+	yz_emit_exit(event, sizeof(*event));
+}
+
+void yz_emit_target_exit(const struct yz_target_exit_event *event)
+{
+	yz_emit_exit(event, sizeof(*event));
 }
 
 void yz_events_init(void)

@@ -10,7 +10,7 @@ kernelsu-objs += feature/yukizygisk/tango.o
 kernelsu-objs += feature/yukizygisk/exec.o
 kernelsu-objs += feature/yukizygisk/lifecycle.o
 kernelsu-objs += feature/yukizygisk/events.o
-kernelsu-objs += feature/yukizygisk/zygote_exit.o
+kernelsu-objs += feature/yukizygisk/process_exit.o
 kernelsu-objs += feature/yukizygisk/fd_handoff.o
 
 ifneq ($(shell grep -A3 'sched_process_exit,' $(srctree)/include/trace/events/sched.h | grep -c 'bool group_dead'),0)

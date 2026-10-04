@@ -11,8 +11,14 @@ int yz_feature_enable_early(void)
 	int ret = 0;
 
 	mutex_lock(&yz_feature_lock);
-	if (!READ_ONCE(yukizygisk_enabled) && yz_early_native_active())
-		ret = yz_exec_enable();
+	if (!READ_ONCE(yukizygisk_enabled) && yz_early_native_active()) {
+		ret = yz_process_exit_enable();
+		if (!ret) {
+			ret = yz_exec_enable();
+			if (ret)
+				yz_process_exit_disable();
+		}
+	}
 	mutex_unlock(&yz_feature_lock);
 	return ret;
 }
@@ -26,31 +32,33 @@ int yz_feature_set_enabled(bool enabled)
 		goto out;
 
 	if (enabled) {
-		ret = yz_exec_enable();
+		ret = yz_process_exit_enable();
 		if (ret)
 			goto out;
+		ret = yz_exec_enable();
+		if (ret)
+			goto undo_exit;
 
 		ret = yz_lifecycle_enable();
 		if (ret) {
-			yz_exec_disable();
-			goto out;
+			if (!yz_early_native_active())
+				yz_exec_disable();
+			goto undo_exit;
 		}
-		ret = yz_zygote_exit_enable();
-		if (ret)
-			pr_warn(
-			    "yukizygisk: exit diagnostics unavailable: %d\n",
-			    ret);
-		ret = 0;
 		WRITE_ONCE(yukizygisk_enabled, true);
 	} else {
 		WRITE_ONCE(yukizygisk_enabled, false);
 		yz_early_native_disable();
-		yz_zygote_exit_disable();
-		yz_lifecycle_disable();
 		yz_exec_disable();
+		yz_lifecycle_disable();
+		yz_process_exit_disable();
 	}
 
 	pr_info("yukizygisk: enabled=%d\n", enabled);
+	goto out;
+undo_exit:
+	if (!yz_early_native_active())
+		yz_process_exit_disable();
 out:
 	mutex_unlock(&yz_feature_lock);
 	return ret;

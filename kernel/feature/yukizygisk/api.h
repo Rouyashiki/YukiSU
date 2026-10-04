@@ -6,6 +6,7 @@
 struct cred;
 struct file;
 struct pt_regs;
+struct task_struct;
 struct yz_native_targets_cmd;
 struct yz_runtime_query_cmd;
 struct yz_runtime_record;
@@ -27,7 +28,8 @@ void ksu_yukizygisk_set_first_stage_loader(bool enabled);
 int ksu_yukizygisk_set_native_targets(const struct yz_native_targets_cmd *cmd);
 int ksu_yukizygisk_restore_native_load_policy(pid_t tgid);
 bool ksu_yukizygisk_is_native_runtime(pid_t pid, u64 start_boottime);
-int ksu_yukizygisk_allow_module_load_policy(pid_t tgid, struct file *dir,
+int ksu_yukizygisk_allow_module_load_policy(struct task_struct *task,
+					    struct file *dir,
 					    const struct cred *cred);
 int ksu_yukizygisk_get_safemode(struct yz_safemode_status_cmd *cmd);
 int ksu_yukizygisk_get_runtime(struct yz_runtime_record *entries, u32 capacity,

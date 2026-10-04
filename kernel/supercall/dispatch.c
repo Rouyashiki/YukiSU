@@ -1298,7 +1298,7 @@ static int do_yz_allow_module_load_policy(void __user *arg)
 		ret = -EPERM;
 		goto out_fd;
 	}
-	ret = ksu_yukizygisk_allow_module_load_policy(task->tgid, file, cred);
+	ret = ksu_yukizygisk_allow_module_load_policy(task, file, cred);
 out_fd:
 	fdput(payload);
 out_cred:

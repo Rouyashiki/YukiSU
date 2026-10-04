@@ -131,7 +131,8 @@ void yz_safemode_fill_runtime_query(struct yz_runtime_query_cmd *query)
 	query->safe_mode = yz_safemode_active ? 1 : 0;
 	query->zygote_crashes = yz_safemode_zygote_crashes;
 	query->capabilities = YZ_RUNTIME_CAP_MODULE_IMAGE_POLICY |
-			      YZ_RUNTIME_CAP_ZYGOTE_MODULE_REPORT;
+			      YZ_RUNTIME_CAP_ZYGOTE_MODULE_REPORT |
+			      YZ_RUNTIME_CAP_INJECTION_STATE;
 	yz_copy_name(query->safe_mode_zygote, sizeof(query->safe_mode_zygote),
 		     yz_safemode_zygote);
 	spin_unlock_irqrestore(&yz_safemode_lock, flags);

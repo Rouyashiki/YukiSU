@@ -10,6 +10,7 @@ struct file;
 struct ksu_feature_handler;
 struct ksu_file_load_policy;
 struct mm_struct;
+struct task_struct;
 
 #define YZ_LOADER64_NAME "libyukilinker64.so"
 #define YZ_LOADER32_NAME "libyukilinker32.so"
@@ -68,14 +69,23 @@ void yz_events_exit(void);
 void yz_emit_specialize(u32 pid, u32 appid);
 void yz_emit_safemode(u32 pid, u32 crashes);
 void yz_emit_zygote_exit(const struct yz_zygote_exit_event *event);
-void yz_zygote_exit_track(u32 pid, u64 start, u32 generation, u8 abi);
-int yz_zygote_exit_enable(void);
-void yz_zygote_exit_disable(void);
+void yz_emit_target_exit(const struct yz_target_exit_event *event);
+int yz_process_exit_enable(void);
+void yz_process_exit_disable(void);
+void yz_process_exit_schedule(void);
+bool yz_process_exit_active(void);
+bool yz_runtime_on_exit(struct task_struct *task);
+void yz_runtime_reconcile(void);
+bool yz_runtime_take_exit(struct yz_target_exit_event *event);
+void yz_lifecycle_on_exit(struct task_struct *task);
+void yz_load_policy_reap(void);
+bool yz_load_policy_has_owner(struct task_struct *task);
 int yz_lifecycle_enable(void);
 void yz_lifecycle_disable(void);
 void yz_fd_handoff_init(void);
 void yz_fd_handoff_exit(void);
-void yz_fd_handoff_release(pid_t pid);
+void yz_fd_handoff_release(struct task_struct *task);
+void yz_fd_handoff_cancel_all(void);
 
 struct yz_early_packet_state {
 	int packet_fd;

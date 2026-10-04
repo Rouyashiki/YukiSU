@@ -242,6 +242,8 @@ static void yz_inject_tw_func(struct callback_head *cb)
 	u8 runtime_kind =
 	    native ? YZ_RUNTIME_KIND_NATIVE : YZ_RUNTIME_KIND_ZYGOTE;
 
+	if (current->flags & PF_EXITING)
+		goto out;
 	if (!READ_ONCE(yukizygisk_enabled) &&
 	    !(native && tw->early_native && yz_early_native_active()))
 		goto out;
@@ -256,7 +258,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 	compat = is_compat_task();
 #endif
 	runtime_abi = compat ? YZ_RUNTIME_ABI_32 : YZ_RUNTIME_ABI_64;
-	start_boottime = READ_ONCE(current->start_boottime);
+	start_boottime = READ_ONCE(current->group_leader->start_boottime);
 	yz_runtime_read_process(mm, process, sizeof(process));
 	if (native) {
 		yz_copy_name(socket_name, sizeof(socket_name),
@@ -282,7 +284,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 		    yz_runtime_begin(runtime_kind, runtime_abi, 0, 0, process,
 				     socket_name, start_boottime);
 	}
-	if (!mm)
+	if (!mm || !runtime_generation)
 		goto out;
 	dlopen_off = compat ? yz_dlopen32_off : yz_dlopen_off;
 	dlsym_off = compat ? yz_dlsym32_off : yz_dlsym_off;
@@ -667,7 +669,9 @@ int yz_tango_prepare(u32 *generation)
 	yz_runtime_read_process(current->mm, process, sizeof(process));
 	*generation = yz_runtime_begin(
 	    YZ_RUNTIME_KIND_ZYGOTE, YZ_RUNTIME_ABI_32, 0, 0, process,
-	    socket_name, READ_ONCE(current->start_boottime));
+	    socket_name, READ_ONCE(current->group_leader->start_boottime));
+	if (!*generation)
+		return -ENOSPC;
 	if (yz_zygote_safemode_should_skip(socket_name)) {
 		yz_runtime_set_state(current->tgid, *generation,
 				     YZ_RUNTIME_STATE_SAFEMODE);
