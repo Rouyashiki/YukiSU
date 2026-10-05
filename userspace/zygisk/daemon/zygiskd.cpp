@@ -1274,7 +1274,33 @@ bool patch_text_for_pid(pid_t pid, uint64_t address, uint32_t length,
   command.len = length;
   command.addr = address;
   memcpy(command.bytes, bytes, length);
-  return ksud::ksuctl(KSU_IOCTL_YZ_PATCH_TEXT, &command) == 0;
+  const bool applied = ksud::ksuctl(KSU_IOCTL_YZ_PATCH_TEXT, &command) == 0;
+  return applied;
+}
+
+uint8_t patch_text_v2_for_pid(pid_t pid, uint64_t address, uint32_t length,
+                              const uint8_t *expected,
+                              const uint8_t *replacement) {
+  if (pid <= 0 || expected == nullptr || replacement == nullptr ||
+      length == 0 || length > YZ_PATCH_TEXT_MAX)
+    return YZ_PATCH_V2_REJECTED;
+  yz_patch_text_v2_cmd command{};
+  command.pid = static_cast<uint32_t>(pid);
+  command.len = length;
+  command.addr = address;
+  memcpy(command.expected, expected, length);
+  memcpy(command.replacement, replacement, length);
+  if (ksud::ksuctl(KSU_IOCTL_YZ_PATCH_TEXT_V2, &command) != 0) {
+    const int error = errno;
+    DLOGE("checked text patch ioctl failed pid=%d addr=0x%llx len=%u errno=%d",
+          pid, static_cast<unsigned long long>(address), length, error);
+    return error == ENOTTY || error == EINVAL ? YZ_PATCH_V2_REJECTED
+                                              : YZ_PATCH_V2_INDETERMINATE;
+  }
+  if (command.result == YZ_PATCH_V2_INDETERMINATE)
+    DLOGE("checked text patch indeterminate pid=%d addr=0x%llx len=%u", pid,
+          static_cast<unsigned long long>(address), length);
+  return static_cast<uint8_t>(command.result);
 }
 
 ssize_t receive_hyos_session_packet(int session, uint8_t *buffer,
@@ -1371,8 +1397,9 @@ bool bind_hyos_session_child(HyosControlSessionContext &context,
 
 bool handle_hyos_control_session(HyosControlSessionContext &context) {
   const int session = context.session;
-  constexpr size_t kFrameCapacity =
-      sizeof(uint8_t) + sizeof(uint64_t) + sizeof(uint32_t) + YZ_PATCH_TEXT_MAX;
+  constexpr size_t kFrameCapacity = sizeof(uint8_t) + sizeof(uint64_t) +
+                                    sizeof(uint32_t) +
+                                    (size_t{2} * YZ_PATCH_TEXT_MAX);
   uint8_t frame[kFrameCapacity];
   struct ucred credentials{};
   const ssize_t size =
@@ -1407,6 +1434,25 @@ bool handle_hyos_control_session(HyosControlSessionContext &context) {
             ? 1
             : 0;
     return send_hyos_response(session, ok);
+  }
+  if (request == zygiskd::Request::PatchTextV2) {
+    constexpr size_t kHeaderSize =
+        sizeof(uint8_t) + sizeof(uint64_t) + sizeof(uint32_t);
+    if (size < static_cast<ssize_t>(kHeaderSize))
+      return false;
+    uint64_t address = 0;
+    uint32_t length = 0;
+    memcpy(&address, frame + sizeof(uint8_t), sizeof(address));
+    memcpy(&length, frame + sizeof(uint8_t) + sizeof(address), sizeof(length));
+    const bool valid_size =
+        length > 0 && length <= YZ_PATCH_TEXT_MAX &&
+        size == static_cast<ssize_t>(kHeaderSize + (size_t{2} * length));
+    const uint8_t result =
+        valid_size ? patch_text_v2_for_pid(credentials.pid, address, length,
+                                           frame + kHeaderSize,
+                                           frame + kHeaderSize + length)
+                   : YZ_PATCH_V2_REJECTED;
+    return send_hyos_response(session, result);
   }
   if (request == zygiskd::Request::ReportHyosCallback) {
     if (size != static_cast<ssize_t>(sizeof(uint8_t) + sizeof(uint32_t)))
@@ -1784,6 +1830,27 @@ void handle_client(int client) {
             ? 1
             : 0;
     write_exact(client, &ok, sizeof(ok));
+    break;
+  }
+  case zygiskd::Request::PatchTextV2: {
+    uint64_t addr = 0;
+    uint32_t len = 0;
+    if (!reader.read_exact(&addr, sizeof(addr)) ||
+        !reader.read_exact(&len, sizeof(len)) || len == 0 ||
+        len > YZ_PATCH_TEXT_MAX)
+      break;
+    uint8_t expected[YZ_PATCH_TEXT_MAX];
+    uint8_t replacement[YZ_PATCH_TEXT_MAX];
+    if (!reader.read_exact(expected, len) ||
+        !reader.read_exact(replacement, len))
+      break;
+    struct ucred cr{};
+    socklen_t crlen = sizeof(cr);
+    const uint8_t result =
+        getsockopt(client, SOL_SOCKET, SO_PEERCRED, &cr, &crlen) == 0
+            ? patch_text_v2_for_pid(cr.pid, addr, len, expected, replacement)
+            : YZ_PATCH_V2_REJECTED;
+    write_exact(client, &result, sizeof(result));
     break;
   }
   case zygiskd::Request::Log: {

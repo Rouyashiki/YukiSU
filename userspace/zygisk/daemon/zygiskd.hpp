@@ -15,6 +15,7 @@ enum class Request : uint8_t {
   // 8-9 reserved
   Log = 10,
   PatchText = 11,
+  PatchTextV2 = 29,
   ReportZygote = 12,
   GetNativeModuleCount = 13,
   GetNativeModuleInfo = 14,

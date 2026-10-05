@@ -103,6 +103,22 @@ struct yz_patch_text_cmd {
   __u8 bytes[YZ_PATCH_TEXT_MAX];
 };
 
+#define KSU_IOCTL_YZ_PATCH_TEXT_V2 _IOC(_IOC_READ | _IOC_WRITE, 'K', 83, 0)
+
+#define YZ_PATCH_V2_REJECTED 0
+#define YZ_PATCH_V2_APPLIED 1
+#define YZ_PATCH_V2_INDETERMINATE 2
+
+struct yz_patch_text_v2_cmd {
+  __u32 pid;
+  __u32 len;
+  __u64 addr;
+  __u8 expected[YZ_PATCH_TEXT_MAX];
+  __u8 replacement[YZ_PATCH_TEXT_MAX];
+  __u32 result;
+  __u32 reserved;
+};
+
 #define KSU_IOCTL_YZ_SET_NATIVE_TARGETS _IOC(_IOC_WRITE, 'K', 58, 0)
 
 #define YZ_NATIVE_TARGET_MAX 64

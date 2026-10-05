@@ -55,6 +55,7 @@
 #ifdef CONFIG_KSU_YUKIZYGISK
 #include "feature/yukizygisk/api.h"
 #include "uapi/yukizygisk.h"
+#include "feature/yukizygisk/patch_transaction.h"
 #endif // #ifdef CONFIG_KSU_YUKIZYGISK
 #include "hook/syscall_hook_manager.h"
 
@@ -1499,6 +1500,52 @@ static int do_yz_patch_text(void __user *arg)
 		cmd.pid, cmd.addr, cmd.len);
 	return 0;
 }
+
+static int yz_patch_v2_read(void *context, unsigned long address, void *buffer,
+			    unsigned int length)
+{
+	return access_process_vm(context, address, buffer, length, FOLL_FORCE);
+}
+
+static int yz_patch_v2_write(void *context, unsigned long address, void *buffer,
+			     unsigned int length)
+{
+	return access_process_vm(context, address, buffer, length,
+				 FOLL_FORCE | FOLL_WRITE);
+}
+
+static int do_yz_patch_text_v2(void __user *arg)
+{
+	struct yz_patch_text_v2_cmd cmd;
+	struct task_struct *task;
+	u8 before[YZ_PATCH_TEXT_MAX];
+	u8 after[YZ_PATCH_TEXT_MAX];
+	struct yz_patch_io io;
+
+	if (copy_from_user(&cmd, arg, sizeof(cmd)))
+		return -EFAULT;
+	if (!cmd.len || cmd.len > YZ_PATCH_TEXT_MAX || !cmd.addr ||
+	    cmd.addr >= TASK_SIZE || cmd.addr + cmd.len < cmd.addr ||
+	    cmd.addr + cmd.len > TASK_SIZE ||
+	    (cmd.addr & (PAGE_SIZE - 1)) + cmd.len > PAGE_SIZE)
+		return -EINVAL;
+
+	cmd.result = YZ_PATCH_V2_REJECTED;
+	rcu_read_lock();
+	task = get_pid_task(find_vpid(cmd.pid), PIDTYPE_PID);
+	rcu_read_unlock();
+	if (!task)
+		return -ESRCH;
+
+	io.context = task;
+	io.read = yz_patch_v2_read;
+	io.write = yz_patch_v2_write;
+	cmd.result =
+	    yz_patch_transaction(&io, (unsigned long)cmd.addr, cmd.len,
+				 cmd.expected, cmd.replacement, before, after);
+	put_task_struct(task);
+	return copy_to_user(arg, &cmd, sizeof(cmd)) ? -EFAULT : 0;
+}
 #endif // #ifdef CONFIG_KSU_YUKIZYGISK
 
 // IOCTL handlers mapping table
@@ -1735,6 +1782,10 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
     {.cmd = KSU_IOCTL_YZ_PATCH_TEXT,
      .name = "YZ_PATCH_TEXT",
      .handler = do_yz_patch_text,
+     .perm_check = only_root},
+    {.cmd = KSU_IOCTL_YZ_PATCH_TEXT_V2,
+     .name = "YZ_PATCH_TEXT_V2",
+     .handler = do_yz_patch_text_v2,
      .perm_check = only_root},
     {.cmd = KSU_IOCTL_YZ_RELOAD,
      .name = "YZ_RELOAD",
