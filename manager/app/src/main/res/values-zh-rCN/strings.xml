@@ -137,6 +137,7 @@
     <string name="allow_any_dynamic_manager">允许授权任何应用为动态管理器</string>
     <string name="allow_any_dynamic_manager_summary">实验性功能。开启后在所有应用的 App Profile 中显示动态管理器开关，而不是仅显示预置签名管理器。</string>
     <string name="require_kernel_version">需要更新内核，点击此处安装</string>
+    <string name="require_kernel_version_gki">需要更新内核</string>
     <string name="settings_umount_modules_default">默认卸载模块</string>
     <string name="settings_umount_modules_default_summary">对没有单独 Profile 的应用默认卸载模块。默认关闭。</string>
     <string name="settings_default_no_new_privs">默认防逃逸 (no-new-privs)</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">อนุญาตให้แอปใดก็ได้เป็นตัวจัดการแบบไดนามิก</string>
     <string name="allow_any_dynamic_manager_summary">ทดลอง แสดงสวิตช์ตัวจัดการแบบไดนามิกสำหรับทุกแอป แทนที่จะเป็นเฉพาะลายเซ็นตัวจัดการที่กำหนดไว้ล่วงหน้า</string>
     <string name="require_kernel_version">จำเป็นต้องอัปเดตเคอร์เนล แตะเพื่อติดตั้ง</string>
+    <string name="require_kernel_version_gki">จำเป็นต้องอัปเดตเคอร์เนล</string>
     <string name="settings_umount_modules_default">Umount โมดูลตามค่าเริ่มต้น</string>
     <string name="settings_umount_modules_default_summary">ค่าเริ่มต้นสากลสำหรับการตั้งค่า \"Unmount modules\" ใน App Profile เมื่อเปิดใช้งาน การแก้ไขโมดูลจะถูกลบสำหรับแอปที่ไม่มีโปรไฟล์ การตั้งค่านี้ปิดอยู่ตามค่าเริ่มต้น ดังนั้นแอปใหม่หรือแอปที่ไม่รู้จักจึงคงการแก้ไขโมดูลไว้</string>
     <string name="profile_umount_modules_summary">การเปิดใช้งานตัวเลือกนี้จะทำให้ KernelSU สามารถกู้คืนไฟล์ที่แก้ไขโดยโมดูลสำหรับแอปนี้ได้</string>

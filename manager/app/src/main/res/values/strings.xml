@@ -139,6 +139,7 @@
     <string name="allow_any_dynamic_manager">Allow any app as dynamic manager</string>
     <string name="allow_any_dynamic_manager_summary">Experimental. Show the dynamic manager switch for every app instead of only preset manager signatures.</string>
     <string name="require_kernel_version">Kernel update required. Tap to install.</string>
+    <string name="require_kernel_version_gki">Kernel update required.</string>
     <string name="settings_umount_modules_default">Umount modules by default</string>
     <string name="settings_umount_modules_default_summary">Umount modules for apps without their own profile. Off by default.</string>
     <string name="settings_default_no_new_privs" tools:ignore="MissingTranslation">Default anti-escape (no-new-privs)</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Permitir calquera aplicación como xestor dinámico</string>
     <string name="allow_any_dynamic_manager_summary">Experimental. Amosa o interruptor de xestor dinámico para cada aplicación, en vez de só para as sinaturas de xestor predefinidas.</string>
     <string name="require_kernel_version">É necesario actualizar o núcleo. Toca para instalar.</string>
+    <string name="require_kernel_version_gki">É necesario actualizar o núcleo.</string>
     <string name="settings_umount_modules_default">Módulos desactivados por defecto</string>
     <string name="settings_umount_modules_default_summary">Predeterminado global para a configuración \"Desmontar módulos\" en App Profile. Cando se activa, elimínanse as modificacións do módulo para as aplicacións sen perfil. Esta configuración está desactivada de forma predeterminada, polo que as aplicacións novas ou descoñecidas conservan as modificacións do módulo.</string>
     <string name="profile_umount_modules_summary">Activar esta opción permitirá que KernelSU restaure calquera ficheiro modificado polos módulos para esta aplicación.</string>

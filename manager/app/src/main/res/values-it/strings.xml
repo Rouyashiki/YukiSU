@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Consenti qualsiasi app come gestore dinamico</string>
     <string name="allow_any_dynamic_manager_summary">Sperimentale. Mostra l\'interruttore del gestore dinamico per ogni app anziché solo per le firme dei gestori preimpostate.</string>
     <string name="require_kernel_version">È necessario aggiornare il kernel. Tocca per installare.</string>
+    <string name="require_kernel_version_gki">È necessario aggiornare il kernel.</string>
     <string name="settings_umount_modules_default">Scollega moduli da default</string>
     <string name="settings_umount_modules_default_summary">Impostazione predefinita globale per l\'impostazione \"Smonta moduli\" nel App Profile. Se abilitato, le modifiche al modulo vengono rimosse per le app senza profilo. Questa impostazione è disattivata per impostazione predefinita, quindi le app nuove o sconosciute mantengono le modifiche del modulo.</string>
     <string name="profile_umount_modules_summary">Attivando questa opzione permetterai a KernelSU di ripristinare ogni file modificato dai moduli per questa app.</string>

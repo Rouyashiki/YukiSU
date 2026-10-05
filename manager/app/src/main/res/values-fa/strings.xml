@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">اجازه به هر برنامه به‌عنوان مدیر پویا</string>
     <string name="allow_any_dynamic_manager_summary">آزمایشی. کلید مدیر پویا را برای هر برنامه نمایش می‌دهد، به‌جای فقط امضاهای مدیر از پیش تعیین‌شده.</string>
     <string name="require_kernel_version">به‌روزرسانی هسته لازم است. برای نصب ضربه بزنید.</string>
+    <string name="require_kernel_version_gki">به‌روزرسانی هسته لازم است.</string>
     <string name="settings_umount_modules_default">آنمانت ماژول‌ها به‌صورت پیش‌فرض</string>
     <string name="settings_umount_modules_default_summary">پیش‌فرض جهانی برای تنظیم \"Unmount modules\" در App Profile. وقتی فعال باشد، تغییرات ماژول برای برنامه‌های بدون نمایه حذف می‌شود. این تنظیم به طور پیش فرض خاموش است، بنابراین برنامه های جدید یا ناشناخته تغییرات ماژول را حفظ می کنند.</string>
     <string name="profile_umount_modules_summary">فعال کردن این گزینه به KernelSU اجازه می دهد تا فایل های اصلاح شده را توسط ماژول های این برنامه بازیابی کند.</string>

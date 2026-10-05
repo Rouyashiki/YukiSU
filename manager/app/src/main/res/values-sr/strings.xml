@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Дозволи било којој апликацији као динамичком менаџеру</string>
     <string name="allow_any_dynamic_manager_summary">Експериментално. Прикажите прекидач динамичког менаџера за сваку апликацију уместо само унапред подешених потписа менаџера.</string>
     <string name="require_kernel_version">Потребно је ажурирати кернел. Додирните за инсталирање.</string>
+    <string name="require_kernel_version_gki">Потребно је ажурирати кернел.</string>
     <string name="settings_umount_modules_default">Подразумевано искључите модуле</string>
     <string name="settings_umount_modules_default_summary">Глобална подразумевана вредност за „Демонтирај модуле“ у профилу апликације. Када је омогућено, уклања измене модула за апликације без профила. Ова опција је подразумевано искључена, па нове или непознате апликације задржавају измене модула.</string>
     <string name="profile_umount_modules_summary">Омогућавање ове опције ће омогућити KernelSU да врати све модификоване датотеке од стране модула за ову апликацију</string>

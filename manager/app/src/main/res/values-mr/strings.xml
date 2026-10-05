@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">कोणत्याही अॅपला डायनॅमिक व्यवस्थापक म्हणून परवानगी द्या</string>
     <string name="allow_any_dynamic_manager_summary">प्रायोगिक. केवळ पूर्वनिर्धारित व्यवस्थापक स्वाक्षरींऐवजी प्रत्येक अॅपसाठी डायनॅमिक व्यवस्थापक स्विच दाखवा.</string>
     <string name="require_kernel_version">कर्नल अपडेट करणे आवश्यक आहे. इंस्टॉल करण्यासाठी टॅप करा.</string>
+    <string name="require_kernel_version_gki">कर्नल अपडेट करणे आवश्यक आहे.</string>
     <string name="settings_umount_modules_default">डीफॉल्टनुसार मॉड्यूल्स उमाउंट करा</string>
     <string name="settings_umount_modules_default_summary">App Profile मधील \"अनमाउंट मॉड्यूल्स\" सेटिंगसाठी ग्लोबल डीफॉल्ट. सक्षम केल्यावर, प्रोफाइलशिवाय ॲप्ससाठी मॉड्यूल बदल काढले जातात. ही सेटिंग बाय डीफॉल्ट बंद असते, त्यामुळे नवीन किंवा अज्ञात ॲप्स मॉड्यूल बदल करत राहतात.</string>
     <string name="profile_umount_modules_summary">हा पर्याय सक्षम केल्याने KernelSU ला या ऍप्लिकेशनसाठी मॉड्यूल्सद्वारे कोणत्याही सुधारित फाइल्स पुनर्संचयित करण्यास अनुमती मिळेल.</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Разрешить любое приложение как динамический менеджер</string>
     <string name="allow_any_dynamic_manager_summary">Экспериментально. Показывать переключатель динамического менеджера для каждого приложения, а не только для предустановленных подписей менеджеров.</string>
     <string name="require_kernel_version">Требуется обновить ядро. Нажмите, чтобы установить.</string>
+    <string name="require_kernel_version_gki">Требуется обновить ядро.</string>
     <string name="settings_umount_modules_default">Размонтировать модули по умолчанию</string>
     <string name="settings_umount_modules_default_summary">Глобальное значение по умолчанию для настройки «Отключить модули» в App Profile. Если этот параметр включен, изменения модуля удаляются для приложений без профиля. По умолчанию этот параметр отключен, поэтому новые или неизвестные приложения сохраняют изменения модуля.</string>
     <string name="profile_umount_modules_summary">Включение этой опции позволит KernelSU восстанавливать любые измененные модулями файлы для данного приложения.</string>

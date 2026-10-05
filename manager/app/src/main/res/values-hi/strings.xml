@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">किसी भी ऐप को डायनामिक प्रबंधक के रूप में अनुमति दें</string>
     <string name="allow_any_dynamic_manager_summary">प्रायोगिक। केवल पूर्व-निर्धारित प्रबंधक हस्ताक्षरों के बजाय हर ऐप के लिए डायनामिक प्रबंधक स्विच दिखाएं।</string>
     <string name="require_kernel_version">कर्नल को अपडेट करना आवश्यक है। इंस्टॉल करने के लिए टैप करें।</string>
+    <string name="require_kernel_version_gki">कर्नल को अपडेट करना आवश्यक है।</string>
     <string name="settings_umount_modules_default">डिफ़ॉल्ट रूप से मॉड्यूल अनमाउन्ट करें</string>
     <string name="settings_umount_modules_default_summary">App Profile में \"अनमाउंट मॉड्यूल\" सेटिंग के लिए वैश्विक डिफ़ॉल्ट। सक्षम होने पर, बिना प्रोफ़ाइल वाले ऐप्स के लिए मॉड्यूल संशोधन हटा दिए जाते हैं। यह सेटिंग डिफ़ॉल्ट रूप से बंद है, इसलिए नए या अज्ञात ऐप्स मॉड्यूल संशोधन करते रहते हैं।</string>
     <string name="profile_umount_modules_summary">इस विकल्प को चालू करने से KernelSU को इस एप्लिकेशन के लिए मॉड्यूल द्वारा किसी भी मोडिफाइड फ़ाइल को रिस्टोर करें।</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Benarkan mana-mana aplikasi sebagai pengurus dinamik</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimental. Menunjukkan suis pengurus dinamik untuk setiap aplikasi dan bukan hanya untuk tandatangan pengurus pratetap.</string>
     <string name="require_kernel_version">Kernel perlu dikemas kini. Ketik untuk memasang.</string>
+    <string name="require_kernel_version_gki">Kernel perlu dikemas kini.</string>
     <string name="settings_umount_modules_default">Nyahlekap modul secara lalai</string>
     <string name="settings_umount_modules_default_summary">Lalai global untuk tetapan \"Nyahlekap modul\" dalam App Profile. Apabila didayakan, pengubahsuaian modul dialih keluar untuk apl tanpa profil. Tetapan ini dimatikan secara lalai, jadi apl baharu atau tidak diketahui menyimpan pengubahsuaian modul.</string>
     <string name="profile_umount_modules_summary">Mendayakan pilihan ini akan membolehkan KernelSU memulihkan sebarang fail yang diubah suai oleh modul untuk apl ini</string>

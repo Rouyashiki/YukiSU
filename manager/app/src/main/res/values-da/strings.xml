@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Tillad enhver app som dynamisk manager</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimentel. Vis kontakten for dynamisk manager for hver app i stedet for kun forudindstillede manager-signaturer.</string>
     <string name="require_kernel_version">Kernelopdatering påkrævet. Tryk for at installere.</string>
+    <string name="require_kernel_version_gki">Kernelopdatering påkrævet.</string>
     <string name="settings_umount_modules_default">Afmontere moduler som standard</string>
     <string name="settings_umount_modules_default_summary">Global standard for indstillingen \"Afmonter moduler\" i App Profile. Når det er aktiveret, fjernes modulændringer for apps uden en profil. Denne indstilling er som standard slået fra, så nye eller ukendte apps beholder modulændringer.</string>
     <string name="profile_umount_modules_summary">Aktivering af denne indstilling vil tillade KernelSU at gendanne hvilken som helst modificeret filer af modulet for denne applikation.</string>

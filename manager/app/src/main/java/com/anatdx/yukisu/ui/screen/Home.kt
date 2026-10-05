@@ -331,8 +331,16 @@ fun HomeScreen(navigator: DestinationsNavigator) {
 
                     if (viewModel.systemStatus.requireNewKernel) {
                         WarningCard(
-                            message = stringResource(R.string.require_kernel_version),
-                            onClick = { navigator.navigate(InstallScreenDestination()) },
+                            message = stringResource(
+                                if (viewModel.systemStatus.canInstallKernelUpdate) {
+                                    R.string.require_kernel_version
+                                } else {
+                                    R.string.require_kernel_version_gki
+                                }
+                            ),
+                            onClick = if (viewModel.systemStatus.canInstallKernelUpdate) {
+                                { navigator.navigate(InstallScreenDestination()) }
+                            } else null,
                         )
                     }
                     if (viewModel.systemStatus.requireNewManager) {
@@ -621,7 +629,9 @@ private fun StatusCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClickInstall() }
+                .clickable(
+                    enabled = systemStatus.ksuVersion == null || systemStatus.canInstallKernelUpdate,
+                ) { onClickInstall() }
                 .padding(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

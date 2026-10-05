@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Dopusti bilo kojoj aplikaciji da bude dinamički upravitelj</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimentalno. Prikazuje prekidač dinamičkog upravitelja za svaku aplikaciju, a ne samo za unaprijed postavljene potpise upravitelja.</string>
     <string name="require_kernel_version">Potrebno je ažurirati kernel. Dodirnite za instaliranje.</string>
+    <string name="require_kernel_version_gki">Potrebno je ažurirati kernel.</string>
     <string name="settings_umount_modules_default">Umount module po zadanom</string>
     <string name="settings_umount_modules_default_summary">Globalno zadano za postavku \"Unmount modules\" u App Profile. Kada je omogućeno, modifikacije modula se uklanjaju za aplikacije bez profila. Ova postavka je isključena prema zadanim postavkama, tako da nove ili nepoznate aplikacije zadržavaju modifikacije modula.</string>
     <string name="profile_umount_modules_summary">Uključivanjem ove opcije omogućit će KernelSU-u da vrati sve izmjenute datoteke od strane modula za ovu aplikaciju.</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Elke app als dynamische beheerder toestaan</string>
     <string name="allow_any_dynamic_manager_summary">Experimenteel. Toon de schakelaar voor dynamische beheerder voor elke app in plaats van alleen voor vooraf ingestelde beheerderhandtekeningen.</string>
     <string name="require_kernel_version">Kernelupdate vereist. Tik om te installeren.</string>
+    <string name="require_kernel_version_gki">Kernelupdate vereist.</string>
     <string name="settings_umount_modules_default">Ontkoppel standaard de modules</string>
     <string name="settings_umount_modules_default_summary">Algemene standaard voor de instelling \"Modules ontkoppelen\" in App Profile. Indien ingeschakeld, worden modulewijzigingen verwijderd voor apps zonder profiel. Deze instelling is standaard uitgeschakeld, dus nieuwe of onbekende apps behouden modulewijzigingen.</string>
     <string name="profile_umount_modules_summary">Met deze optie ingeschakeld zal KernelSU toelaten om alle gewijzigde bestanden door de modules voor deze app te herstellen.</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">السماح لأي تطبيق كمدير ديناميكي</string>
     <string name="allow_any_dynamic_manager_summary">تجريبي. إظهار مفتاح المدير الديناميكي لكل تطبيق بدلاً من توقيعات المدراء المحددة مسبقاً فقط.</string>
     <string name="require_kernel_version">يلزم تحديث النواة. اضغط للتثبيت.</string>
+    <string name="require_kernel_version_gki">يلزم تحديث النواة.</string>
     <string name="settings_umount_modules_default">الغاء تحميل الإضافات بشكل افتراضي</string>
     <string name="settings_umount_modules_default_summary">الإعداد الافتراضي العالمي لإعداد \"إلغاء تحميل الوحدات\" في App Profile. عند التمكين، تتم إزالة تعديلات الوحدة للتطبيقات التي لا تحتوي على ملف تعريف. يتم إيقاف هذا الإعداد بشكل افتراضي، لذا تحتفظ التطبيقات الجديدة أو غير المعروفة بتعديلات الوحدة.</string>
     <string name="profile_umount_modules_summary">سيسمح تمكين هذا الخيار لـKernelSU باستعادة أي ملفات معدلة بواسطة الإضافات لهذا التطبيق.</string>

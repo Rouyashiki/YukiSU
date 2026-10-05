@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">任意のアプリを動的マネージャーとして許可</string>
     <string name="allow_any_dynamic_manager_summary">実験的機能。プリセットのマネージャー署名だけでなく、すべてのアプリに動的マネージャーのスイッチを表示します。</string>
     <string name="require_kernel_version">カーネルの更新が必要です。タップしてインストールします。</string>
+    <string name="require_kernel_version_gki">カーネルの更新が必要です。</string>
     <string name="settings_umount_modules_default">デフォルトでモジュールのマウントを解除する</string>
     <string name="settings_umount_modules_default_summary">App Profile の「モジュールのアンマウント」設定のグローバル デフォルト。有効にすると、プロファイルのないアプリのモジュールの変更が削除されます。この設定はデフォルトではオフになっているため、新しいアプリや不明なアプリはモジュールの変更を保持します。</string>
     <string name="profile_umount_modules_summary">このオプションを有効にすると、KernelSU はこのアプリのモジュールによって変更されたファイルを復元できるようになります。</string>

@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Atļaut jebkuru lietotni kā dinamisko pārvaldnieku</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimentāli. Rāda dinamiskā pārvaldnieka slēdzi katrai lietotnei, nevis tikai iepriekš iestatītajiem pārvaldnieku parakstiem.</string>
     <string name="require_kernel_version">Nepieciešams kodola atjauninājums. Pieskarieties, lai instalētu.</string>
+    <string name="require_kernel_version_gki">Nepieciešams kodola atjauninājums.</string>
     <string name="settings_umount_modules_default">Pēc noklusējuma atvienot moduļus</string>
     <string name="settings_umount_modules_default_summary">Globālais noklusējums iestatījumam \"Atvienot moduļus\" lietotnes profilā. Ja tas ir ieslēgts, lietotnēm bez profila tiek noņemtas visas moduļu veiktās izmaiņas. Pēc noklusējuma šis iestatījums ir izslēgts, tāpēc jaunās vai nezināmās lietotnes saglabā moduļu izmaiņas.</string>
     <string name="profile_umount_modules_summary">Iespējojot šo opciju, KernelSU varēs atjaunot visus moduļos šīs lietojumprogrammas modificētos failus.</string>

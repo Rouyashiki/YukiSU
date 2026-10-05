@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Payagan ang anumang app bilang dynamic manager</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimental. Ipakita ang switch ng dynamic manager para sa bawat app sa halip na para lamang sa mga preset manager signature.</string>
     <string name="require_kernel_version">Kailangang i-update ang kernel. I-tap para i-install.</string>
+    <string name="require_kernel_version_gki">Kailangang i-update ang kernel.</string>
     <string name="settings_umount_modules_default">I-umount ang mga module bilang default</string>
     <string name="settings_umount_modules_default_summary">Global default para sa setting na \"I-unmount ang mga module\" sa App Profile. Kapag pinagana, aalisin ang mga pagbabago sa module para sa mga app na walang profile. Naka-off ang setting na ito bilang default, kaya ang mga bago o hindi kilalang app ay nagpapanatili ng mga pagbabago sa module.</string>
     <string name="profile_umount_modules_summary">Ang pagpapagana sa opsyong ito ay magbibigay-daan sa KernelSU na ibalik ang anumang binagong file ng mga modyul para sa aplikasyon na ito.</string>

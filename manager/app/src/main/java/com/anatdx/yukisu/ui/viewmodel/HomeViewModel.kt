@@ -32,6 +32,7 @@ class HomeViewModel : ViewModel() {
         val kernelVersion: KernelVersion = getKernelVersion(),
         val isRootAvailable: Boolean = false,
         val isLkmBundled: Boolean = false,
+        val isLateLoadMode: Boolean = true,
         val kernelUapiVersion: Int = 0,
         val managerUapiVersion: Int = 0,
         val managerVersionCode: Long = BuildConfig.VERSION_CODE.toLong(),
@@ -40,8 +41,10 @@ class HomeViewModel : ViewModel() {
             get() = isManager && kernelUapiVersion < managerUapiVersion
         val requireNewManager: Boolean
             get() = isManager && kernelUapiVersion > managerUapiVersion
+        val canInstallKernelUpdate: Boolean
+            get() = !isLateLoadMode
         val showLkmUpdate: Boolean
-            get() = isManager && isLkmBundled && ksuVersion != null &&
+            get() = isManager && canInstallKernelUpdate && isLkmBundled && ksuVersion != null &&
                 ksuVersion.toLong() != managerVersionCode &&
                 kernelUapiVersion == managerUapiVersion
         val showCustomLkmBadge: Boolean
@@ -184,6 +187,7 @@ class HomeViewModel : ViewModel() {
                     kernelVersion = kernelVersion,
                     isRootAvailable = isRootAvailable,
                     isLkmBundled = isLkmBundled,
+                    isLateLoadMode = runCatching { Natives.isLateLoadMode }.getOrDefault(true),
                     kernelUapiVersion = kernelUapiVersion,
                     managerUapiVersion = managerUapiVersion
                 )

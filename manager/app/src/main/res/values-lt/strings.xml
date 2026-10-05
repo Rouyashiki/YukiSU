@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Leisti bet kuriai programai būti dinamine tvarkykle</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimentinė. Rodo dinaminės tvarkyklės jungiklį kiekvienai programai, o ne tik iš anksto nustatytiems tvarkyklių parašams.</string>
     <string name="require_kernel_version">Reikia atnaujinti branduolį. Palieskite, kad įdiegtumėte.</string>
+    <string name="require_kernel_version_gki">Reikia atnaujinti branduolį.</string>
     <string name="settings_umount_modules_default">Atjungti modulius pagal numatytuosius parametrus</string>
     <string name="settings_umount_modules_default_summary">Visuotinis numatytasis parametras „Atjungti modulius“ App Profile. Kai įgalinta, programų be profilio modulių pakeitimai pašalinami. Šis nustatymas išjungtas pagal numatytuosius nustatymus, todėl naujos arba nežinomos programos išsaugo modulio pakeitimus.</string>
     <string name="profile_umount_modules_summary">Įjungus šią parinktį, KernelSU galės atkurti visus modulių modifikuotus failus šiai programai.</string>

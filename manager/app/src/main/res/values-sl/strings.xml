@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Dovoli vsaki aplikaciji, da je dinamični upravitelj</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimentalno. Prikaže stikalo dinamičnega upravitelja za vsako aplikacijo, ne le za prednastavljene podpise upraviteljev.</string>
     <string name="require_kernel_version">Potrebna je posodobitev jedra. Tapnite za namestitev.</string>
+    <string name="require_kernel_version_gki">Potrebna je posodobitev jedra.</string>
     <string name="settings_umount_modules_default">Po privzetem izvrzi module</string>
     <string name="settings_umount_modules_default_summary">Globalna privzeta vrednost za nastavitev \"Odpni module\" v App Profile. Ko je omogočeno, so spremembe modula odstranjene za aplikacije brez profila. Ta nastavitev je privzeto izklopljena, zato nove ali neznane aplikacije ohranijo spremembe modula.</string>
     <string name="profile_umount_modules_summary">Omogočanje te opcije bo dovolilo KernelSU, da obnovi vse zaradi modulov spremenjene datoteke za to aplikacijo.</string>

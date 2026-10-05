@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">ಯಾವುದೇ ಆ್ಯಪ್ ಅನ್ನು ಡೈನಾಮಿಕ್ ನಿರ್ವಾಹಕವಾಗಿ ಅನುಮತಿಸಿ</string>
     <string name="allow_any_dynamic_manager_summary">ಪ್ರಾಯೋಗಿಕ. ಕೇವಲ ಪೂರ್ವನಿರ್ಧಾರಿತ ನಿರ್ವಾಹಕ ಸಹಿಗಳ ಬದಲಿಗೆ ಪ್ರತಿ ಆ್ಯಪ್‌ಗೆ ಡೈನಾಮಿಕ್ ನಿರ್ವಾಹಕ ಸ್ವಿಚ್ ತೋರಿಸಿ.</string>
     <string name="require_kernel_version">ಕರ್ನಲ್ ಅನ್ನು ನವೀಕರಿಸುವ ಅಗತ್ಯವಿದೆ. ಸ್ಥಾಪಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ.</string>
+    <string name="require_kernel_version_gki">ಕರ್ನಲ್ ಅನ್ನು ನವೀಕರಿಸುವ ಅಗತ್ಯವಿದೆ.</string>
     <string name="settings_umount_modules_default">ಡೀಫಾಲ್ಟ್ ಆಗಿ Umount ಮಾಡ್ಯೂಲ್</string>
     <string name="settings_umount_modules_default_summary">App Profile ನಲ್ಲಿ \"ಅನ್‌ಮೌಂಟ್ ಮಾಡ್ಯೂಲ್\" ಸೆಟ್ಟಿಂಗ್‌ಗಾಗಿ ಜಾಗತಿಕ ಡೀಫಾಲ್ಟ್. ಸಕ್ರಿಯಗೊಳಿಸಿದಾಗ, ಪ್ರೊಫೈಲ್ ಇಲ್ಲದ ಅಪ್ಲಿಕೇಶನ್‌ಗಳಿಗಾಗಿ ಮಾಡ್ಯೂಲ್ ಮಾರ್ಪಾಡುಗಳನ್ನು ತೆಗೆದುಹಾಕಲಾಗುತ್ತದೆ. ಈ ಸೆಟ್ಟಿಂಗ್ ಡಿಫಾಲ್ಟ್ ಆಗಿ ಆಫ್ ಆಗಿದೆ, ಆದ್ದರಿಂದ ಹೊಸ ಅಥವಾ ಅಪರಿಚಿತ ಅಪ್ಲಿಕೇಶನ್‌ಗಳು ಮಾಡ್ಯೂಲ್ ಮಾರ್ಪಾಡುಗಳನ್ನು ಇರಿಸುತ್ತವೆ.</string>
     <string name="profile_umount_modules_summary">ಈ ಆಯ್ಕೆಯನ್ನು ಸಕ್ರಿಯಗೊಳಿಸುವುದರಿಂದ ಈ ಅಪ್ಲಿಕೇಶನ್‌ಗಾಗಿ ಮಾಡ್ಯೂಲ್‌ಗಳ ಮೂಲಕ ಯಾವುದೇ ಮಾರ್ಪಡಿಸಿದ ಫೈಲ್‌ಗಳನ್ನು ಮರುಸ್ಥಾಪಿಸಲು KernelSU ಗೆ ಅನುಮತಿಸುತ್ತದೆ.</string>

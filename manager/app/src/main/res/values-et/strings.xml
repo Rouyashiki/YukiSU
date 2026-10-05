@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Luba mis tahes rakendus dünaamilise haldurina</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimentaalne. Kuvab dünaamilise halduri lüliti iga rakenduse jaoks, mitte ainult eelseadistatud halduri allkirjade jaoks.</string>
     <string name="require_kernel_version">Kerneli värskendamine on vajalik. Puuduta installimiseks.</string>
+    <string name="require_kernel_version_gki">Kerneli värskendamine on vajalik.</string>
     <string name="settings_umount_modules_default">Haagi moodulid vaikimisi lahti</string>
     <string name="settings_umount_modules_default_summary">Globaalne vaikeseade App Profile sätte \"Unmount moodulid\" jaoks. Kui see on lubatud, eemaldatakse profiilita rakenduste mooduli muudatused. See seade on vaikimisi välja lülitatud, nii et uued või tundmatud rakendused säilitavad mooduli muudatused.</string>
     <string name="profile_umount_modules_summary">Selle valiku lubamine lubab KernelSU-l taastada selle rakenduse moodulite poolt mistahes muudetud faile.</string>

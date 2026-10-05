@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Izinkan aplikasi apa pun sebagai pengelola dinamis</string>
     <string name="allow_any_dynamic_manager_summary">Eksperimental. Menampilkan sakelar pengelola dinamis untuk setiap aplikasi alih-alih hanya untuk tanda tangan pengelola prasetel.</string>
     <string name="require_kernel_version">Kernel perlu diperbarui. Ketuk untuk menginstal.</string>
+    <string name="require_kernel_version_gki">Kernel perlu diperbarui.</string>
     <string name="settings_umount_modules_default">Melepas Modul secara bawaan</string>
     <string name="settings_umount_modules_default_summary">Default global untuk pengaturan \"Lepas modul\" di App Profile. Jika diaktifkan, modifikasi modul akan dihapus untuk aplikasi tanpa profil. Pengaturan ini dinonaktifkan secara default, sehingga aplikasi baru atau tidak dikenal tetap melakukan modifikasi modul.</string>
     <string name="profile_umount_modules_summary">Aktifkan opsi ini agar KernelSU dapat memulihkan kembali berkas termodifikasi oleh modul pada aplikasi ini.</string>

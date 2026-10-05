@@ -71,6 +71,7 @@
     <string name="allow_any_dynamic_manager">允許授權任何應用為動態管理器</string>
     <string name="allow_any_dynamic_manager_summary">實驗性功能。開啟後會在所有應用的 App Profile 中顯示動態管理器開關，而非僅顯示預置簽章管理器。</string>
     <string name="require_kernel_version">需要更新核心，按一下安裝</string>
+    <string name="require_kernel_version_gki">需要更新核心</string>
     <string name="settings_umount_modules_default">默認卸載模組</string>
     <string name="settings_umount_modules_default_summary">App Profile 入面「卸載模組」嘅全局預設值。開啟後，冇獨立 Profile 嘅應用會移除所有模組對系統嘅修改。呢個選項預設關閉，所以新應用或未知應用仍會保留模組修改。</string>
     <string name="profile_umount_modules_summary">啟用該選項後將允許 KernelSU 為本應用還原被模組修改過嘅文件。</string>

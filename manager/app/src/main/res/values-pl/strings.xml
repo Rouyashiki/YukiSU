@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Zezwól każdej aplikacji jako menedżer dynamiczny</string>
     <string name="allow_any_dynamic_manager_summary">Eksperymentalne. Pokazuje przełącznik menedżera dynamicznego dla każdej aplikacji, a nie tylko dla wstępnie zdefiniowanych podpisów menedżerów.</string>
     <string name="require_kernel_version">Wymagana jest aktualizacja jądra. Kliknij, aby zainstalować.</string>
+    <string name="require_kernel_version_gki">Wymagana jest aktualizacja jądra.</string>
     <string name="settings_umount_modules_default">Domyślnie odmontuj moduły</string>
     <string name="settings_umount_modules_default_summary">Globalne ustawienie domyślne dla ustawienia \"Odmontuj moduły\" w App Profile. Po włączeniu modyfikacje modułów są usuwane w przypadku aplikacji bez profilu. To ustawienie jest domyślnie wyłączone, więc nowe lub nieznane aplikacje zachowują modyfikacje modułów.</string>
     <string name="profile_umount_modules_summary">Włączenie tej opcji umożliwi KernelSU przywrócenie wszelkich zmodyfikowanych plików przez moduły dla tej aplikacji.</string>

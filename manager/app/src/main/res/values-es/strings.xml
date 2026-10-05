@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Permitir cualquier aplicación como administrador dinámico</string>
     <string name="allow_any_dynamic_manager_summary">Experimental. Muestra el interruptor de administrador dinámico para cada aplicación en lugar de solo para las firmas de administrador predefinidas.</string>
     <string name="require_kernel_version">Se requiere actualizar el kernel. Toca para instalar.</string>
+    <string name="require_kernel_version_gki">Se requiere actualizar el kernel.</string>
     <string name="settings_umount_modules_default">Desmontar módulos por defecto</string>
     <string name="settings_umount_modules_default_summary">Valor predeterminado global para la configuración \"Desmontar módulos\" en App Profile. Cuando está habilitado, las modificaciones del módulo se eliminan para las aplicaciones sin perfil. Esta configuración está desactivada de forma predeterminada, por lo que las aplicaciones nuevas o desconocidas mantienen las modificaciones del módulo.</string>
     <string name="profile_umount_modules_summary">Activar esta opción permitirá a KernelSU restaurar cualquier archivo modificado por los módulos para esta aplicación.</string>

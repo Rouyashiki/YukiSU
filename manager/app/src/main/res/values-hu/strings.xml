@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">Bármely alkalmazás engedélyezése dinamikus kezelőként</string>
     <string name="allow_any_dynamic_manager_summary">Kísérleti. A dinamikus kezelő kapcsolójának megjelenítése minden alkalmazásnál, nem csak az előre beállított kezelői aláírásoknál.</string>
     <string name="require_kernel_version">A kernel frissítése szükséges. Érintse meg a telepítéshez.</string>
+    <string name="require_kernel_version_gki">A kernel frissítése szükséges.</string>
     <string name="settings_umount_modules_default">Modulok leválasztása alapértelmezetten</string>
     <string name="settings_umount_modules_default_summary">Globális alapértelmezés a \"Modulok leválasztása\" beállításhoz a App Profile-ban. Ha engedélyezve van, a modul módosításai törlődnek a profil nélküli alkalmazásoknál. Ez a beállítás alapértelmezés szerint ki van kapcsolva, így az új vagy ismeretlen alkalmazások megtartják a modul módosításait.</string>
     <string name="profile_umount_modules_summary">Ha engedélyezi ezt az opciót, a KernelSU visszaállíthatja az alkalmazás moduljai által módosított fájlokat.</string>

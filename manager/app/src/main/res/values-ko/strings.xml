@@ -70,6 +70,7 @@
     <string name="allow_any_dynamic_manager">모든 앱을 동적 관리자로 허용</string>
     <string name="allow_any_dynamic_manager_summary">실험적 기능. 사전 설정된 관리자 서명뿐만 아니라 모든 앱에 동적 관리자 스위치를 표시합니다.</string>
     <string name="require_kernel_version">커널 업데이트가 필요합니다. 탭하여 설치하세요.</string>
+    <string name="require_kernel_version_gki">커널 업데이트가 필요합니다.</string>
     <string name="settings_umount_modules_default">기본값으로 모듈 사용 해제</string>
     <string name="settings_umount_modules_default_summary">앱 프로필의 \"모듈 마운트 해제\" 전역 기본값입니다. 활성화하면 프로필이 없는 앱에서 모듈이 적용한 모든 변경 사항을 제거합니다. 기본값은 꺼짐이므로 새 앱이나 알 수 없는 앱에는 모듈 변경 사항이 유지됩니다.</string>
     <string name="profile_umount_modules_summary">이 옵션이 활성화되면, KernelSU는 이 앱에 대한 모듈의 모든 수정사항을 복구합니다.</string>
