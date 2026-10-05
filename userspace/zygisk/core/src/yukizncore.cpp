@@ -100,6 +100,8 @@ struct InlineHookRecord {
 };
 
 std::vector<InlineHookRecord> g_inline_hooks;
+pthread_mutex_t g_inline_hooks_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 std::vector<ModuleHandle *> g_loaded_modules;
 yz_config g_yz_config = yukizygisk::config::defaults;
 uint32_t g_runtime_generation = 0;
@@ -820,42 +822,81 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
 }
 
 int api_inline_hook(void *target, void *addr, void **original) {
-  if (target == nullptr || addr == nullptr) {
+  if (target == nullptr || addr == nullptr ||
+      !yuki::ihook::single_threaded_process()) {
     LOGE("inline hook: invalid args target=%p handler=%p", target, addr);
     return kFailed;
   }
-  for (const auto &rec : g_inline_hooks)
-    if (rec.target == target) {
-      LOGE("inline hook: duplicate target=%p", target);
+  pthread_mutex_lock(&g_inline_hooks_mutex);
+  const uintptr_t requested =
+      reinterpret_cast<uintptr_t>(target) & ~uintptr_t{1};
+#if defined(__aarch64__)
+  constexpr size_t requested_size = 8;
+#else
+  constexpr size_t requested_size = 10;
+#endif
+  for (const auto &rec : g_inline_hooks) {
+    const uintptr_t existing =
+        reinterpret_cast<uintptr_t>(rec.target) & ~uintptr_t{1};
+#if defined(__aarch64__)
+    constexpr size_t existing_size = 8;
+#else
+    const size_t existing_size = rec.hook.patched_size;
+#endif
+    if (yuki::ihook::hook_ranges_overlap(requested, requested_size, existing,
+                                         existing_size)) {
+      LOGE("inline hook: overlapping target=%p existing=%p", target,
+           rec.target);
+      pthread_mutex_unlock(&g_inline_hooks_mutex);
       return kFailed;
     }
+  }
 
-  InlineHookRecord rec{};
+  g_inline_hooks.emplace_back();
+  InlineHookRecord &rec = g_inline_hooks.back();
   rec.target = target;
+#if defined(__aarch64__)
+  yuki::ihook::a64::Error reason = yuki::ihook::a64::Error::None;
+  void *orig =
+      yuki::ihook::install(target, addr, &rec.hook, true, false, &reason);
+#else
   void *orig = yuki::ihook::install(target, addr, &rec.hook, true);
+#endif
   if (orig == nullptr) {
+#if defined(__aarch64__)
+    LOGE("inline hook: install failed target=%p handler=%p reason=%s", target,
+         addr, yuki::ihook::a64::error_name(reason));
+#else
     LOGE("inline hook: install failed target=%p handler=%p", target, addr);
+#endif
+    g_inline_hooks.pop_back();
+    pthread_mutex_unlock(&g_inline_hooks_mutex);
     return kFailed;
   }
   if (original != nullptr)
     *original = orig;
-  g_inline_hooks.push_back(rec);
+  pthread_mutex_unlock(&g_inline_hooks_mutex);
   LOGI("inline hook: installed target=%p handler=%p original=%p", target, addr,
        orig);
   return kSuccess;
 }
 
 int api_inline_unhook(void *target) {
-  if (target == nullptr)
+  if (target == nullptr || !yuki::ihook::single_threaded_process())
     return kFailed;
+  pthread_mutex_lock(&g_inline_hooks_mutex);
   for (auto it = g_inline_hooks.begin(); it != g_inline_hooks.end(); ++it) {
     if (it->target != target)
       continue;
-    if (!yuki::ihook::uninstall(&it->hook))
+    if (!yuki::ihook::uninstall(&it->hook)) {
+      pthread_mutex_unlock(&g_inline_hooks_mutex);
       return kFailed;
+    }
     g_inline_hooks.erase(it);
+    pthread_mutex_unlock(&g_inline_hooks_mutex);
     return kSuccess;
   }
+  pthread_mutex_unlock(&g_inline_hooks_mutex);
   return kFailed;
 }
 
@@ -1485,6 +1526,60 @@ extern "C" bool yz_patch_text(uintptr_t addr, const void *bytes,
     ok = read_all(s, &ack, 1) && ack != 0;
   close(s);
   return ok;
+}
+
+extern "C" uint8_t yz_patch_text_checked(uintptr_t addr, const void *expected,
+                                         const void *replacement,
+                                         unsigned int len) {
+  if (expected == nullptr || replacement == nullptr || len == 0 ||
+      len > YZ_PATCH_TEXT_MAX)
+    return 0;
+  if (yukizygisk::hyos::in_specialized_child()) {
+    uint8_t frame[sizeof(uint8_t) + sizeof(uint64_t) + sizeof(uint32_t) +
+                  (size_t{2} * YZ_PATCH_TEXT_MAX)];
+    size_t offset = 0;
+    frame[offset++] = static_cast<uint8_t>(ZdRequest::PatchTextV2);
+    const uint64_t address = addr;
+    const uint32_t length = len;
+    memcpy(frame + offset, &address, sizeof(address));
+    offset += sizeof(address);
+    memcpy(frame + offset, &length, sizeof(length));
+    offset += sizeof(length);
+    memcpy(frame + offset, expected, len);
+    offset += len;
+    memcpy(frame + offset, replacement, len);
+    offset += len;
+    uint8_t result = 2;
+    yukizygisk::hyos::lock_child_control_session();
+    const int session = yukizygisk::hyos::child_control_session();
+    if (session < 0) {
+      yukizygisk::hyos::unlock_child_control_session();
+      return 0;
+    }
+    const HyosDeadline deadline = make_hyos_deadline();
+    const bool sent = send_packet_until(session, frame, offset, deadline);
+    const bool received =
+        sent && receive_byte_until(session, &result, deadline);
+    if (!sent || !received)
+      yukizygisk::hyos::invalidate_child_control_session();
+    yukizygisk::hyos::unlock_child_control_session();
+    return received && result <= 2 ? result : 2;
+  }
+  int s = connect_zygiskd();
+  if (s < 0) {
+    return 0;
+  }
+  const uint8_t op = static_cast<uint8_t>(ZdRequest::PatchTextV2);
+  const uint64_t a64 = addr;
+  const uint32_t l32 = len;
+  uint8_t result = 2;
+  const bool sent = write_all(s, &op, 1) && write_all(s, &a64, sizeof(a64)) &&
+                    write_all(s, &l32, sizeof(l32)) &&
+                    write_all(s, expected, len) &&
+                    write_all(s, replacement, len);
+  const bool received = sent && read_all(s, &result, 1);
+  close(s);
+  return received && result <= 2 ? result : 2;
 }
 
 extern "C" [[gnu::visibility("default")]] void

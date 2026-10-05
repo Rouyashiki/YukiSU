@@ -26,6 +26,7 @@ g_yz_ret_ctx:
 .hidden yz_cap_tmpl_wrap
 .hidden yz_cap_tmpl_end
 yz_cap_tmpl:
+    hint #38 // bti jc
     adr  x16, yz_cap_tmpl_ctx
     ldr  x16, [x16]
     cbz  x16, 1f
@@ -56,6 +57,7 @@ yz_cap_tmpl_end:
 .hidden yz_self_unmap_tail
 .type yz_self_unmap_tail, %function
 yz_self_unmap_tail:
+    hint #34 // bti c
     adrp x16, g_yz_ret_ctx
     add  x16, x16, :lo12:g_yz_ret_ctx
     ldp  x19, x20, [x16, #0]
@@ -148,4 +150,20 @@ yz_self_unmap_tail:
 1:
     .word g_yz_ret_ctx - 1b
 .size yz_self_unmap_tail, .-yz_self_unmap_tail
+#endif
+
+.section .note.GNU-stack,"",%progbits
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_BTI_DEFAULT)
+.section .note.gnu.property,"a",%note
+.p2align 3
+.word 4, 16, 5
+.asciz "GNU"
+.word 0xc0000000, 4
+#if defined(__ARM_FEATURE_PAC_DEFAULT)
+.word 3
+#else
+.word 1
+#endif
+.word 0
 #endif

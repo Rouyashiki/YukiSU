@@ -735,6 +735,33 @@ struct JniHookRecord {
 };
 std::vector<JniHookRecord> g_jni_hooks;
 
+bool reflected_is_native(JNIEnv *env, jobject method) {
+  if (method == nullptr || env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return false;
+  }
+  jclass type = env->GetObjectClass(method);
+  if (type == nullptr || env->ExceptionCheck()) {
+    env->ExceptionClear();
+    if (type != nullptr)
+      env->DeleteLocalRef(type);
+    return false;
+  }
+  auto *const get_modifiers = env->GetMethodID(type, "getModifiers", "()I");
+  env->DeleteLocalRef(type);
+  if (get_modifiers == nullptr || env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return false;
+  }
+  const jint modifiers = env->CallIntMethod(method, get_modifiers);
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return false;
+  }
+  constexpr jint native_modifier = 0x0100;
+  return (modifiers & native_modifier) != 0;
+}
+
 void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
                       int count, yuki::ihook::UnhookMode mode, int owner) {
   jclass clazz = env->FindClass(clz);
@@ -743,6 +770,9 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
     ZLOGE("FindClass(%s) failed", clz);
     return;
   }
+
+  if (count > 0)
+    g_jni_hooks.reserve(g_jni_hooks.size() + static_cast<size_t>(count));
 
   for (int i = 0; i < count; ++i) {
     JNINativeMethod &m = methods[i];
@@ -761,7 +791,13 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
       continue;
     }
     jobject reflected = env->ToReflectedMethod(clazz, mid, is_static);
-    void *art = reflected ? yuki::art::art_method_of(env, reflected) : nullptr;
+    if (!reflected_is_native(env, reflected)) {
+      if (reflected != nullptr)
+        env->DeleteLocalRef(reflected);
+      m.fnPtr = nullptr;
+      continue;
+    }
+    void *art = yuki::art::art_method_of(env, reflected);
     if (reflected != nullptr)
       env->DeleteLocalRef(reflected);
     void *orig = art ? yuki::art::native_entry(art) : nullptr;
@@ -807,7 +843,8 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
     record.name = m.name;
     record.signature = m.signature;
     g_jni_hooks.push_back(std::move(record));
-    if (env->RegisterNatives(clazz, &m, 1) != JNI_OK || env->ExceptionCheck()) {
+    const jint registered = env->RegisterNatives(clazz, &m, 1);
+    if (registered != JNI_OK || env->ExceptionCheck()) {
       env->ExceptionClear();
       ZLOGE("RegisterNatives fallback failed for %s", m.name);
       m.fnPtr = nullptr;
@@ -856,8 +893,9 @@ bool restore_jni_hooks(JNIEnv *env, int owner) {
         }
         ok = ok && yuki::art::native_entry(record.method) == record.original;
       }
-      if (ok)
+      if (ok) {
         env->DeleteGlobalRef(record.clazz);
+      }
     }
     if (!ok) {
       ZLOGE("JNI hook restore failed: module=%d", owner);

@@ -780,6 +780,28 @@ extern "C" bool yz_patch_text(uintptr_t addr, const void *bytes,
   return ok;
 }
 
+extern "C" uint8_t yz_patch_text_checked(uintptr_t addr, const void *expected,
+                                         const void *replacement,
+                                         unsigned int len) {
+  if (expected == nullptr || replacement == nullptr || len == 0 || len > 64)
+    return 0;
+  int s = connect_zygiskd();
+  if (s < 0) {
+    return 0;
+  }
+  const uint8_t req = static_cast<uint8_t>(ZdRequest::PatchTextV2);
+  const uint64_t a64 = addr;
+  const uint32_t l32 = len;
+  uint8_t result = 2;
+  const bool sent = write_all(s, &req, 1) && write_all(s, &a64, sizeof(a64)) &&
+                    write_all(s, &l32, sizeof(l32)) &&
+                    write_all(s, expected, len) &&
+                    write_all(s, replacement, len);
+  const bool received = sent && read_all(s, &result, 1);
+  close(s);
+  return received && result <= 2 ? result : 2;
+}
+
 extern "C" {
 extern void (*__init_array_start[])(void) __attribute__((visibility("hidden")));
 extern void (*__init_array_end[])(void) __attribute__((visibility("hidden")));
