@@ -290,22 +290,14 @@ struct data_path {
 	struct list_head list;
 };
 
-struct apk_path_hash {
-	unsigned int hash;
-	bool exists;
-	struct list_head list;
-};
-
-static struct list_head apk_path_hash_list = LIST_HEAD_INIT(apk_path_hash_list);
 static bool manager_scan_forced;
 
 struct my_dir_context {
 	struct dir_context ctx;
 	struct list_head *data_path_list;
 	char *parent_dir;
-	void *private_data;
+	char *candidate_path;
 	int depth;
-	int *stop;
 };
 // https://docs.kernel.org/filesystems/porting.html
 // filldir_t (readdir callbacks) calling conventions have changed. Instead of
@@ -331,15 +323,6 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
 	    container_of(ctx, struct my_dir_context, ctx);
 	char dirpath[DATA_PATH_LEN];
 
-	if (!my_ctx) {
-		pr_err("Invalid context\n");
-		return FILLDIR_ACTOR_STOP;
-	}
-	if (my_ctx->stop && *my_ctx->stop) {
-		pr_info("Stop searching\n");
-		return FILLDIR_ACTOR_STOP;
-	}
-
 	if (!strncmp(name, "..", namelen) || !strncmp(name, ".", namelen))
 		return FILLDIR_ACTOR_CONTINUE; // Skip "." and ".."
 
@@ -356,8 +339,7 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
 		return FILLDIR_ACTOR_CONTINUE;
 	}
 
-	if (d_type == DT_DIR && my_ctx->depth > 0 &&
-	    (my_ctx->stop && !*my_ctx->stop)) {
+	if (d_type == DT_DIR && my_ctx->depth > 0) {
 		struct data_path *data =
 		    kzalloc(sizeof(struct data_path), GFP_ATOMIC);
 
@@ -369,61 +351,9 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
 		strscpy(data->dirpath, dirpath, DATA_PATH_LEN);
 		data->depth = my_ctx->depth - 1;
 		list_add_tail(&data->list, my_ctx->data_path_list);
-	} else {
-		if ((namelen == 8) &&
-		    (strncmp(name, "base.apk", namelen) == 0)) {
-			struct apk_path_hash *pos, *n;
-			struct apk_path_hash *apk_data;
-			struct apk_sign_match sign_match = {
-			    .index = -1,
-			};
-			int signature_index = -1;
-			unsigned int hash =
-			    full_name_hash(NULL, dirpath, strlen(dirpath));
-			list_for_each_entry (pos, &apk_path_hash_list, list) {
-				if (hash == pos->hash) {
-					pos->exists = true;
-					return FILLDIR_ACTOR_CONTINUE;
-				}
-			}
-
-			if (match_apk_signature(dirpath, &sign_match)) {
-				if (sign_match.trusted &&
-				    sign_match.index >= 0) {
-					signature_index = sign_match.index;
-					pr_info("Found manager base.apk at "
-						"path: %s\n",
-						dirpath);
-					crown_manager(dirpath,
-						      my_ctx->private_data,
-						      signature_index);
-					/* Do not stop: continue scanning so
-					 * preset branch managers can be marked
-					 * even after YukiSU is found. */
-				} else {
-					note_scanned_manager(
-					    dirpath, my_ctx->private_data,
-					    &sign_match);
-				}
-			}
-
-			apk_data = kzalloc(sizeof(*apk_data), GFP_ATOMIC);
-			if (apk_data) {
-				apk_data->hash = hash;
-				apk_data->exists = true;
-				list_add_tail(&apk_data->list,
-					      &apk_path_hash_list);
-			}
-
-			if (sign_match.trusted) {
-				// Manager found, clear APK cache list
-				list_for_each_entry_safe (
-				    pos, n, &apk_path_hash_list, list) {
-					list_del(&pos->list);
-					kfree(pos);
-				}
-			}
-		}
+	} else if (d_type == DT_REG && namelen == 8 &&
+		   !memcmp(name, "base.apk", 8)) {
+		strscpy(my_ctx->candidate_path, dirpath, DATA_PATH_LEN);
 	}
 
 	return FILLDIR_ACTOR_CONTINUE;
@@ -432,20 +362,12 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
 static void search_manager(const char *path, int depth,
 			   struct list_head *uid_data)
 {
-	int i, stop = 0;
+	int i;
 	unsigned long data_app_magic = 0;
-	struct apk_path_hash *pos, *n;
-	struct list_head data_path_list;
+	LIST_HEAD(data_path_list);
 	struct data_path data;
+	char candidate_path[DATA_PATH_LEN];
 
-	INIT_LIST_HEAD(&data_path_list);
-
-	// Initialize APK cache list
-	list_for_each_entry (pos, &apk_path_hash_list, list) {
-		pos->exists = false;
-	}
-
-	// First depth
 	strscpy(data.dirpath, path, DATA_PATH_LEN);
 	data.depth = depth;
 	list_add_tail(&data.list, &data_path_list);
@@ -454,69 +376,54 @@ static void search_manager(const char *path, int depth,
 		struct data_path *pos, *n;
 
 		list_for_each_entry_safe (pos, n, &data_path_list, list) {
-			struct my_dir_context ctx = {.ctx.actor = my_actor,
-						     .data_path_list =
-							 &data_path_list,
-						     .parent_dir = pos->dirpath,
-						     .private_data = uid_data,
-						     .depth = pos->depth,
-						     .stop = &stop};
+			struct my_dir_context ctx = {
+			    .ctx.actor = my_actor,
+			    .data_path_list = &data_path_list,
+			    .parent_dir = pos->dirpath,
+			    .candidate_path = candidate_path,
+			    .depth = pos->depth,
+			};
+			struct apk_sign_match sign_match = {.index = -1};
 			struct file *file;
 
-			if (!stop) {
-				file = ksu_filp_open_nonotify(
-				    pos->dirpath,
-				    O_RDONLY | O_NOFOLLOW | O_NOATIME);
-				if (IS_ERR(file)) {
-					pr_err("Failed to open directory: %s, "
-					       "err: %ld\n",
-					       pos->dirpath, PTR_ERR(file));
-					goto skip_iterate;
-				}
-
-				// grab magic on first folder, which is
-				// /data/app
-				if (!data_app_magic) {
-					if (file->f_inode->i_sb->s_magic) {
-						data_app_magic =
-						    file->f_inode->i_sb
-							->s_magic;
-						pr_info("%s: dir: %s got "
-							"magic! 0x%lx\n",
-							__func__, pos->dirpath,
-							data_app_magic);
-					} else {
-						filp_close(file, NULL);
-						goto skip_iterate;
-					}
-				}
-
-				if (file->f_inode->i_sb->s_magic !=
-				    data_app_magic) {
-					pr_info("%s: skip: %s magic: 0x%lx "
-						"expected: 0x%lx\n",
-						__func__, pos->dirpath,
-						file->f_inode->i_sb->s_magic,
-						data_app_magic);
-					filp_close(file, NULL);
-					goto skip_iterate;
-				}
-
-				iterate_dir(file, &ctx.ctx);
-				filp_close(file, NULL);
+			candidate_path[0] = '\0';
+			file = ksu_filp_open_nonotify(
+			    pos->dirpath,
+			    O_RDONLY | O_NOFOLLOW | O_NOATIME | O_DIRECTORY);
+			if (IS_ERR(file)) {
+				pr_err(
+				    "Failed to open directory: %s, err: %ld\n",
+				    pos->dirpath, PTR_ERR(file));
+				goto skip_iterate;
 			}
+			if (!data_app_magic)
+				data_app_magic = file->f_inode->i_sb->s_magic;
+			if (!data_app_magic ||
+			    file->f_inode->i_sb->s_magic != data_app_magic) {
+				filp_close(file, NULL);
+				goto skip_iterate;
+			}
+
+			iterate_dir(file, &ctx.ctx);
+			filp_close(file, NULL);
+
+			// APK opens must run after iterate_dir releases the
+			// directory lock.
+			if (candidate_path[0] &&
+			    match_apk_signature(candidate_path, &sign_match)) {
+				if (sign_match.trusted && sign_match.index >= 0)
+					crown_manager(candidate_path, uid_data,
+						      sign_match.index);
+				else
+					note_scanned_manager(candidate_path,
+							     uid_data,
+							     &sign_match);
+			}
+
 		skip_iterate:
 			list_del(&pos->list);
 			if (pos != &data)
 				kfree(pos);
-		}
-	}
-
-	// Remove stale cached APK entries
-	list_for_each_entry_safe (pos, n, &apk_path_hash_list, list) {
-		if (!pos->exists) {
-			list_del(&pos->list);
-			kfree(pos);
 		}
 	}
 }
