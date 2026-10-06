@@ -1,6 +1,7 @@
 #include <linux/err.h>
 #include <linux/fs.h>
 #include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/types.h>
@@ -290,7 +291,7 @@ struct data_path {
 	struct list_head list;
 };
 
-static bool manager_scan_forced;
+static DEFINE_MUTEX(throne_tracker_mutex);
 
 struct my_dir_context {
 	struct dir_context ctx;
@@ -445,7 +446,7 @@ static bool is_uid_exist(uid_t uid, char *package, void *data)
 	return exist;
 }
 
-void track_throne(bool prune_only)
+static void track_throne_locked(bool prune_only, bool force_scan)
 {
 	const struct cred *old_cred = override_creds(ksu_cred);
 	struct list_head uid_list;
@@ -457,7 +458,7 @@ void track_throne(bool prune_only)
 	char *buf = NULL;
 	char *line = NULL;
 	char *next = NULL;
-	static bool manager_exist = false;
+	bool manager_exist = false;
 	bool need_search = false;
 
 	// init uid list head
@@ -568,8 +569,7 @@ void track_throne(bool prune_only)
 		}
 	}
 
-	need_search = !manager_exist || manager_scan_forced;
-	manager_scan_forced = false;
+	need_search = !manager_exist || force_scan;
 
 	if (need_search) {
 		pr_info("Searching for manager(s)...\n");
@@ -590,6 +590,13 @@ out:
 	revert_creds(old_cred);
 }
 
+void track_throne(bool prune_only)
+{
+	mutex_lock(&throne_tracker_mutex);
+	track_throne_locked(prune_only, false);
+	mutex_unlock(&throne_tracker_mutex);
+}
+
 /*
  * LKM: Delayed manager search when loaded after boot (packages.list may
  * already exist and won't trigger fsnotify). Schedule a delayed search.
@@ -604,8 +611,9 @@ static void do_throne_search(struct work_struct *work)
 
 void ksu_request_manager_rescan(void)
 {
-	manager_scan_forced = true;
-	track_throne(false);
+	mutex_lock(&throne_tracker_mutex);
+	track_throne_locked(false, true);
+	mutex_unlock(&throne_tracker_mutex);
 }
 
 void ksu_throne_tracker_init()
