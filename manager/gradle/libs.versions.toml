@@ -2,7 +2,7 @@
 accompanist-drawablepainter = "0.37.3"
 agp = "9.4.1"
 gson = "2.14.0"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 ksp = "2.3.12"
 compose-bom = "2026.09.00"
 lifecycle = "2.11.0"
