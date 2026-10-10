@@ -17,6 +17,7 @@ import com.anatdx.yukisu.R
 import com.topjohnwu.superuser.CallbackList
 import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ShellUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
@@ -29,6 +30,7 @@ import com.anatdx.yukisu.core.tasks.ProbeResult
 import com.anatdx.yukisu.core.utils.DataSourceChannel
 import com.anatdx.yukisu.ksu.KsuPaths
 import com.anatdx.yukisu.ksuApp
+import com.anatdx.yukisu.ui.kasumi.util.KasumiManager
 import com.topjohnwu.superuser.io.SuFile
 import org.json.JSONArray
 import org.json.JSONObject
@@ -1068,8 +1070,16 @@ fun install() {
     Log.w(TAG, "install result: $result, cost: ${SystemClock.elapsedRealtime() - start}ms")
 }
 
-fun hasMetaModule(): Boolean {
-    return getMetaModuleImplement() != "None"
+suspend fun hasModuleMountProvider(): Boolean = withContext(Dispatchers.IO) {
+    if (getMetaModuleImplement() != "None") return@withContext true
+    try {
+        KasumiManager.isBuiltinMountEnabled()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        Log.w(TAG, "Failed to read built-in Kagami mount state", error)
+        false
+    }
 }
 
 fun listModules(): String =

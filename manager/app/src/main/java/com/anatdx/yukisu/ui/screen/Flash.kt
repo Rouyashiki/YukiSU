@@ -269,12 +269,12 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                 }
                 hasUpdateCompleted = true
 
-                if (!hasMetaModule() && code == 0) {
-                    // ????? MetaModule?????????????????????????
+                if (code == 0) {
                     scope.launch {
                         val mountOldDirectory = SuFile.open("/data/adb/modules/${getModuleIdFromUri(context,flashIt.uri)}/system")
                         val mountNewDirectory = SuFile.open("/data/adb/modules_update/${getModuleIdFromUri(context,flashIt.uri)}/system")
                         if (!(mountNewDirectory.isDirectory) && !(mountOldDirectory.isDirectory)) return@launch
+                        if (hasModuleMountProvider()) return@launch
                         shouldWarningUserMetaModule = true
 
                         alertDialog.show()
@@ -391,8 +391,7 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                 }
 
                 hasFlashCompleted = true
-                if (!hasMetaModule() && code == 0) {
-                    // ?? MetaModule???????????????????
+                if (code == 0) {
                     scope.launch {
                         var mountOldDirectory : File
                         var mountNewDirectory : File
@@ -415,10 +414,10 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                             else -> return@launch
                         }
                         if (!mountNewDirectory.isDirectory && !mountOldDirectory.isDirectory) return@launch
+                        if (hasModuleMountProvider()) return@launch
                         shouldWarningUserMetaModule = true
 
-                        if (!hasMetaModule() && (flashIt !is FlashIt.FlashModules || flashIt.currentIndex >= flashIt.uris.size - 1)) {
-                            // ???? MetaModule?????????????????????????????????????????
+                        if (flashIt !is FlashIt.FlashModules || flashIt.currentIndex >= flashIt.uris.size - 1) {
                             alertDialog.show()
                         }
                     }
