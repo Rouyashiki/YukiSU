@@ -46,16 +46,18 @@ jobs:
         run: |
           echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
           echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
-      - uses: Kernel-SU/actions-comment-on-issue@master
+      - uses: peter-evans/create-or-update-comment@v5
         if: ${{ steps.cpr.outputs.pull-request-number }}
         with:
-          message: "Automatically created pull request: ${{ steps.cpr.outputs.pull-request-url }}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: Kernel-SU/actions-comment-on-issue@master
+          issue-number: ${{ github.event.issue.number }}
+          body: "Automatically created pull request: ${{ steps.cpr.outputs.pull-request-url }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: peter-evans/create-or-update-comment@v5
         if: steps.handle-add-device.outputs.success != 'true'
         with:
-          message: "Cannot create pull request. Please check the issue content. Or you can create a pull request manually."
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: "Cannot create pull request. Please check the issue content. Or you can create a pull request manually."
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: close issue
         uses: peter-evans/close-issue@v3
         with:
