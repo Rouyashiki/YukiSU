@@ -20,6 +20,7 @@
 #include <linux/mutex.h>
 #include <linux/module.h>
 #include <linux/printk.h>
+#include <linux/smp.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <asm-generic/errno-base.h>
@@ -409,7 +410,7 @@ static void initialize_fake_status(void)
 			new_status->enforcing = 1;
 	}
 
-	fake_status = new_page;
+	smp_store_release(&fake_status, new_page);
 	pr_info("initialize_fake_status initialized: sequence=%d, "
 		"policyload=%d, enforcing=%d\n",
 		new_status->sequence, new_status->policyload,
@@ -431,30 +432,22 @@ static int my_sel_open_handle_status_impl(struct inode *inode,
 	int ret;
 
 	if (likely(current_uid().val >= 10000 && ksu_selinux_hide_enabled)) {
-		mutex_lock(&selinux_state.status_lock);
-		data = fake_status;
+		data = smp_load_acquire(&fake_status);
 		if (data) {
 			const struct file_operations *ops;
 
-			if (!fake_status_fops_ready) {
-				fake_status_fops = *filp->f_op;
-				fake_status_fops.owner = THIS_MODULE;
-				fake_status_fops_ready = true;
-			}
 			ops = fops_get(&fake_status_fops);
 			if (ops) {
 				replace_fops(filp, ops);
 				filp->private_data = data;
-				mutex_unlock(&selinux_state.status_lock);
 				return 0;
 			}
 		}
-		mutex_unlock(&selinux_state.status_lock);
 	}
 
 	ret = orig_sel_open_handle_status(inode, filp);
 	if (static_branch_unlikely(&fake_status_initialize_key) && !ret &&
-	    !fake_status)
+	    !READ_ONCE(fake_status))
 		initialize_fake_status();
 
 	return ret;
@@ -631,7 +624,7 @@ static const struct ksu_feature_handler selinux_hide_handler = {
 void ksu_selinux_hide_handle_second_stage(void)
 {
 	initialize_fake_status();
-	if (fake_status) {
+	if (READ_ONCE(fake_status)) {
 		static_branch_disable(&fake_status_initialize_key);
 	} else {
 		pr_warn("selinux_hide: fake status need late initialization\n");
@@ -641,7 +634,7 @@ void ksu_selinux_hide_handle_second_stage(void)
 void ksu_selinux_hide_handle_post_fs_data(void)
 {
 	static_branch_disable(&fake_status_initialize_key);
-	if (!fake_status)
+	if (!READ_ONCE(fake_status))
 		pr_err("selinux_hide: fake status is not initialized after "
 		       "post-fs-data!\n");
 }
@@ -661,6 +654,13 @@ static void hook_selinux_status_open(void)
 			pr_err("selinux_hide: sel_handle_status_ops not found, "
 			       "fake status will not work\n");
 			return;
+		}
+		if (!fake_status_fops_ready) {
+			/* Open files can retain this proxy across feature
+			 * toggles. */
+			fake_status_fops = *ops;
+			fake_status_fops.owner = THIS_MODULE;
+			fake_status_fops_ready = true;
 		}
 		sel_open_handle_status_slot = &ops->open;
 	}
@@ -704,7 +704,7 @@ void ksu_selinux_hide_exit(void)
 	mutex_lock(&selinux_state.status_lock);
 	if (fake_status)
 		__free_page(fake_status);
-	fake_status = NULL;
+	WRITE_ONCE(fake_status, NULL);
 	mutex_unlock(&selinux_state.status_lock);
 }
 
