@@ -697,16 +697,18 @@ int yzctl_run(const std::vector<std::string>& args) {
             (void)fprintf(stderr, "yzctl: reload takes no arguments\n");
             return 1;
         }
+        int result = 0;
         if (ksuctl(KSU_IOCTL_YZ_RELOAD, nullptr) != 0) {
             (void)fprintf(stderr, "yzctl: reload failed: %s\n", strerror(errno));
-            return 1;
+            result = 1;
         }
         if (refresh_yukizygisk_early_snapshot() != 0) {
             (void)fprintf(stderr, "yzctl: early snapshot refresh failed\n");
-            return 1;
+            result = 1;
         }
-        printf("YukiZygisk reload signalled\n");
-        return 0;
+        if (result == 0)
+            printf("YukiZygisk reload signalled\n");
+        return result;
     }
 
     if (args[0] == "refresh-snapshot") {
