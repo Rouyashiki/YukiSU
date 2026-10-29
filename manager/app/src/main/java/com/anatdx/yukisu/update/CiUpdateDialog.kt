@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import com.anatdx.yukisu.BuildConfig
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.component.YukiDownloadProgressIndicator
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.screen.WarningCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +53,7 @@ private enum class CiUpdateStage {
     FAILED,
 }
 
-private sealed interface CiUpdateCheckState {
+internal sealed interface CiUpdateCheckState {
     data object Hidden : CiUpdateCheckState
     data object Checking : CiUpdateCheckState
     data object Current : CiUpdateCheckState
@@ -147,28 +149,16 @@ fun CiUpdateCard() {
 
     val currentCheckState = checkState
     val availableRun = (currentCheckState as? CiUpdateCheckState.Available)?.run
-    when (currentCheckState) {
-        CiUpdateCheckState.Failed -> WarningCard(
-            message = stringResource(R.string.ci_update_check_failed_card),
-            onClick = { checkRequest++ },
-        )
-        is CiUpdateCheckState.Available -> WarningCard(
-            message = stringResource(
-                R.string.ci_update_available_card,
-                currentCheckState.run.versionCode,
-            ),
-            color = MaterialTheme.colorScheme.outlineVariant,
-            onClick = {
-                error = ""
-                progress = 0
-                stage = CiUpdateStage.READY
-                showDialog = true
-            },
-        )
-        CiUpdateCheckState.Checking,
-        CiUpdateCheckState.Current,
-        CiUpdateCheckState.Hidden -> Unit
-    }
+    CiUpdateNotice(
+        state = currentCheckState,
+        onRetry = { checkRequest++ },
+        onUpdate = {
+            error = ""
+            progress = 0
+            stage = CiUpdateStage.READY
+            showDialog = true
+        },
+    )
 
     if (!showDialog || availableRun == null) return
 
@@ -298,4 +288,34 @@ fun CiUpdateCard() {
             dismissOnClickOutside = !busy,
         ),
     )
+}
+
+@Composable
+internal fun CiUpdateNotice(
+    state: CiUpdateCheckState,
+    onRetry: () -> Unit,
+    onUpdate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visible = state == CiUpdateCheckState.Failed || state is CiUpdateCheckState.Available
+    var previousNotice by remember { mutableStateOf<CiUpdateCheckState?>(null) }
+    val displayedState = if (visible) state else previousNotice
+    SideEffect {
+        if (visible) previousNotice = state
+    }
+
+    YukiExpandableContent(visible = visible, modifier = modifier) {
+        when (val notice = displayedState) {
+            CiUpdateCheckState.Failed -> WarningCard(
+                message = stringResource(R.string.ci_update_check_failed_card),
+                onClick = if (visible) onRetry else null,
+            )
+            is CiUpdateCheckState.Available -> WarningCard(
+                message = stringResource(R.string.ci_update_available_card, notice.run.versionCode),
+                color = MaterialTheme.colorScheme.outlineVariant,
+                onClick = if (visible) onUpdate else null,
+            )
+            else -> Unit
+        }
+    }
 }
