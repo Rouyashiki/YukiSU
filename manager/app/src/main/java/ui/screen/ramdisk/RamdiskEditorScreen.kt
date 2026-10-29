@@ -91,6 +91,8 @@ import com.anatdx.yukifb.ui.FileBrowserBackHandler
 import com.anatdx.yukifb.ui.FileBrowserPresentationState
 import com.anatdx.yukifb.ui.TextFileEditor
 import com.anatdx.yukifb.ui.YukiFBBackHandler
+import com.anatdx.yukifb.ui.YukiFBMotion
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukifb.ui.YukiFBProvider
 import com.anatdx.yukifb.ui.YukiFBScene
 import com.anatdx.yukifb.ui.YukiFBStyle
@@ -155,6 +157,7 @@ fun RamdiskEditorScreen(
         sceneBackground = { BackgroundLayer() },
         style = if (isExpressiveUi) YukiFBStyle.Expressive else YukiFBStyle.Classic,
         colors = colors,
+        motion = if (LocalYukiMotion.current.enabled) YukiFBMotion.Full else YukiFBMotion.None,
         icon = { vector, description, modifier, tint -> YukiIcon(vector, description, modifier, tint) },
     ) {
         RamdiskEditorContent(navigator, partitionName, targetSlot)

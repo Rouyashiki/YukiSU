@@ -1,5 +1,8 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.yukiExpansionSemantics
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
 import androidx.compose.foundation.Image
@@ -26,8 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
@@ -387,15 +388,15 @@ fun OpenSourceLicenseScreen(componentId: String, navigator: DestinationsNavigato
                                         Text(stringResource(R.string.open_source_project))
                                     }
                                     if (component.artifacts.isNotEmpty()) {
-                                        TextButton(onClick = { showArtifacts = !showArtifacts }) {
+                                        TextButton(
+                                            onClick = { showArtifacts = !showArtifacts },
+                                            modifier = Modifier.yukiExpansionSemantics(showArtifacts),
+                                        ) {
                                             Text(stringResource(R.string.open_source_artifacts, component.artifacts.size))
                                             Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                                            Icon(
-                                                if (showArtifacts) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                null,
-                                            )
+                                            YukiExpandArrow(expanded = showArtifacts)
                                         }
-                                        if (showArtifacts) {
+                                        YukiExpandableContent(visible = showArtifacts, large = true) {
                                             Text(
                                                 component.artifacts.joinToString("\n"),
                                                 style = MaterialTheme.typography.bodySmall,

@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.rememberSplineBasedDecay
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.LocalCompactWindow
 import com.anatdx.yukisu.ui.theme.isExpressiveUi
@@ -12,12 +14,18 @@ import com.anatdx.yukisu.ui.theme.isExpressiveUi
 @Composable
 fun rememberYukiTopAppBarScrollBehavior(
     state: TopAppBarState = rememberTopAppBarState(),
-): TopAppBarScrollBehavior =
-    if (isExpressiveUi && !LocalCompactWindow.current) {
-        TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state)
+): TopAppBarScrollBehavior {
+    val motion = LocalYukiMotion.current
+    return if (isExpressiveUi && !LocalCompactWindow.current) {
+        TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+            state = state,
+            snapAnimationSpec = motion.spatial(),
+            flingAnimationSpec = if (motion.enabled) rememberSplineBasedDecay<Float>() else null,
+        )
     } else {
         TopAppBarDefaults.pinnedScrollBehavior(state)
     }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

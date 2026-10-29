@@ -1,5 +1,8 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.yukiExpansionSemantics
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,7 +28,7 @@ internal fun BootConfigControls(
     forcedFeatures: List<String>,
     onForcedFeaturesChange: (List<String>) -> Unit,
 ) {
-    if (allowConfigOnly) {
+    YukiExpandableContent(visible = allowConfigOnly) {
         BootConfigSwitch(
             stringResource(R.string.install_config_only),
             stringResource(R.string.install_config_only_summary),
@@ -43,10 +46,15 @@ internal fun BootConfigControls(
         noCustomRc, onNoCustomRcChange,
     )
     var expanded by rememberSaveable { mutableStateOf(false) }
-    TextButton(onClick = { expanded = !expanded }) {
+    TextButton(
+        onClick = { expanded = !expanded },
+        modifier = Modifier.yukiExpansionSemantics(expanded),
+    ) {
         Text(stringResource(R.string.install_force_features, forcedFeatures.size))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        YukiExpandArrow(expanded = expanded)
     }
-    if (expanded) {
+    YukiExpandableContent(visible = expanded, large = true) {
         Text(
             stringResource(R.string.install_force_features_summary),
             style = MaterialTheme.typography.bodySmall,

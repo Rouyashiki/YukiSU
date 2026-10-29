@@ -4,6 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -33,6 +37,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -49,6 +54,9 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.component.YukiSwitch
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.yukiAnimateContentSize
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.kasumi.util.KasumiUiAdapter as KasumiManager
 import com.anatdx.yukisu.ui.kasumi.util.KasumiUiAdapter.KasumiStatus
@@ -64,11 +72,13 @@ import ui.screen.moreSettings.component.MoreSettingsItemPosition
 import ui.screen.moreSettings.component.SwitchSettingItem
 
 
-enum class KasumiTab(val displayNameRes: Int) {
+enum class KasumiTab(displayNameRes: Int) {
     STATUS(R.string.kasumi_tab_status),
     SETTINGS(R.string.kasumi_tab_settings),
     RULES(R.string.kasumi_tab_rules),
-    LOGS(R.string.kasumi_tab_logs)
+    LOGS(R.string.kasumi_tab_logs);
+
+    val displayNameRes: Int = displayNameRes
 }
 
 
@@ -621,6 +631,7 @@ internal fun SettingTextField(
     position: MoreSettingsItemPosition = MoreSettingsItemPosition.Middle,
 ) {
     var isEditing by remember { mutableStateOf(false) }
+    val motion = LocalYukiMotion.current
     KasumiControlGroup(position) {
         Column(
             modifier = Modifier
@@ -655,33 +666,45 @@ internal fun SettingTextField(
                 }
             }
 
-            if (isEditing) {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
-                    singleLine = true,
-                    enabled = enabled,
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            onConfirm()
-                            isEditing = false
-                        }) {
-                            YukiIcon(Icons.Filled.Done, contentDescription = null)
-                        }
+            AnimatedContent(
+                targetState = isEditing,
+                modifier = Modifier.yukiAnimateContentSize(),
+                transitionSpec = {
+                    (fadeIn(motion.effects()) togetherWith fadeOut(motion.effects()))
+                        .using(null)
+                },
+                label = "kasumiPathEditor",
+            ) { editing ->
+                Box(Modifier.then(if (editing != isEditing) Modifier.clearAndSetSemantics {} else Modifier)) {
+                    if (editing) {
+                        OutlinedTextField(
+                            value = value,
+                            onValueChange = onValueChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
+                            singleLine = true,
+                            enabled = enabled && isEditing,
+                            trailingIcon = {
+                                IconButton(enabled = enabled && isEditing, onClick = {
+                                    onConfirm()
+                                    isEditing = false
+                                }) {
+                                    YukiIcon(Icons.Filled.Done, contentDescription = null)
+                                }
+                            }
+                        )
+                    } else if (value.isNotEmpty()) {
+                        Text(
+                            text = value,
+                            modifier = Modifier.padding(top = 4.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
-                )
-            } else if (value.isNotEmpty()) {
-                Text(
-                    text = value,
-                    modifier = Modifier.padding(top = 4.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                }
             }
         }
     }
@@ -1085,12 +1108,16 @@ private fun ScrollableRuleText(text: String, fontFamily: FontFamily, color: Colo
     )
 }
 
-enum class LogLevel(val displayNameRes: Int, val color: Color, val tag: String) {
+enum class LogLevel(displayNameRes: Int, color: Color, tag: String) {
     VERBOSE(R.string.kasumi_logs_filter_verbose, Color(0xFF9C27B0), "VERBOSE"),
     DEBUG(R.string.kasumi_logs_filter_debug, Color(0xFF4CAF50), "DEBUG"),
     INFO(R.string.kasumi_logs_filter_info, Color(0xFF2196F3), "INFO"),
     WARN(R.string.kasumi_logs_filter_warn, Color(0xFFFF9800), "WARN"),
-    ERROR(R.string.kasumi_logs_filter_error, Color(0xFFF44336), "ERROR")
+    ERROR(R.string.kasumi_logs_filter_error, Color(0xFFF44336), "ERROR");
+
+    val displayNameRes: Int = displayNameRes
+    val color: Color = color
+    val tag: String = tag
 }
 
 private val taggedLogLevel = Regex("\\[(VERBOSE|DEBUG|INFO|WARN(?:ING)?|ERROR)]", RegexOption.IGNORE_CASE)
@@ -1132,9 +1159,6 @@ internal fun LogsTab(
     }
 
     BackHandler(enabled = searchExpanded) { closeSearch() }
-    LaunchedEffect(searchExpanded) {
-        if (searchExpanded) searchFocus.requestFocus()
-    }
 
     LaunchedEffect(showKernelLog) {
         onRefreshLog()
@@ -1174,52 +1198,75 @@ internal fun LogsTab(
     ) {
 
         KasumiLogActions {
-            if (searchExpanded) {
-                OutlinedTextField(
-                    value = search,
-                    onValueChange = { search = it },
-                    modifier = Modifier.weight(1f).focusRequester(searchFocus),
-                    singleLine = true,
-                    placeholder = {
-                        Text(stringResource(R.string.kasumi_logs_search), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { closeSearch() }) {
-                            YukiIcon(Icons.Filled.Close, stringResource(R.string.close))
+            val motion = LocalYukiMotion.current
+            AnimatedContent(
+                targetState = searchExpanded,
+                modifier = Modifier.weight(1f).yukiAnimateContentSize(),
+                transitionSpec = {
+                    (fadeIn(motion.effects()) togetherWith fadeOut(motion.effects()))
+                        .using(null)
+                },
+                label = "kasumiLogSearch",
+            ) { searching ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().then(
+                        if (searching != searchExpanded) Modifier.clearAndSetSemantics {} else Modifier
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (searching) {
+                        LaunchedEffect(searchExpanded) {
+                            if (searchExpanded) searchFocus.requestFocus()
                         }
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        focusManager.clearFocus()
-                        keyboard?.hide()
-                    }),
-                )
-            } else {
-                Box(Modifier.weight(1f)) {
-                    FilledTonalButton(onClick = { sourceExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            stringResource(if (showKernelLog) R.string.kasumi_logs_kernel else R.string.kasumi_logs_daemon),
-                            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        OutlinedTextField(
+                            value = search,
+                            onValueChange = { search = it },
+                            enabled = searchExpanded,
+                            modifier = Modifier.weight(1f).focusRequester(searchFocus),
+                            singleLine = true,
+                            placeholder = {
+                                Text(stringResource(R.string.kasumi_logs_search), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
+                            trailingIcon = {
+                                IconButton(enabled = searchExpanded, onClick = { closeSearch() }) {
+                                    YukiIcon(Icons.Filled.Close, stringResource(R.string.close))
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = {
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                            }),
                         )
-                        YukiIcon(Icons.Filled.ArrowDropDown, null, Modifier.size(18.dp))
-                    }
-                    DropdownMenu(expanded = sourceExpanded, onDismissRequest = { sourceExpanded = false }) {
-                        listOf(false, true).forEach { kernel ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(if (kernel) R.string.kasumi_logs_kernel else R.string.kasumi_logs_daemon)) },
-                                trailingIcon = {
-                                    if (showKernelLog == kernel) YukiIcon(Icons.Filled.Check, null)
-                                },
-                                onClick = {
-                                    sourceExpanded = false
-                                    if (showKernelLog != kernel) onToggleLogType()
-                                },
-                            )
+                    } else {
+                        Box(Modifier.weight(1f)) {
+                            FilledTonalButton(enabled = !searchExpanded, onClick = { sourceExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    stringResource(if (showKernelLog) R.string.kasumi_logs_kernel else R.string.kasumi_logs_daemon),
+                                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                                YukiExpandArrow(sourceExpanded && !searchExpanded, Modifier.size(18.dp))
+                            }
+                            DropdownMenu(expanded = sourceExpanded && !searchExpanded, onDismissRequest = { sourceExpanded = false }) {
+                                listOf(false, true).forEach { kernel ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (kernel) R.string.kasumi_logs_kernel else R.string.kasumi_logs_daemon)) },
+                                        trailingIcon = {
+                                            if (showKernelLog == kernel) YukiIcon(Icons.Filled.Check, null)
+                                        },
+                                        onClick = {
+                                            sourceExpanded = false
+                                            if (showKernelLog != kernel) onToggleLogType()
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(enabled = !searchExpanded, onClick = { searchExpanded = true }) {
+                            YukiIcon(Icons.Filled.Search, stringResource(R.string.kasumi_logs_search))
                         }
                     }
-                }
-                IconButton(onClick = { searchExpanded = true }) {
-                    YukiIcon(Icons.Filled.Search, stringResource(R.string.kasumi_logs_search))
                 }
             }
             IconButton(onClick = onRefreshLog) {

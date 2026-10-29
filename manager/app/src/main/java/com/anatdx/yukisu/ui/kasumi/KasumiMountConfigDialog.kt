@@ -1,8 +1,5 @@
 package com.anatdx.yukisu.ui.kasumi
 
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,10 +21,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.component.YukiSwitch
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.kasumi.util.KasumiManager
 import kotlinx.coroutines.CancellationException
@@ -74,6 +75,8 @@ internal fun KasumiMountConfigDialog(
     var modeExpanded by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var rulesExpanded by remember { mutableStateOf(false) }
+    val expansionState = stringResource(if (rulesExpanded) R.string.motion_expanded else R.string.motion_collapsed)
+    val expansionAction = stringResource(if (rulesExpanded) R.string.collapse_menu else R.string.expand_menu)
 
     val modeLabels = mapOf(
         "auto" to stringResource(R.string.kasumi_mount_mode_auto),
@@ -157,7 +160,12 @@ internal fun KasumiMountConfigDialog(
                         .fillMaxWidth()
                         .then(if (isExpressiveUi) Modifier.clip(MaterialTheme.shapes.large)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier)
-                        .clickable { rulesExpanded = !rulesExpanded }
+                        .heightIn(min = 48.dp)
+                        .semantics { stateDescription = expansionState }
+                        .clickable(role = Role.Button, onClickLabel = expansionAction) {
+                            rulesExpanded = !rulesExpanded
+                            if (!rulesExpanded) modeExpanded = false
+                        }
                         .padding(horizontal = if (isExpressiveUi) 16.dp else 0.dp, vertical = if (isExpressiveUi) 16.dp else 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -166,23 +174,13 @@ internal fun KasumiMountConfigDialog(
                         text = stringResource(R.string.kasumi_module_rules_title),
                         style = if (isExpressiveUi) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall
                     )
-                    YukiIcon(
-                        imageVector = if (rulesExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                        contentDescription = null
-                    )
+                    YukiExpandArrow(rulesExpanded)
                 }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(
-                            animationSpec = tween(280, easing = FastOutSlowInEasing)
-                        )
-                ) {
-                    if (rulesExpanded) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
+                YukiExpandableContent(visible = rulesExpanded, large = true) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         rules.forEach { rule: KasumiManager.ModuleRule ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().then(
@@ -237,10 +235,10 @@ internal fun KasumiMountConfigDialog(
                                     shape = if (isExpressiveUi) ButtonDefaults.shape else RoundedCornerShape(20.dp)
                                 ) {
                                     Text(modeLabels[newMode] ?: newMode)
-                                    YukiIcon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                                    YukiExpandArrow(modeExpanded && rulesExpanded)
                                 }
                                 DropdownMenu(
-                                    expanded = modeExpanded,
+                                    expanded = modeExpanded && rulesExpanded,
                                     onDismissRequest = { modeExpanded = false }
                                 ) {
                                     selectableModes.filter { it != "auto" || newMode == "auto" }.forEach { mode ->
@@ -268,7 +266,6 @@ internal fun KasumiMountConfigDialog(
                             ) {
                                 Text(stringResource(if (editingPath == null) R.string.kasumi_module_rules_add else R.string.kasumi_rule_save))
                             }
-                        }
                         }
                     }
                 }

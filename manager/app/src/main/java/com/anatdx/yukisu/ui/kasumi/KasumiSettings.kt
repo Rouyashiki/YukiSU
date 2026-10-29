@@ -1,11 +1,5 @@
 package com.anatdx.yukisu.ui.kasumi
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,10 +15,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -33,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import com.anatdx.yukisu.ui.util.SnackbarController
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiIcon
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.kasumi.util.KasumiUiAdapter as Controller
 import com.anatdx.yukisu.ui.theme.getCardColors
@@ -243,7 +240,7 @@ internal fun ConfigChoice(title: String, value: String, values: List<String>, en
         ExposedDropdownMenuBox(expanded = expanded && enabled, onExpandedChange = { if (enabled) expanded = it }) {
             OutlinedTextField(value = labels[value] ?: value, onValueChange = {}, readOnly = true, enabled = enabled,
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) })
+                trailingIcon = { YukiExpandArrow(expanded && enabled) })
             ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
                 values.forEach { choice -> DropdownMenuItem(text = { Text(labels[choice] ?: choice) },
                     onClick = { expanded = false; selected(choice) }) }
@@ -371,10 +368,12 @@ private fun UserHideRulesCard(
         }
         states.forEach { rule -> key(rule.src) {
             var expanded by rememberSaveable { mutableStateOf(false) }
+            val expansionState = stringResource(if (expanded) R.string.motion_expanded else R.string.motion_collapsed)
             KasumiControlGroup(MoreSettingsItemPosition.Middle) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Row(
                         Modifier.weight(1f).heightIn(min = 56.dp).clip(MaterialTheme.shapes.medium)
+                            .semantics { stateDescription = expansionState }
                             .clickable(role = Role.Button, onClickLabel = hideOptionsAction(expanded)) { expanded = !expanded }
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -416,8 +415,10 @@ private fun UserHideRulesCard(
                     Text(stringResource(R.string.kasumi_user_hide_add))
                 }
             }
+            val expansionState = stringResource(if (draftOptionsExpanded) R.string.motion_expanded else R.string.motion_collapsed)
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(MaterialTheme.shapes.medium)
+                    .semantics { stateDescription = expansionState }
                     .clickable(role = Role.Button, onClickLabel = hideOptionsAction(draftOptionsExpanded)) { draftOptionsExpanded = !draftOptionsExpanded }
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -444,24 +445,14 @@ private fun UserHideRulesCard(
 private fun hideOptionsAction(expanded: Boolean): String =
     stringResource(if (expanded) R.string.kasumi_hide_collapse_options else R.string.kasumi_hide_expand_options)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HideOptionsArrow(expanded: Boolean) {
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), label = "hideOptionsArrow")
-    YukiIcon(Icons.Filled.ExpandMore, null, Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    YukiExpandArrow(expanded, tint = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HideOptionsExpansion(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    AnimatedVisibility(
-        visible = expanded,
-        enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Top) +
-            fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-        exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(), shrinkTowards = Alignment.Top) +
-            fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-    ) {
+    YukiExpandableContent(visible = expanded) {
         Column(Modifier.fillMaxWidth().padding(top = 4.dp), content = content)
     }
 }
@@ -483,16 +474,25 @@ internal fun userHideStatus(rule: Controller.ActiveRule): String = when (rule.hi
 @Composable
 internal fun KernelHooksCard(hooks: String) {
     if (hooks.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val expansionState = stringResource(if (expanded) R.string.motion_expanded else R.string.motion_collapsed)
+    val expansionAction = stringResource(if (expanded) R.string.collapse_menu else R.string.expand_menu)
     Card(Modifier.fillMaxWidth(), shape = kasumiCardShape(),
         colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow), elevation = getCardElevation()) {
         Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .semantics { stateDescription = expansionState }
+                    .clickable(role = Role.Button, onClickLabel = expansionAction) { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(stringResource(R.string.kasumi_kernel_hooks), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                     fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.Bold)
-                YukiIcon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
+                YukiExpandArrow(expanded)
             }
-            if (expanded) Text(hooks, Modifier.padding(top = 8.dp), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            YukiExpandableContent(visible = expanded, large = true) {
+                Text(hooks, Modifier.padding(top = 8.dp), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }

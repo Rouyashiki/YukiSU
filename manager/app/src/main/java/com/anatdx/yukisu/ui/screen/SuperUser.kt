@@ -38,6 +38,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +56,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +75,8 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.anatdx.yukisu.ui.component.YukiModalBottomSheet
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.MotionRole
 import com.anatdx.yukisu.ui.component.FabMenuPresets
 import com.anatdx.yukisu.ui.component.SearchAppBar
 import com.anatdx.yukisu.ui.component.VerticalExpandableFab
@@ -85,6 +92,7 @@ import com.anatdx.yukisu.ui.viewmodel.SortType
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -301,6 +309,7 @@ private fun SuperUserFab(
     listState: androidx.compose.foundation.lazy.LazyListState,
     scope: CoroutineScope
 ) {
+    val motion = LocalYukiMotion.current
     VerticalExpandableFab(
         menuItems = if (viewModel.showBatchActions && viewModel.selectedApps.isNotEmpty()) {
             FabMenuPresets.getBatchActionMenuItems(
@@ -325,11 +334,15 @@ private fun SuperUserFab(
             )
         } else {
             FabMenuPresets.getScrollMenuItems(
-                onScrollToTop = { scope.launch { listState.animateScrollToItem(0) } },
+                onScrollToTop = { scope.launch {
+                    if (motion.enabled) listState.animateScrollToItem(0) else listState.scrollToItem(0)
+                } },
                 onScrollToBottom = {
                     scope.launch {
                         val lastIndex = filteredAndSortedAppGroups.size - 1
-                        if (lastIndex >= 0) listState.animateScrollToItem(lastIndex)
+                        if (lastIndex >= 0) {
+                            if (motion.enabled) listState.animateScrollToItem(lastIndex) else listState.scrollToItem(lastIndex)
+                        }
                     }
                 }
             )
@@ -434,6 +447,7 @@ private fun SuperUserBottomSheet(
     scope: CoroutineScope,
     listState: androidx.compose.foundation.lazy.LazyListState
 ) {
+    val motion = LocalYukiMotion.current
     val bottomSheetMenuItems = remember(viewModel.showSystemApps) {
         listOf(
             BottomSheetMenuItem(
@@ -512,7 +526,7 @@ private fun SuperUserBottomSheet(
             onCategorySelected = { newCategory ->
                 viewModel.updateSelectedCategory(newCategory)
                 scope.launch {
-                    listState.animateScrollToItem(0)
+                    if (motion.enabled) listState.animateScrollToItem(0) else listState.scrollToItem(0)
                     bottomSheetState.hide()
                     onDismiss()
                 }
@@ -614,22 +628,20 @@ private fun CategoryChip(
     appCount: Int,
     modifier: Modifier = Modifier
 ) {
+    val motion = LocalYukiMotion.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
+        animationSpec = motion.spatial(MotionRole.Scale),
         label = "categoryChipScale"
     )
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
+            .scale(if (motion.enabled) scale else if (isPressed) 0.95f else 1f)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         shape = RoundedCornerShape(12.dp),
         color = if (isSelected) {
@@ -665,8 +677,8 @@ private fun CategoryChip(
 
                 AnimatedVisibility(
                     visible = isSelected,
-                    enter = scaleIn() + fadeIn(),
-                    exit = scaleOut() + fadeOut()
+                    enter = scaleIn(motion.spatial(MotionRole.Scale)) + fadeIn(motion.effects()),
+                    exit = scaleOut(motion.effects()) + fadeOut(motion.effects())
                 ) {
                     YukiIcon(
                         imageVector = Icons.Filled.Check,
@@ -692,22 +704,20 @@ private fun CategoryChip(
 
 @Composable
 private fun BottomSheetMenuItemView(menuItem: BottomSheetMenuItem) {
+    val motion = LocalYukiMotion.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
+        animationSpec = motion.spatial(MotionRole.Scale),
         label = "menuItemScale"
     )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .scale(if (motion.enabled) scale else if (isPressed) 0.95f else 1f)
             .clickable(interactionSource = interactionSource, indication = null) { menuItem.onClick() }
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -743,33 +753,30 @@ private fun LoadingAnimation(
     modifier: Modifier = Modifier,
     isLoading: Boolean = true
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-
+    val motion = LocalYukiMotion.current
     AnimatedVisibility(
         visible = isLoading,
-        enter = fadeIn() + scaleIn(),
-        exit = fadeOut() + scaleOut(),
-        modifier = modifier
+        enter = fadeIn(motion.effects()) + scaleIn(motion.spatial(MotionRole.Scale)),
+        exit = fadeOut(motion.effects()) + scaleOut(motion.effects()),
+        modifier = modifier,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            LinearProgressIndicator(
-                modifier = Modifier.width(200.dp).height(4.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-            )
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            if (motion.enabled) {
+                LinearProgressIndicator(
+                    modifier = Modifier.width(200.dp).height(4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                )
+            } else {
+                Box(Modifier.clearAndSetSemantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }) {
+                    LinearProgressIndicator(
+                        progress = { 0.5f },
+                        modifier = Modifier.width(200.dp).height(4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                    )
+                }
+            }
         }
     }
 }
@@ -826,19 +833,27 @@ private fun SwipeActionContainer(
     }
     val scope = rememberCoroutineScope()
     var targetOffsetX by remember { mutableFloatStateOf(0f) }
+    var gestureAction by remember { mutableStateOf<AppSwipeAction?>(null) }
     var isDragging by remember { mutableStateOf(false) }
-    var settleSpec by remember { mutableStateOf<AnimationSpec<Float>>(spring(stiffness = Spring.StiffnessMediumLow)) }
+    val motion by rememberUpdatedState(LocalYukiMotion.current)
+    var revealingAction by remember { mutableStateOf(false) }
     val offsetX by animateFloatAsState(
         targetValue = targetOffsetX,
-        animationSpec = if (isDragging) snap() else settleSpec,
+        animationSpec = when {
+            isDragging -> snap()
+            revealingAction -> motion.effects()
+            else -> motion.spatial(expanding = false)
+        },
         label = "appSwipeOffset"
     )
-    val action = when {
-        offsetX < 0f -> AppSwipeAction.UmountModules
-        offsetX > 0f -> AppSwipeAction.GrantRoot
-        else -> null
+    val renderedOffsetX = if (motion.enabled) offsetX else targetOffsetX
+    val action = gestureAction
+    val actionDistance = when (action) {
+        AppSwipeAction.UmountModules -> -renderedOffsetX
+        AppSwipeAction.GrantRoot -> renderedOffsetX
+        null -> 0f
     }
-    val actionProgress = (abs(offsetX) / actionThresholdPx).coerceIn(0f, 1f)
+    val actionProgress = (actionDistance / actionThresholdPx).coerceIn(0f, 1f)
     val remainingProgress = 1f - actionProgress
     val backgroundAlpha = 1f - remainingProgress * remainingProgress
     val backgroundColor = when (action) {
@@ -852,8 +867,13 @@ private fun SwipeActionContainer(
         null -> Color.Transparent
     }
 
-    fun boundedSwipeOffset(rawOffset: Float): Float {
-        return rawOffset.coerceIn(-maxRevealPx, maxRevealPx)
+    fun updateSwipeOffset(rawOffset: Float) {
+        targetOffsetX = rawOffset.coerceIn(-maxRevealPx, maxRevealPx)
+        gestureAction = when {
+            targetOffsetX < 0f -> AppSwipeAction.UmountModules
+            targetOffsetX > 0f -> AppSwipeAction.GrantRoot
+            else -> null
+        }
     }
 
     Box(
@@ -862,7 +882,7 @@ private fun SwipeActionContainer(
             .clip(containerShape)
             .background(backgroundColor)
     ) {
-        if (action != null) {
+        if (action != null && actionProgress > 0f) {
             SwipeActionHint(
                 action = action,
                 contentColor = contentColor.copy(alpha = 0.45f + actionProgress * 0.55f),
@@ -874,7 +894,7 @@ private fun SwipeActionContainer(
 
         Box(
             modifier = Modifier
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .offset { IntOffset(renderedOffsetX.roundToInt(), 0) }
                 .fillMaxWidth()
                 .pointerInput(enabled, onSwipeLeft, onSwipeRight) {
                     if (!enabled) return@pointerInput
@@ -915,7 +935,8 @@ private fun SwipeActionContainer(
                                 horizontalLocked = true
                                 change.consume()
                                 isDragging = true
-                                targetOffsetX = boundedSwipeOffset(totalX)
+                                revealingAction = false
+                                updateSwipeOffset(totalX)
                             }
                         }
 
@@ -932,7 +953,7 @@ private fun SwipeActionContainer(
                             val deltaX = change.positionChange().x
                             if (deltaX != 0f) {
                                 change.consume()
-                                targetOffsetX = boundedSwipeOffset(targetOffsetX + deltaX)
+                                updateSwipeOffset(targetOffsetX + deltaX)
                                 if (!thresholdHapticSent && abs(targetOffsetX) >= actionThresholdPx) {
                                     thresholdHapticSent = true
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -944,27 +965,33 @@ private fun SwipeActionContainer(
                         val finalOffset = targetOffsetX
                         when {
                             finalOffset <= -actionThresholdPx -> {
-                                settleSpec = tween(120)
+                                revealingAction = true
                                 targetOffsetX = -maxRevealPx
                                 scope.launch {
-                                    kotlinx.coroutines.delay(120)
-                                    onSwipeLeft()
-                                    settleSpec = spring(stiffness = Spring.StiffnessHigh)
-                                    targetOffsetX = 0f
+                                    val destination = -maxRevealPx
+                                    snapshotFlow { !motion.enabled || targetOffsetX != destination || offsetX == destination }.first { it }
+                                    if (targetOffsetX == destination) {
+                                        onSwipeLeft()
+                                        revealingAction = false
+                                        targetOffsetX = 0f
+                                    }
                                 }
                             }
                             finalOffset >= actionThresholdPx -> {
-                                settleSpec = tween(120)
+                                revealingAction = true
                                 targetOffsetX = maxRevealPx
                                 scope.launch {
-                                    kotlinx.coroutines.delay(120)
-                                    onSwipeRight()
-                                    settleSpec = spring(stiffness = Spring.StiffnessHigh)
-                                    targetOffsetX = 0f
+                                    val destination = maxRevealPx
+                                    snapshotFlow { !motion.enabled || targetOffsetX != destination || offsetX == destination }.first { it }
+                                    if (targetOffsetX == destination) {
+                                        onSwipeRight()
+                                        revealingAction = false
+                                        targetOffsetX = 0f
+                                    }
                                 }
                             }
                             else -> {
-                                settleSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                revealingAction = false
                                 targetOffsetX = 0f
                             }
                         }
@@ -1166,14 +1193,15 @@ private fun AppGroupItem(
                 )
             },
             trailingContent = {
+                val motion = LocalYukiMotion.current
                 AnimatedVisibility(
                     visible = viewModel.showBatchActions,
-                    enter = fadeIn(animationSpec = tween(200)) + scaleIn(
-                        animationSpec = tween(200),
+                    enter = fadeIn(animationSpec = motion.effects()) + scaleIn(
+                        animationSpec = motion.spatial(MotionRole.Scale),
                         initialScale = 0.6f
                     ),
-                    exit = fadeOut(animationSpec = tween(200)) + scaleOut(
-                        animationSpec = tween(200),
+                    exit = fadeOut(animationSpec = motion.effects()) + scaleOut(
+                        animationSpec = motion.effects(),
                         targetScale = 0.6f
                     )
                 ) {
@@ -1186,8 +1214,8 @@ private fun AppGroupItem(
                     ) {
                         AnimatedVisibility(
                             visible = isCheckboxPressed,
-                            enter = expandHorizontally() + fadeIn(),
-                            exit = shrinkHorizontally() + fadeOut()
+                            enter = expandHorizontally(motion.spatial()) + fadeIn(motion.effects()),
+                            exit = shrinkHorizontally(motion.effects()) + fadeOut(motion.effects())
                         ) {
                             Text(
                                 text = if (isSelected) stringResource(R.string.selected) else stringResource(R.string.select),

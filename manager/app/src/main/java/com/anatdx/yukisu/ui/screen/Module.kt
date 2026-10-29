@@ -16,13 +16,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -34,14 +29,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Wysiwyg
 import androidx.compose.material.icons.filled.MoreVert
@@ -104,6 +99,7 @@ import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
 import com.anatdx.yukisu.BuildConfig
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.component.*
 import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getElevatedCardElevation
@@ -685,7 +681,6 @@ fun ModuleScreen(navigator: DestinationsNavigator) {
                         }
                     }
 
-                    // 选择图标按钮和撤销按钮
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -697,10 +692,11 @@ fun ModuleScreen(navigator: DestinationsNavigator) {
                         ) {
                             Text(stringResource(id = R.string.module_shortcut_icon_pick))
                         }
-                        androidx.compose.animation.AnimatedVisibility(
+                        val motion = LocalYukiMotion.current
+                        AnimatedVisibility(
                             visible = shortcutIconUri != defaultShortcutIconUri,
-                            enter = expandHorizontally() + slideInHorizontally(initialOffsetX = { it }),
-                            exit = shrinkHorizontally() + slideOutHorizontally(targetOffsetX = { it }),
+                            enter = expandHorizontally(motion.spatial()) + fadeIn(motion.effects()),
+                            exit = shrinkHorizontally(motion.effects()) + fadeOut(motion.effects()),
                         ) {
                             IconButton(
                                 onClick = { shortcutIconUri = defaultShortcutIconUri }

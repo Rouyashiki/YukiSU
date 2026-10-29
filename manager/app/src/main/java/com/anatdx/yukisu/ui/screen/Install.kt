@@ -1,5 +1,8 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.yukiExpansionSemantics
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
 import android.app.Activity
@@ -12,7 +15,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -29,8 +31,6 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeveloperMode
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.outlined.Warning
@@ -531,12 +531,10 @@ fun InstallScreen(
             )
 
             // Select the target partition for direct LKM installation.
-            AnimatedVisibility(
+            YukiExpandableContent(
                 visible = !configOnly && !embedLkmInBoot &&
                     (installMethod is InstallMethod.DirectInstall ||
                         installMethod is InstallMethod.DirectInstallToInactiveSlot),
-                enter = fadeIn() + expandVertically(),
-                exit = shrinkVertically() + fadeOut()
             ) {
                 Column(
                     modifier = Modifier
@@ -603,10 +601,8 @@ fun InstallScreen(
                 }
             }
 
-            AnimatedVisibility(
+            YukiExpandableContent(
                 visible = installMethod is InstallMethod.DownloadFile,
-                enter = fadeIn() + expandVertically(),
-                exit = shrinkVertically() + fadeOut()
             ) {
                 Column(
                     modifier = Modifier
@@ -687,13 +683,11 @@ fun InstallScreen(
                 }
 
                 // SuperKey input is shared by ramdisk and ImgPatch flows.
-                AnimatedVisibility(
+                YukiExpandableContent(
                     visible = !configOnly && (installMethod is InstallMethod.DirectInstall ||
                               installMethod is InstallMethod.DirectInstallToInactiveSlot ||
                               installMethod is InstallMethod.SelectFile ||
                               installMethod is InstallMethod.DownloadFile),
-                    enter = fadeIn() + expandVertically(),
-                    exit = shrinkVertically() + fadeOut()
                 ) {
                     InstallSurface(
                         colors = getCardColors(MaterialTheme.colorScheme.tertiaryContainer),
@@ -781,10 +775,8 @@ fun InstallScreen(
                     }
                 }
 
-                AnimatedVisibility(
+                YukiExpandableContent(
                     visible = directKernelMethod && embedLkmInBoot,
-                    enter = fadeIn() + expandVertically(),
-                    exit = shrinkVertically() + fadeOut()
                 ) {
                     InstallSurface(
                         colors = getCardColors(MaterialTheme.colorScheme.errorContainer),
@@ -820,10 +812,9 @@ fun InstallScreen(
                     }
                 }
 
-                AnimatedVisibility(
+                YukiExpandableContent(
                     visible = installMethod != null,
-                    enter = fadeIn() + expandVertically(),
-                    exit = shrinkVertically() + fadeOut()
+                    large = true,
                 ) {
                     InstallSurface(
                         colors = getCardColors(MaterialTheme.colorScheme.secondaryContainer),
@@ -839,6 +830,7 @@ fun InstallScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp)
+                                    .yukiExpansionSemantics(advancedOptionsExpanded)
                                     .clickable(
                                         role = Role.Button,
                                         onClickLabel = stringResource(
@@ -859,16 +851,14 @@ fun InstallScreen(
                                     color = MaterialTheme.colorScheme.secondary,
                                     modifier = Modifier.weight(1f),
                                 )
-                                YukiIcon(
-                                    if (advancedOptionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
+                                YukiExpandArrow(
+                                    expanded = advancedOptionsExpanded,
                                     tint = MaterialTheme.colorScheme.secondary,
                                 )
                             }
-                            AnimatedVisibility(
+                            YukiExpandableContent(
                                 visible = advancedOptionsExpanded,
-                                enter = fadeIn() + expandVertically(),
-                                exit = shrinkVertically() + fadeOut(),
+                                large = true,
                             ) {
                                 Column {
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -895,7 +885,7 @@ fun InstallScreen(
                                             onCheckedChange = { blockModulesEnabled = it },
                                         )
                                     }
-                                    if (blockModulesEnabled) {
+                                    YukiExpandableContent(visible = blockModulesEnabled) {
                                         Spacer(modifier = Modifier.height(12.dp))
                                         OutlinedTextField(
                                             value = blockModules,
@@ -931,7 +921,7 @@ fun InstallScreen(
                                         forcedFeatures = forcedFeatures,
                                         onForcedFeaturesChange = { forcedFeatures = it },
                                     )
-                                    if (directKernelMethod) {
+                                    YukiExpandableContent(visible = directKernelMethod) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -960,7 +950,9 @@ fun InstallScreen(
                                         Spacer(modifier = Modifier.height(12.dp))
                                     }
 
-                                    if (installMethod is InstallMethod.SelectFile && !embedLkmInBoot && !configOnly) {
+                                    YukiExpandableContent(
+                                        visible = installMethod is InstallMethod.SelectFile && !embedLkmInBoot && !configOnly,
+                                    ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -1035,7 +1027,7 @@ fun InstallScreen(
                                         )
                                     }
 
-                                    if (utsBootRepatch) {
+                                    YukiExpandableContent(visible = utsBootRepatch) {
                                         Spacer(modifier = Modifier.height(12.dp))
                                         HorizontalDivider(
                                             color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -1070,11 +1062,8 @@ fun InstallScreen(
                     }
                 }
 
-                // 高级功能入口：未选择安装方式时显示，选择后隐藏
-                AnimatedVisibility(
+                YukiExpandableContent(
                     visible = !utsBootRepatch && installMethod == null,
-                    enter = fadeIn() + expandVertically(),
-                    exit = shrinkVertically() + fadeOut()
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(Modifier.height(16.dp))
@@ -1122,10 +1111,8 @@ fun InstallScreen(
                     }
                 }
 
-                AnimatedVisibility(
+                YukiExpandableContent(
                     visible = !utsBootRepatch && !isManager,
-                    enter = fadeIn() + expandVertically(),
-                    exit = shrinkVertically() + fadeOut()
                 ) {
                     InstallSurface(
                         colors = getCardColors(MaterialTheme.colorScheme.tertiaryContainer),

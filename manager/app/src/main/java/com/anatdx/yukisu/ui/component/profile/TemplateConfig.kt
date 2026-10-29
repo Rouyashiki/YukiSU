@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,6 +12,7 @@ import androidx.compose.ui.res.stringResource
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiIcon
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.component.clickHapticFeedback
 import com.anatdx.yukisu.ui.util.listAppProfileTemplates
 import com.anatdx.yukisu.ui.util.setSepolicy
@@ -58,8 +57,9 @@ fun TemplateConfig(
                         ) {
                             YukiIcon(Icons.Filled.Add, null)
                         }
-                    } else if (expanded) YukiIcon(Icons.Filled.KeyboardArrowUp, null)
-                    else YukiIcon(Icons.Filled.KeyboardArrowDown, null)
+                    } else {
+                        YukiExpandArrow(expanded)
+                    }
                 },
             )
             if (profileTemplates.isEmpty()) {

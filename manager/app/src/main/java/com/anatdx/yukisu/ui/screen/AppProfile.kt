@@ -1,5 +1,7 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
 import android.annotation.SuppressLint
@@ -471,7 +473,7 @@ private fun AppProfileInner(
                         enabled = dynamicManagerEnabled,
                         onCheckedChange = onDynamicManagerChange,
                     )
-                    if (isDynamicManager) {
+                    YukiExpandableContent(visible = isDynamicManager) {
                         FilledTonalButton(
                             enabled = dynamicManagerEnabled,
                             onClick = onDynamicManagerCompat,
@@ -495,6 +497,7 @@ private fun AppProfileInner(
 
             Crossfade(
                 targetState = isRootGranted,
+                animationSpec = LocalYukiMotion.current.effects(),
                 label = "RootAccess"
             ) { current ->
                 Column(
@@ -534,10 +537,9 @@ private fun AppProfileInner(
                             }
                         }
 
-                        AnimatedVisibility(
+                        YukiExpandableContent(
                             visible = mode != Mode.Default,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
+                            large = true,
                         ) {
                             ProfileSurface(
                                 modifier = Modifier
@@ -550,6 +552,7 @@ private fun AppProfileInner(
                                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                                     Crossfade(
                                         targetState = mode,
+                                        animationSpec = LocalYukiMotion.current.effects(),
                                         label = "ProfileMode"
                                     ) { currentMode ->
                                         when (currentMode) {
@@ -592,10 +595,8 @@ private fun AppProfileInner(
                             }
                         }
 
-                        AnimatedVisibility(
+                        YukiExpandableContent(
                             visible = mode == Mode.Custom,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
                         ) {
                             ProfileSurface(
                                 modifier = Modifier

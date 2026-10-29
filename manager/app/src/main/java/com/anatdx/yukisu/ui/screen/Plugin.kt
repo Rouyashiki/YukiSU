@@ -46,7 +46,6 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -86,6 +85,7 @@ import com.anatdx.yukisu.ui.component.AnimatedFab
 import com.anatdx.yukisu.ui.component.ConfirmResult
 import com.anatdx.yukisu.ui.component.SearchAppBar
 import com.anatdx.yukisu.ui.component.YukiIcon
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.component.YukiPullToRefreshBox
 import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.component.rememberConfirmDialog
@@ -902,7 +902,7 @@ private fun PluginConfigDialog(
                                         enabled = !isSaving,
                                     ),
                                     trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                        YukiExpandArrow(expanded = expanded)
                                     },
                                 )
                                 DropdownMenu(

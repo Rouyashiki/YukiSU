@@ -13,11 +13,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.LocalActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
-import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -66,6 +63,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.anatdx.yukisu.KernelVersion
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.integrity.KsudIntegrity
 import com.anatdx.yukisu.integrity.KsudIntegrityStatus
 import com.anatdx.yukisu.magica.MagicaHelper
@@ -431,16 +429,7 @@ fun UpdateCard() {
     val title = stringResource(id = R.string.module_changelog)
     val updateText = stringResource(id = R.string.module_update)
 
-    AnimatedVisibility(
-        visible = newVersionCode > currentVersionCode,
-        enter = fadeIn() + expandVertically(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        ),
-        exit = shrinkVertically() + fadeOut()
-    ) {
+    YukiExpandableContent(visible = newVersionCode > currentVersionCode) {
         val updateDialog = rememberConfirmDialog(onConfirm = { uriHandler.openUri(newVersionUrl) })
         WarningCard(
             message = stringResource(id = R.string.new_version_available).format(newVersionCode),

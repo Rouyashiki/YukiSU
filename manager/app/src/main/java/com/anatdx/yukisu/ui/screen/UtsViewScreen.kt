@@ -1,8 +1,8 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -1169,7 +1169,7 @@ private fun UtsFieldEditorItem(
                     enabled = enabled,
                 )
             }
-            AnimatedVisibility(
+            YukiExpandableContent(
                 visible = selected,
                 modifier = Modifier.fillMaxWidth(),
             ) {

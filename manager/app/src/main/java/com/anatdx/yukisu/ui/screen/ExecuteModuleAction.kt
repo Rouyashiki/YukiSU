@@ -2,6 +2,7 @@ package com.anatdx.yukisu.ui.screen
 
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import android.annotation.SuppressLint
 import android.os.Environment
 import android.util.Log
@@ -193,8 +194,10 @@ internal fun ActionOutputScreen(
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .verticalScroll(scrollState),
         ) {
-            LaunchedEffect(text) {
-                scrollState.animateScrollTo(scrollState.maxValue)
+            val motion = LocalYukiMotion.current
+            LaunchedEffect(text, motion) {
+                if (motion.enabled) scrollState.animateScrollTo(scrollState.maxValue, motion.effects())
+                else scrollState.scrollTo(scrollState.maxValue)
             }
             resultNotice?.let {
                 Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary)

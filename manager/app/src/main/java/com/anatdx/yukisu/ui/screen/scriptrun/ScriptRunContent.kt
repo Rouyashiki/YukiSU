@@ -1,5 +1,8 @@
 package com.anatdx.yukisu.ui.screen.scriptrun
 
+import com.anatdx.yukisu.ui.motion.yukiExpansionSemantics
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
 import androidx.compose.foundation.horizontalScroll
@@ -10,7 +13,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -132,16 +134,19 @@ internal fun ScriptRunContent(state: ScriptRunUiState, actions: ScriptRunActions
                         }
                     }
                     var expanded by rememberSaveable { mutableStateOf(false) }
-                    OutlinedCard(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedCard(
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth().yukiExpansionSemantics(expanded),
+                    ) {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(stringResource(R.string.script_source))
                                 if (prepared.actionSourceTruncated) Text(stringResource(R.string.script_source_truncated))
                             }
-                            Icon(Icons.Filled.ExpandMore, null)
+                            YukiExpandArrow(expanded = expanded)
                         }
                     }
-                    if (expanded) {
+                    YukiExpandableContent(visible = expanded, large = true) {
                         val highlighted = rememberShellHighlight(
                             prepared.actionSource,
                             ShellHighlightColors.forBackground(MaterialTheme.colorScheme.surface),

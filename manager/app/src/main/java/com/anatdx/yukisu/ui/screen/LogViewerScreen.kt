@@ -1,7 +1,10 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.yukiExpansionSemantics
+import com.anatdx.yukisu.ui.motion.yukiAnimateContentSize
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import android.content.Context
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -365,6 +368,10 @@ private fun LogControlPanel(
     var fileSelectorExpanded by rememberSaveable { mutableStateOf(false) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+    val fileSelectorVisible = fileSelectorExpanded && controlsExpanded && logSources.isNotEmpty()
+    LaunchedEffect(controlsExpanded, logSources.isEmpty()) {
+        if (!controlsExpanded || logSources.isEmpty()) fileSelectorExpanded = false
+    }
     val selectedSource = remember(logSources, currentLogPath) {
         resolveSelectedSulogSource(logSources, currentLogPath, currentLogPath)
     }
@@ -416,6 +423,8 @@ private fun LogControlPanel(
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .yukiExpansionSemantics(controlsExpanded)
                         .clickable { controlsExpanded = !controlsExpanded },
                     verticalArrangement = Arrangement.spacedBy(SPACING_SMALL)
                 ) {
@@ -456,13 +465,12 @@ private fun LogControlPanel(
                         }
                     }
 
-                    FilledTonalIconButton(onClick = { controlsExpanded = !controlsExpanded }) {
-                        Icon(
-                            imageVector = if (controlsExpanded) {
-                                Icons.Filled.ExpandLess
-                            } else {
-                                Icons.Filled.ExpandMore
-                            },
+                    FilledTonalIconButton(
+                        onClick = { controlsExpanded = !controlsExpanded },
+                        modifier = Modifier.yukiExpansionSemantics(controlsExpanded),
+                    ) {
+                        YukiExpandArrow(
+                            expanded = controlsExpanded,
                             contentDescription = stringResource(
                                 if (controlsExpanded) {
                                     R.string.collapse_menu
@@ -475,10 +483,8 @@ private fun LogControlPanel(
                 }
             }
 
-            AnimatedVisibility(
+            YukiExpandableContent(
                 visible = controlsExpanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -486,9 +492,9 @@ private fun LogControlPanel(
                 ) {
                     ExposedDropdownMenuBox(
                         modifier = Modifier.fillMaxWidth(),
-                        expanded = fileSelectorExpanded,
+                        expanded = fileSelectorVisible,
                         onExpandedChange = {
-                            if (logSources.isNotEmpty()) {
+                            if (controlsExpanded && logSources.isNotEmpty()) {
                                 fileSelectorExpanded = it
                             }
                         }
@@ -504,18 +510,11 @@ private fun LogControlPanel(
                             enabled = logSources.isNotEmpty(),
                             label = { Text(stringResource(R.string.log_viewer_select_file)) },
                             trailingIcon = {
-                                Icon(
-                                    if (fileSelectorExpanded) {
-                                        Icons.Filled.ArrowDropUp
-                                    } else {
-                                        Icons.Filled.ArrowDropDown
-                                    },
-                                    contentDescription = null
-                                )
+                                YukiExpandArrow(expanded = fileSelectorVisible)
                             }
                         )
                         ExposedDropdownMenu(
-                            expanded = fileSelectorExpanded,
+                            expanded = fileSelectorVisible,
                             onDismissRequest = { fileSelectorExpanded = false },
                             modifier = Modifier.clickHapticFeedback(),
                         ) {
@@ -804,6 +803,8 @@ private fun LogEntryCard(entry: LogEntry) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .yukiAnimateContentSize()
+            .yukiExpansionSemantics(expanded)
             .clickable { expanded = !expanded },
         colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -875,11 +876,7 @@ private fun LogEntryCard(entry: LogEntry) {
                 )
             }
 
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+            if (expanded) {
                 Column {
                     Spacer(modifier = Modifier.height(SPACING_MEDIUM))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1007,10 +1004,8 @@ private fun LogViewerTopBar(
             scrollBehavior = scrollBehavior
         )
 
-        AnimatedVisibility(
+        YukiExpandableContent(
             visible = showSearchBar,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
         ) {
             OutlinedTextField(
                 value = searchQuery,

@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.LifecycleCoroutineScope
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.MainActivity
 import com.anatdx.yukisu.ui.util.*
 import kotlinx.coroutines.Dispatchers
@@ -39,10 +40,11 @@ object AnimatedBottomBar {
         showBottomBar: Boolean,
         content: @Composable () -> Unit
     ) {
+        val motion = LocalYukiMotion.current
         AnimatedVisibility(
             visible = showBottomBar,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            enter = slideInVertically(motion.spatial(), initialOffsetY = { it }) + fadeIn(motion.effects()),
+            exit = slideOutVertically(motion.effects(), targetOffsetY = { it }) + fadeOut(motion.effects())
         ) {
             content()
         }

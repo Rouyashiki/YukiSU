@@ -2,6 +2,7 @@ package com.anatdx.yukisu.ui.component
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -16,9 +17,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import com.anatdx.yukisu.R
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.yukiAnimateContentSize
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.LocalCompactWindow
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -43,6 +49,7 @@ fun SearchAppBar(
     dropdownContent: @Composable (() -> Unit)? = null,
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
+    val motion = LocalYukiMotion.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -92,13 +99,13 @@ fun SearchAppBar(
     }
 
     val expressiveSearchEnter = expandHorizontally(
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>(),
+        animationSpec = motion.spatial<IntSize>(),
         expandFrom = Alignment.End,
         clip = true,
         initialWidth = { fullWidth -> fullWidth / 10 },
     )
     val expressiveSearchExit = shrinkHorizontally(
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>(),
+        animationSpec = motion.effects<IntSize>(),
         shrinkTowards = Alignment.End,
         clip = true,
         targetWidth = { 0 },
@@ -109,6 +116,8 @@ fun SearchAppBar(
             if (onSearch) {
                 withFrameNanos { }
                 focusRequester.requestFocus()
+            } else {
+                focusManager.clearFocus()
             }
         }
         val horizontalOffset = if (expressiveUi) 8.dp else 0.dp
@@ -131,12 +140,20 @@ fun SearchAppBar(
                     start = horizontalOffset,
                     end = endPadding,
                 )
+                .focusProperties {
+                    onEnter = { if (!onSearch) cancelFocusChange() }
+                }
+                .focusGroup()
+                .onPreviewKeyEvent { !onSearch }
+                .then(if (onSearch) Modifier else Modifier.clearAndSetSemantics {})
                 .focusRequester(focusRequester),
+            enabled = onSearch,
             value = searchText,
-            onValueChange = onSearchTextChange,
+            onValueChange = { if (onSearch) onSearchTextChange(it) },
             placeholder = placeholder,
             trailingIcon = {
                 IconButton(
+                    enabled = onSearch,
                     onClick = {
                         focusManager.clearFocus()
                         onSearch = false
@@ -153,7 +170,7 @@ fun SearchAppBar(
             ),
             keyboardActions = KeyboardActions(onDone = {
                 keyboardController?.hide()
-                onConfirm?.invoke()
+                if (onSearch) onConfirm?.invoke()
             })
         )
     }
@@ -170,8 +187,8 @@ fun SearchAppBar(
                     AnimatedVisibility(
                         modifier = Modifier.align(Alignment.CenterStart),
                         visible = showCompactTitle,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
+                        enter = fadeIn(motion.effects()),
+                        exit = fadeOut(motion.effects()),
                         content = { title() }
                     )
 
@@ -185,8 +202,8 @@ fun SearchAppBar(
                     } else {
                         AnimatedVisibility(
                             visible = searching,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
+                            enter = fadeIn(motion.effects()),
+                            exit = fadeOut(motion.effects()),
                             content = { searchField() },
                         )
                     }
@@ -201,8 +218,13 @@ fun SearchAppBar(
                 }
             },
             actions = {
-                AnimatedVisibility(visible = showCompactTitle) {
+                AnimatedVisibility(
+                    visible = showCompactTitle,
+                    enter = fadeIn(motion.effects()) + expandHorizontally(motion.spatial()),
+                    exit = fadeOut(motion.effects()) + shrinkHorizontally(motion.effects()),
+                ) {
                     IconButton(
+                        enabled = showCompactTitle && !onSearch,
                         onClick = { onSearch = true },
                         content = { YukiIcon(Icons.Filled.Search, stringResource(R.string.ui_search)) }
                     )
@@ -223,20 +245,15 @@ fun SearchAppBar(
     }
 
     if (expressiveUi) {
-        val headerEffectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
-        val headerSizeSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
+        val headerEffectsSpec = motion.effects<Float>()
 
         headerTransition.AnimatedContent(
+            modifier = Modifier.yukiAnimateContentSize(),
             contentAlignment = Alignment.TopCenter,
             transitionSpec = {
                 fadeIn(animationSpec = headerEffectsSpec).togetherWith(
                     fadeOut(animationSpec = headerEffectsSpec)
-                ).using(
-                    SizeTransform(
-                        clip = false,
-                        sizeAnimationSpec = { _, _ -> headerSizeSpec },
-                    )
-                )
+                ).using(null)
             },
         ) { compact ->
             if (compact) {
@@ -256,6 +273,7 @@ fun SearchAppBar(
                     },
                     actions = {
                         IconButton(
+                            enabled = !onSearch,
                             onClick = { onSearch = true },
                             content = { YukiIcon(Icons.Filled.Search, stringResource(R.string.ui_search)) }
                         )

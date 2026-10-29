@@ -1,5 +1,13 @@
 package ui.screen.partition
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.YukiExpandArrow
+import com.anatdx.yukisu.ui.motion.yukiExpansionSemantics
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,8 +49,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
@@ -591,7 +597,13 @@ fun PartitionManagerScreen(navigator: DestinationsNavigator) {
                         items = filteredList,
                         key = { _, partition -> partition.name },
                     ) { index, partition ->
+                        val motion = LocalYukiMotion.current
                         PartitionCard(
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = motion.effects(),
+                                placementSpec = motion.spatial(),
+                                fadeOutSpec = motion.effects(),
+                            ),
                             partition = partition,
                             index = index,
                             count = filteredList.size,
@@ -804,7 +816,16 @@ private fun LazyListScope.partitionSection(
     content: @Composable () -> Unit,
 ) {
     item(key = key) {
-        Box(modifier = Modifier.padding(bottom = if (isExpressiveUi) 8.dp else 0.dp)) {
+        val motion = LocalYukiMotion.current
+        Box(
+            modifier = Modifier
+                .animateItem(
+                    fadeInSpec = motion.effects(),
+                    placementSpec = motion.spatial(),
+                    fadeOutSpec = motion.effects(),
+                )
+                .padding(bottom = if (isExpressiveUi) 8.dp else 0.dp),
+        ) {
             content()
         }
     }
@@ -1079,12 +1100,9 @@ private fun PartitionControls(
                 OutlinedButton(
                     onClick = onToggleShowAll,
                     enabled = enabled,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).yukiExpansionSemantics(showAll),
                 ) {
-                    YukiIcon(
-                        if (showAll) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = null,
-                    )
+                    YukiExpandArrow(expanded = showAll)
                     Spacer(Modifier.width(6.dp))
                     Text(
                         stringResource(
@@ -1339,6 +1357,7 @@ private fun SlotInfoCard(
 @Composable
 private fun PartitionCard(
     partition: PartitionInfo,
+    modifier: Modifier = Modifier,
     index: Int,
     count: Int,
     isSelected: Boolean,
@@ -1347,13 +1366,14 @@ private fun PartitionCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val motion = LocalYukiMotion.current
     val shape = if (isExpressiveUi) {
         ListItemDefaults.segmentedShapes(index, count).shape
     } else {
         RoundedCornerShape(12.dp)
     }
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .then(
                 if (isExpressiveUi) {
@@ -1399,14 +1419,20 @@ private fun PartitionCard(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (multiSelectMode) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = null,
-                    enabled = enabled && !partition.excludeFromBatch,
-                )
+            AnimatedVisibility(
+                visible = multiSelectMode,
+                enter = expandHorizontally(motion.spatial()) + fadeIn(motion.effects()),
+                exit = shrinkHorizontally(motion.spatial(expanding = false)) + fadeOut(motion.effects()),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = null,
+                        enabled = enabled && !partition.excludeFromBatch,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                }
             }
             Column(
                 modifier = Modifier.weight(1f),
@@ -1465,6 +1491,7 @@ private fun PartitionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Spacer(Modifier.width(12.dp))
             YukiIcon(
                 imageVector = if (partition.isLogical) {
                     Icons.Filled.Layers

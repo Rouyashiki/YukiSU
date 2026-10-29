@@ -1,5 +1,7 @@
 package com.anatdx.yukisu.ui.screen
 
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
 import android.content.Context
@@ -9,7 +11,6 @@ import android.os.Environment
 import android.os.Parcelable
 import android.util.Log
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -578,8 +579,10 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                     .weight(1f)
                     .verticalScroll(scrollState)
             ) {
-                LaunchedEffect(text) {
-                    scrollState.animateScrollTo(scrollState.maxValue)
+                val motion = LocalYukiMotion.current
+                LaunchedEffect(text, motion) {
+                    if (motion.enabled) scrollState.animateScrollTo(scrollState.maxValue, motion.effects())
+                    else scrollState.scrollTo(scrollState.maxValue)
                 }
                 Text(
                     modifier = Modifier.padding(16.dp),
@@ -643,11 +646,8 @@ fun ModuleInstallProgressBar(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ??????
-            AnimatedVisibility(
+            YukiExpandableContent(
                 visible = failedModules.isNotEmpty(),
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
             ) {
                 Column {
                     Row(

@@ -66,6 +66,7 @@ import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.getCardElevation
 import com.anatdx.yukisu.ui.theme.ManagerUi
 import com.anatdx.yukisu.ui.theme.isExpressiveUi
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.util.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -309,7 +310,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                     var checkCiUpdate by rememberSaveable {
                         mutableStateOf(prefs.getBoolean("check_ci_update", false))
                     }
-                    if (checkUpdate) {
+                    YukiExpandableContent(visible = checkUpdate) {
                         SwitchItem(
                             icon = Icons.Filled.DeveloperMode,
                             title = stringResource(R.string.settings_check_ci_update),
