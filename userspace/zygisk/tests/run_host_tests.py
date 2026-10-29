@@ -94,7 +94,8 @@ with tempfile.TemporaryDirectory(prefix='yz-host-tests-') as temporary:
     build = Path(temporary)
     replay = build / 'crash_protection_test'
     run(compiler, *flags, str(root / 'userspace/zygisk/tests/crash_protection_test.cpp'),
-        str(root / 'userspace/zygisk/daemon/crash_monitor.cpp'), '-o', str(replay))
+        str(root / 'userspace/zygisk/daemon/crash_monitor.cpp'),
+        '-Wl,--wrap=flock', '-Wl,--wrap=fsync', '-o', str(replay))
     run(str(replay))
     fixture = os.environ.get('YZ_TOMBSTONE_FIXTURE')
     if fixture:

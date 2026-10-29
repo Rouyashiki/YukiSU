@@ -1118,31 +1118,27 @@ yz_config g_yz_config = yukizygisk::config::defaults;
 
 void read_yzconfig() {
   yz_config cfg = yukizygisk::config::defaults;
-  int fd = open(ksud::YUKIZYGISK_CONFIG_PATH, O_RDONLY | O_CLOEXEC);
-  if (fd >= 0) {
-    std::string buf;
-    char tmp[1024];
-    for (ssize_t n; (n = read(fd, tmp, sizeof(tmp))) > 0;)
-      buf.append(tmp, static_cast<size_t>(n));
-    close(fd);
-    json::Value root = json::parse(buf);
-    if (root.type == json::Type::Object) {
-      if (root.contains("yukilinker"))
-        cfg.yukilinker = root.at("yukilinker").as_bool() ? 1 : 0;
-      if (root.at("anonymous_memory").type == json::Type::Bool)
-        cfg.memory_type = root.at("anonymous_memory").as_bool()
-                              ? YZ_MEMORY_ANONYMOUS
-                              : YZ_MEMORY_FILE;
-      if (root.contains("denylist_mode"))
-        cfg.denylist_mode =
-            static_cast<__u8>(root.at("denylist_mode").as_number());
-      if (root.contains("dmesg_log"))
-        cfg.dmesg_log = root.at("dmesg_log").as_bool() ? 1 : 0;
-    }
+  json::Value root;
+  const bool config_read =
+      yukizygisk::settings::read(ksud::YUKIZYGISK_CONFIG_PATH, &root);
+  if (config_read) {
+    if (root.contains("yukilinker"))
+      cfg.yukilinker = root.at("yukilinker").as_bool() ? 1 : 0;
+    if (root.at("anonymous_memory").type == json::Type::Bool)
+      cfg.memory_type = root.at("anonymous_memory").as_bool()
+                            ? YZ_MEMORY_ANONYMOUS
+                            : YZ_MEMORY_FILE;
+    if (root.contains("denylist_mode"))
+      cfg.denylist_mode =
+          static_cast<__u8>(root.at("denylist_mode").as_number());
+    if (root.contains("dmesg_log"))
+      cfg.dmesg_log = root.at("dmesg_log").as_bool() ? 1 : 0;
+  } else {
+    DLOGE("yzconfig: read failed: %s", strerror(errno));
   }
   g_yz_config = cfg;
   g_crash_monitor.set_protection_enabled(
-      yukizygisk::settings::protection_enabled(ksud::YUKIZYGISK_CONFIG_PATH));
+      config_read && root.at("crash_protection").bool_or(false));
   zygiskd::logging::set_kernel_mirror(cfg.dmesg_log != 0);
   yz_yukilinker_cmd yc{};
   yc.enabled = cfg.yukilinker;

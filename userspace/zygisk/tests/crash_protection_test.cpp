@@ -12,6 +12,27 @@
 using namespace yukizygisk::crash;
 namespace fs = std::filesystem;
 
+static int config_lock_signal = -1;
+static bool fail_config_sync;
+
+extern "C" int __real_flock(int fd, int operation);
+extern "C" int __wrap_flock(int fd, int operation) {
+  if (config_lock_signal >= 0 && operation == LOCK_EX) {
+    assert(write(config_lock_signal, "L", 1) == 1);
+    config_lock_signal = -1;
+  }
+  return __real_flock(fd, operation);
+}
+
+extern "C" int __real_fsync(int fd);
+extern "C" int __wrap_fsync(int fd) {
+  if (fail_config_sync) {
+    errno = EIO;
+    return -1;
+  }
+  return __real_fsync(fd);
+}
+
 static void put(const fs::path &path, const std::string &text) {
   std::ofstream output(path);
   output << text;
@@ -211,12 +232,89 @@ static void configuration(const fs::path &base) {
          config.at("dmesg_log").as_bool());
   assert(config.at("custom").string_or("") == "preserved");
   put(path, "not json");
-  assert(!yukizygisk::settings::update(path, {"crash_protection", "true"}));
-  assert(get(path) == "not json");
+  assert(yukizygisk::settings::update(path, {"crash_protection", "false"}));
+  assert(yukizygisk::settings::read(path, &config));
+  assert(!config.at("crash_protection").as_bool());
+  assert(config.at("anonymous_memory").as_bool());
   fs::remove(path);
   fs::create_symlink(base / "unrelated", path);
+  assert(!yukizygisk::settings::read(path, &config));
   assert(!yukizygisk::settings::update(path, {"crash_protection", "true"}));
   assert(!fs::exists(base / "unrelated"));
+}
+
+static void configuration_recovery(const fs::path &base) {
+  fs::create_directories(base);
+  const auto path = (base / "yzconfig.json").string();
+  const auto defaults = json::dump(yukizygisk::settings::defaults());
+  json::Value config;
+  for (const auto &corrupt : std::vector<std::string>{
+           std::string(56, '\0'), "", " \n\t", "{\"yukilinker\":", "not json",
+           "{}trailing", "[]", "null", "false", "42", "\"string\""}) {
+    put(path, corrupt);
+    assert(yukizygisk::settings::read(path, &config));
+    assert(json::dump(config) == defaults && get(path) == defaults);
+    assert(yukizygisk::settings::protection_enabled(path));
+    struct stat status{};
+    assert(stat(path.c_str(), &status) == 0);
+    assert(status.st_uid == 0 && (status.st_mode & 0777) == 0600);
+  }
+
+  // Valid partial settings and unknown fields survive a read byte for byte.
+  const std::string custom = "{ \"custom\": 7, \"yukilinker\": false }\n";
+  put(path, custom);
+  assert(yukizygisk::settings::read(path, &config));
+  assert(!config.at("yukilinker").as_bool());
+  assert(config.at("custom").u32_or(0) == 7 && get(path) == custom);
+
+  put(path, std::string(56, '\0'));
+  fail_config_sync = true;
+  assert(!yukizygisk::settings::read(path, &config) && errno == EIO);
+  fail_config_sync = false;
+  assert(get(path) == std::string(56, '\0'));
+  for (const auto &entry : fs::directory_iterator(base))
+    assert(entry.path().filename().string().find(".tmp.") == std::string::npos);
+
+  // A reader that saw corruption must re-read after a competing writer commits.
+  const int lock = open((path + ".lock").c_str(), O_RDWR | O_CLOEXEC);
+  assert(lock >= 0 && flock(lock, LOCK_EX) == 0);
+  int signal_pipe[2];
+  assert(pipe(signal_pipe) == 0);
+  const pid_t child = fork();
+  assert(child >= 0);
+  if (child == 0) {
+    alarm(10);
+    close(lock);
+    close(signal_pipe[0]);
+    config_lock_signal = signal_pipe[1];
+    assert(yukizygisk::settings::read(path, &config));
+    assert(!config.at("yukilinker").as_bool());
+    assert(config.at("custom").u32_or(0) == 7);
+    _exit(0);
+  }
+  close(signal_pipe[1]);
+  char ready;
+  assert(read(signal_pipe[0], &ready, 1) == 1 && ready == 'L');
+  close(signal_pipe[0]);
+  put(path, custom);
+  assert(flock(lock, LOCK_UN) == 0);
+  close(lock);
+  int child_status = -1;
+  assert(waitpid(child, &child_status, 0) == child && child_status == 0);
+  assert(get(path) == custom);
+
+  // A read error or an unsupported file must not be mistaken for bad JSON.
+  assert(chown(path.c_str(), 10000, 0) == 0);
+  assert(!yukizygisk::settings::read(path, &config));
+  assert(get(path) == custom);
+  fs::remove(path);
+  assert(mkfifo(path.c_str(), 0600) == 0);
+  assert(!yukizygisk::settings::read(path, &config));
+  assert(fs::is_fifo(path));
+  fs::remove(path);
+  fs::create_directory(path);
+  assert(!yukizygisk::settings::read(path, &config));
+  assert(fs::is_directory(path));
 }
 
 int main(int argc, char **argv) {
@@ -273,6 +371,7 @@ backtrace:
   replay(base / "wrong-pid", dump, true, true, true, false, stale);
   protection_state(base / "protection");
   configuration(base / "config");
+  configuration_recovery(base / "config-recovery");
   Frame malformed;
   assert(!frame_line("#999999999999 pc 1234 " + parsed.frames[0].path,
                      &malformed));
