@@ -22,14 +22,24 @@ import com.anatdx.yukisu.ui.util.NavigationLeaveGuard
 
 internal data class BackTarget(val id: String, val route: String?)
 
-internal class ForwardedBackInput : NavigationEventInput() {
+internal interface BackGestureObserver {
+    fun onStarted(event: NavigationEvent)
+    fun onProgressed(event: NavigationEvent)
+    fun onCompleted()
+    fun onCancelled()
+}
+
+internal class ForwardedBackInput(private val gestureObserver: BackGestureObserver? = null) : NavigationEventInput() {
     private var attached = false
     private var started = false
+    private var pageGesture = false
     var onEnabledChanged: (Boolean) -> Unit = {}
     var onHistoryUpdated: (NavigationEventHistory) -> Unit = {}
 
     override fun onAdded(dispatcher: NavigationEventDispatcher) { attached = true }
     override fun onRemoved() {
+        if (pageGesture) gestureObserver?.onCancelled()
+        pageGesture = false
         attached = false
         started = false
         onEnabledChanged(false)
@@ -37,25 +47,36 @@ internal class ForwardedBackInput : NavigationEventInput() {
     override fun onHasEnabledHandlersChanged(hasEnabledHandlers: Boolean) = onEnabledChanged(hasEnabledHandlers)
     override fun onHistoryChanged(history: NavigationEventHistory) = onHistoryUpdated(history)
 
-    fun start(event: NavigationEvent) {
+    fun start(event: NavigationEvent, pageGesture: Boolean = false) {
         if (!attached) return
+        this.pageGesture = pageGesture
+        if (pageGesture) gestureObserver?.onStarted(event)
         dispatchOnBackStarted(event)
         started = true
     }
 
     fun progress(event: NavigationEvent) {
-        if (attached && started) dispatchOnBackProgressed(event)
+        if (attached && started) {
+            if (pageGesture) gestureObserver?.onProgressed(event)
+            dispatchOnBackProgressed(event)
+        }
     }
 
     fun complete() {
         if (!attached) return
+        if (pageGesture) gestureObserver?.onCompleted()
         dispatchOnBackCompleted()
         started = false
+        pageGesture = false
     }
 
     fun cancel() {
-        if (attached && started) dispatchOnBackCancelled()
+        if (attached && started) {
+            if (pageGesture) gestureObserver?.onCancelled()
+            dispatchOnBackCancelled()
+        }
         started = false
+        pageGesture = false
     }
 }
 
@@ -93,7 +114,9 @@ internal class GuardedBackHandler(
         if (ignoredGesture) return
         cancelPending()
         gestureTarget = currentTarget()
-        if (currentInfo !is NavBackStackEntryInfo || predictiveBackEnabled()) input.start(event)
+        if (currentInfo !is NavBackStackEntryInfo || predictiveBackEnabled()) {
+            input.start(event, pageGesture = currentInfo is NavBackStackEntryInfo)
+        }
     }
 
     override fun onBackProgressed(event: NavigationEvent) {
@@ -163,12 +186,13 @@ internal class GuardedBackHandler(
 internal fun rememberGuardedNavigationDispatcher(
     navController: NavHostController,
     predictiveBackEnabled: Boolean,
+    gestureObserver: BackGestureObserver? = null,
 ): NavigationEventDispatcherOwner {
     val parent = checkNotNull(LocalNavigationEventDispatcherOwner.current).navigationEventDispatcher
     val owner = rememberNavigationEventDispatcherOwner(parent = null)
     val dispatcher = owner.navigationEventDispatcher
     val leaveGuard = LocalNavigationLeaveGuard.current
-    val input = remember(dispatcher) { ForwardedBackInput() }
+    val input = remember(dispatcher, gestureObserver) { ForwardedBackInput(gestureObserver) }
     val enabled = rememberUpdatedState(predictiveBackEnabled)
     val handler = remember(input, leaveGuard, navController) {
         GuardedBackHandler(input, leaveGuard, predictiveBackEnabled = { enabled.value }) {

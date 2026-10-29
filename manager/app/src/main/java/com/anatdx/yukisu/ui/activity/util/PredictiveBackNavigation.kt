@@ -1,94 +1,67 @@
 package com.anatdx.yukisu.ui.activity.util
 
+import android.os.SystemClock
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateIntOffset
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.ComposeNavigator
-import androidx.navigation.compose.NavBackStackEntryInfo
-import androidx.navigation.get
-import androidx.navigationevent.NavigationEvent
-import androidx.navigationevent.NavigationEventTransitionState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.PageTransitionStyle
 import com.anatdx.yukisu.ui.theme.BackgroundLayer
+import com.anatdx.yukisu.ui.theme.ThemeConfig
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
 import com.ramcosta.composedestinations.manualcomposablecalls.ManualComposableCallsBuilder
 import com.ramcosta.composedestinations.manualcomposablecalls.composable
 import com.ramcosta.composedestinations.rememberNavHostEngine
-import com.ramcosta.composedestinations.scope.AnimatedDestinationScope
 import com.ramcosta.composedestinations.spec.DestinationStyle
 import com.ramcosta.composedestinations.spec.Direction
 import com.ramcosta.composedestinations.spec.NavGraphSpec
 import com.ramcosta.composedestinations.spec.NavHostEngine
 import com.ramcosta.composedestinations.spec.TypedDestinationSpec
-import kotlinx.coroutines.flow.collectLatest
-import kotlin.math.roundToInt
-
-private class BackGesture(val outgoingId: String, val incomingId: String, val direction: Int)
-
-private data class CapturedBackPage(
-    val entryId: String,
-    val transform: PageTransform,
-    val shape: ScreenShape,
-    val elevation: Float,
-)
-
-private class NavigationMotionState(val captureLayer: GraphicsLayer) {
-    var navigation by mutableStateOf(PageNavigation())
-    var gesture by mutableStateOf<BackGesture?>(null)
-    var progress by mutableFloatStateOf(0f)
-    var gestureActive = false
-    var capturedPage: CapturedBackPage? = null
-    var completion by mutableStateOf<CapturedBackPage?>(null)
-    var completionProgress by mutableFloatStateOf(0f)
-    var completedEntries by mutableStateOf(emptySet<String>())
-}
-
-private val LocalNavigationMotion = staticCompositionLocalOf<NavigationMotionState> {
-    error("Navigation motion is not available")
-}
 
 internal val LocalPredictiveBackEnabled = staticCompositionLocalOf { false }
+private val LocalBackGestureState = staticCompositionLocalOf<BackGestureState?> { null }
+private val LocalForwardEntries = staticCompositionLocalOf<MutableMap<String, ForwardPageMotion>?> { null }
+private val LocalNavigationBackdrop = staticCompositionLocalOf<NavigationBackdrop?> { null }
 
 @Composable
 fun rememberPredictiveBackNavHostEngine(bottomBarRoutes: Set<String>, predictiveBackEnabled: Boolean): NavHostEngine {
@@ -111,140 +84,151 @@ private class PredictiveBackNavHostEngine(
         navController: NavHostController,
         builder: NavGraphBuilder.() -> Unit,
     ) {
-        val captureLayer = rememberGraphicsLayer()
-        val motion = remember(captureLayer) { NavigationMotionState(captureLayer) }
-        val density = LocalDensity.current
-        val layoutDirection = LocalLayoutDirection.current
-        val navigator = navController.navigatorProvider[ComposeNavigator::class]
-        val dispatcherOwner = rememberGuardedNavigationDispatcher(navController, predictiveBackEnabled.value)
-        val dispatcher = dispatcherOwner.navigationEventDispatcher
-
-        LaunchedEffect(navigator) {
-            var previous = navigator.backStack.value
-            navigator.backStack.collect { entries ->
-                val from = previous.lastOrNull()
-                val to = entries.lastOrNull()
-                if (from?.id != to?.id) {
-                    motion.navigation = PageNavigation(
-                        from = from?.id,
-                        to = to?.id,
-                        pop = previous.any { it.id == to?.id },
-                        fromBottomBar = from?.destination?.route in bottomBarRoutes,
-                        toBottomBar = to?.destination?.route in bottomBarRoutes,
-                    )
-                }
-                previous = entries
-            }
-        }
-
-        LaunchedEffect(dispatcher, navigator, density, layoutDirection) {
-            dispatcher.transitionState.collectLatest { eventState ->
-                val event = (eventState as? NavigationEventTransitionState.InProgress)
-                    ?.takeIf { it.direction == NavigationEventTransitionState.TRANSITIONING_BACK }
-                    ?.latestEvent
-                if (event != null) {
-                    if (!motion.gestureActive) {
-                        val entries = navigator.backStack.value
-                        if (entries.size < 2) return@collectLatest
-                        val history = dispatcher.history.value
-                        val activeEntry = (history.mergedHistory.getOrNull(history.currentIndex) as? NavBackStackEntryInfo)
-                            ?.visibleEntry
-                        if (activeEntry?.id != entries.last().id) return@collectLatest
-                        motion.completion = null
-                        motion.capturedPage = null
-                        motion.gesture = BackGesture(
-                            outgoingId = entries.last().id,
-                            incomingId = entries[entries.lastIndex - 1].id,
-                            direction = when (event.swipeEdge) {
-                                NavigationEvent.EDGE_LEFT -> 1
-                                NavigationEvent.EDGE_RIGHT -> -1
-                                else -> 0
-                            },
-                        )
-                    }
-                    motion.gestureActive = true
-                    motion.progress = event.progress.coerceIn(0f, 1f)
-                } else {
-                    motion.gestureActive = false
-                    val gesture = motion.gesture ?: return@collectLatest
-                    val cancelled = navigator.backStack.value.lastOrNull()?.id == gesture.outgoingId
-                    if (cancelled) {
-                        animate(
-                            initialValue = motion.progress,
-                            targetValue = 0f,
-                            animationSpec = tween(
-                                (motion.progress * NavigationDurationMillis).roundToInt(),
-                                easing = LinearEasing,
-                            ),
-                        ) { value, _ -> motion.progress = value }
-                    } else {
-                        val startProgress = motion.progress
-                        motion.completedEntries += gesture.outgoingId
-                        motion.completionProgress = 0f
-                        // This layer survives destination disposal even when the gesture reached 1f.
-                        motion.completion = motion.capturedPage?.takeIf { it.entryId == gesture.outgoingId }
-                        animate(0f, 1f, animationSpec = tween(BackCommitDurationMillis, easing = LinearEasing)) { value, _ ->
-                            motion.completionProgress = value
-                            motion.progress = startProgress + (1f - startProgress) * value
-                        }
-                    }
-                    if (motion.gesture === gesture) {
-                        motion.gesture = null
-                        motion.completion = null
-                        motion.capturedPage = null
-                        captureLayer.record(density, layoutDirection, IntSize.Zero) {}
-                        motion.completedEntries = motion.completedEntries.intersect(navController.visibleEntries.value.map { it.id }.toSet())
-                    }
-                }
-            }
-        }
-
-        CompositionLocalProvider(
-            LocalNavigationMotion provides motion,
-            LocalPredictiveBackEnabled provides predictiveBackEnabled.value,
-            LocalNavigationEventDispatcherOwner provides dispatcherOwner,
-        ) {
-            Box(modifier) {
-                // Keep NavHost's back stack and lifecycle clock, but give the whole page one transform.
-                androidx.navigation.compose.NavHost(
-                    navController = navController,
-                    startDestination = start.route,
-                    modifier = Modifier.fillMaxSize(),
-                    route = route,
-                    contentAlignment = Alignment.Center,
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None },
-                    predictivePopEnterTransition = { EnterTransition.None },
-                    predictivePopExitTransition = { ExitTransition.None },
-                    builder = builder,
-                )
-                motion.completion?.let { page ->
-                    BackCompletionLayer(motion, page)
-                }
-            }
-        }
+        YukiNavigationHost(
+            navController = navController,
+            startDestination = start.route,
+            modifier = modifier,
+            route = route,
+            bottomBarRoutes = bottomBarRoutes,
+            predictiveBackEnabled = predictiveBackEnabled.value,
+            builder = builder,
+        )
     }
 }
 
 @Composable
-private fun BackCompletionLayer(motion: NavigationMotionState, page: CapturedBackPage) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                val transform = page.transform.completingBack(motion.completionProgress)
-                scaleX = transform.scale
-                scaleY = transform.scale
-                translationX = size.width * transform.offset
-                alpha = transform.alpha
-                shape = page.shape
-                clip = true
-                shadowElevation = page.elevation
+internal fun YukiNavigationHost(
+    navController: NavHostController,
+    startDestination: String,
+    modifier: Modifier = Modifier,
+    route: String? = null,
+    bottomBarRoutes: Set<String> = emptySet(),
+    predictiveBackEnabled: Boolean,
+    pageTransitionStyle: PageTransitionStyle = ThemeConfig.pageTransitionStyle,
+    builder: NavGraphBuilder.() -> Unit,
+) {
+    val motion by rememberUpdatedState(PageMotion(LocalYukiMotion.current, pageTransitionStyle))
+    val origins = remember { NavigationOriginTracker() }
+    val forwardEntries = remember(navController) { mutableMapOf<String, ForwardPageMotion>() }
+    val graphics = LocalGraphicsContext.current
+    val backdrop = remember(graphics, navController) { NavigationBackdrop(graphics) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val gestures = remember(navController) {
+        BackGestureState(
+            currentEntryId = { navController.currentBackStackEntry?.id },
+            previousEntryId = { navController.previousBackStackEntry?.id },
+        )
+    }
+    val dispatcherOwner = rememberGuardedNavigationDispatcher(navController, predictiveBackEnabled, gestures)
+    LaunchedEffect(navController, gestures) {
+        navController.visibleEntries.collect { entries ->
+            val ids = entries.mapTo(mutableSetOf()) { it.id }
+            gestures.retainVisibleEntries(ids)
+            forwardEntries.keys.retainAll(ids)
+        }
+    }
+    DisposableEffect(gestures) { onDispose { gestures.clear() } }
+    DisposableEffect(backdrop, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) backdrop.stop()
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            backdrop.dispose()
+        }
+    }
+    LaunchedEffect(backdrop, gestures) {
+        snapshotFlow { backdrop.entryFinished && gestures.session == null }.collect { covered ->
+            if (covered) backdrop.finishIfCovered(gestureActive = false)
+        }
+    }
+    DisposableEffect(navController, gestures, backdrop) {
+        var currentEntry = navController.currentBackStackEntry?.id
+        val listener = NavController.OnDestinationChangedListener { controller, _, _ ->
+            val nextEntry = controller.currentBackStackEntry?.id
+            backdrop.onDestinationChanged(nextEntry)
+            if (currentEntry != nextEntry) {
+                currentEntry?.let(gestures::freezeEntry)
+                currentEntry = nextEntry
             }
-            .drawWithContent { drawLayer(motion.captureLayer) },
-    )
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
+
+    CompositionLocalProvider(
+        LocalPredictiveBackEnabled provides predictiveBackEnabled,
+        LocalBackGestureState provides gestures,
+        LocalForwardEntries provides forwardEntries,
+        LocalNavigationBackdrop provides backdrop,
+        LocalNavigationEventDispatcherOwner provides dispatcherOwner,
+    ) {
+        // Forward entry motion hands ownership to this seekable host before any back gesture starts.
+        androidx.navigation.compose.NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = modifier.fillMaxSize().observeNavigationTaps(origins)
+                .onSizeChanged(backdrop::resize)
+                .drawWithContent {
+                    backdrop.draw(this)
+                    drawContent()
+                },
+            route = route,
+            contentAlignment = Alignment.Center,
+            enterTransition = {
+                if (gestures.session?.matches(initialState.id, targetState.id) == true) EnterTransition.None
+                else {
+                    val bottomBar = targetState.destination.route in bottomBarRoutes
+                    val origin = origins.originFor(initialState.id, targetState.id, SystemClock.uptimeMillis())
+                    if (initialState.id != targetState.id && motion.enabled) {
+                        val entryMotion = forwardEntries.getOrPut(targetState.id) {
+                            ForwardPageMotion(motion, origin, bottomBar)
+                        }
+                        backdrop.begin(initialState.id, targetState.id, entryMotion)
+                    }
+                    EnterTransition.None
+                }
+            },
+            exitTransition = {
+                if (gestures.session?.matches(initialState.id, targetState.id) == true) ExitTransition.None
+                else ExitTransition.KeepUntilTransitionsFinished
+            },
+            popEnterTransition = {
+                forwardEntries.remove(targetState.id)
+                origins.originFor(initialState.id, targetState.id, SystemClock.uptimeMillis())
+                if (gestures.session?.matches(initialState.id, targetState.id) == true) EnterTransition.None
+                else motion.popEnter()
+            },
+            popExitTransition = {
+                if (gestures.session?.matches(initialState.id, targetState.id) == true) ExitTransition.None
+                else motion.popExit()
+            },
+            predictivePopEnterTransition = {
+                forwardEntries.remove(targetState.id)
+                EnterTransition.None
+            },
+            predictivePopExitTransition = { ExitTransition.None },
+            builder = builder,
+        )
+    }
+}
+
+private fun Modifier.observeNavigationTaps(origins: NavigationOriginTracker): Modifier = pointerInput(origins) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var tap = true
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (event.changes.any { it.id != down.id && it.pressed } ||
+                (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+            ) tap = false
+            if (change.changedToUpIgnoreConsumed() && tap) {
+                origins.recordTap(change.position.x, change.position.y, size.width, size.height, change.uptimeMillis)
+            }
+        } while (event.changes.any { it.pressed })
+    }
 }
 
 fun ManualComposableCallsBuilder.predictiveBackSurfaces(
@@ -264,99 +248,88 @@ private fun <T> ManualComposableCallsBuilder.predictiveBackSurface(
     page: @Composable (route: String?, contentModifier: Modifier, content: @Composable () -> Unit) -> Unit,
 ) {
     composable(destination) {
-        NavigationPage { contentModifier ->
-            page(navBackStackEntry.destination.route, contentModifier) { with(destination) { Content() } }
+        YukiNavigationPage(navBackStackEntry.id) {
+            page(navBackStackEntry.destination.route, Modifier) { with(destination) { Content() } }
         }
     }
 }
 
 @Composable
-private fun AnimatedDestinationScope<*>.NavigationPage(content: @Composable (Modifier) -> Unit) {
-    val motion = LocalNavigationMotion.current
-    val predictiveBackEnabled = LocalPredictiveBackEnabled.current
-    val navigation = motion.navigation
-    val entryId = navBackStackEntry.id
-    val gesture = motion.gesture?.takeIf { it.outgoingId == entryId || it.incomingId == entryId }
-    var handledGesture by remember(navigation) { mutableStateOf(false) }
-    SideEffect { if (gesture != null) handledGesture = true }
-
-    DisposableEffect(entryId) {
-        onDispose { motion.completedEntries -= entryId }
+internal fun AnimatedVisibilityScope.YukiNavigationPage(entryId: String, content: @Composable () -> Unit) {
+    val gestures = LocalBackGestureState.current
+    val session = gestures?.session?.takeIf { it.contains(entryId) }
+    val outgoing = session?.outgoingId == entryId
+    val forwardEntries = LocalForwardEntries.current
+    val backdrop = LocalNavigationBackdrop.current
+    val pageLayer = remember(backdrop, entryId) { backdrop?.createPage(entryId) }
+    val entryMotion = remember(entryId) { forwardEntries?.remove(entryId) }
+    DisposableEffect(gestures, entryId, entryMotion) {
+        if (entryMotion != null) gestures?.registerEntry(entryId, entryMotion)
+        onDispose { if (entryMotion != null) gestures?.unregisterEntry(entryId, entryMotion) }
     }
-
-    val pageWidth = LocalWindowInfo.current.containerSize.width
-    fun targetTransform(state: EnterExitState) = navigation.transform(
-        entryId,
-        entering = if (state == EnterExitState.PreEnter) 1f else 0f,
-        leaving = if (state == EnterExitState.PostExit) 1f else 0f,
-        predictiveBackEnabled = predictiveBackEnabled,
-    )
-    val offset by transition.animateIntOffset(
-        transitionSpec = { PageSlideAnimation },
-        label = "page slide",
-    ) { IntOffset((targetTransform(it).offset * pageWidth).roundToInt(), 0) }
-    val opacity by transition.animateFloat(
-        transitionSpec = { navigation.fadeAnimation(entryId, predictiveBackEnabled) },
-        label = "page opacity",
-    ) { targetTransform(it).alpha }
-    val scale by transition.animateFloat(
-        transitionSpec = { spring(stiffness = Spring.StiffnessMediumLow) },
-        label = "page scale",
-    ) { targetTransform(it).scale }
-
-    fun ordinaryTransform() = if (handledGesture) PageTransform() else PageTransform(
-        scale = scale,
-        offset = if (pageWidth > 0) offset.x.toFloat() / pageWidth else 0f,
-        alpha = opacity,
-    )
-
-    // Finish the remaining incoming offset while back takes control; never seek the old slide backwards.
-    val incomingOffset = remember(gesture) {
-        Animatable(if (gesture?.outgoingId == entryId) ordinaryTransform().offset else 0f)
+    val motionEnabled = LocalYukiMotion.current.enabled
+    LaunchedEffect(entryMotion, motionEnabled) {
+        if (motionEnabled) entryMotion?.animate() else entryMotion?.handOff()
     }
-    LaunchedEffect(gesture) {
-        if (gesture != null) incomingOffset.animateTo(0f, tween(100))
+    val progress = key(gestures?.progressKey(entryId)) {
+        transition.animateFloat(
+            transitionSpec = { if (session != null) predictiveBackSpec() else snap() },
+            label = "predictive page progress",
+        ) { state ->
+            if (session == null) 0f else if (outgoing) {
+                if (state == EnterExitState.PostExit) 1f else 0f
+            } else {
+                if (state == EnterExitState.PreEnter) 0f else 1f
+            }
+        }
     }
-
-    fun pageTransform(): PageTransform = if (gesture != null) {
-        predictivePageTransform(motion.progress, gesture.direction, gesture.outgoingId == entryId, incomingOffset.value)
-    } else {
-        ordinaryTransform()
+    LaunchedEffect(session, transition.currentState, transition.targetState, transition.isRunning) {
+        if (transition.targetState == EnterExitState.Visible && !transition.isRunning &&
+            transition.currentState != EnterExitState.PreEnter
+        ) {
+            gestures?.onPageSettled(entryId)
+            backdrop?.onPageSettled(entryId)
+        }
     }
-
     val view = LocalView.current
     var screenShape by remember { mutableStateOf(ScreenShape()) }
-    val animatedModifier = Modifier
-        .graphicsLayer {
-            val transform = pageTransform()
-            scaleX = transform.scale
-            scaleY = transform.scale
-            translationX = size.width * transform.offset
-            alpha = if (entryId in motion.completedEntries) 0f else transform.alpha.coerceIn(0f, 1f)
-            shape = screenShape
-            clip = gesture != null
-            shadowElevation = if (gesture?.outgoingId == entryId) 16.dp.toPx() * motion.progress else 0f
-        }
-        .drawWithContent {
-            if (gesture?.outgoingId == entryId && motion.gestureActive && motion.gesture === gesture) {
-                motion.captureLayer.record { this@drawWithContent.drawContent() }
-                motion.capturedPage = CapturedBackPage(entryId, pageTransform(), screenShape, 16.dp.toPx() * motion.progress)
-                drawLayer(motion.captureLayer)
-            } else {
-                drawContent()
-            }
-            val dim = pageTransform().dim
-            if (dim > 0f) drawRect(Color.Black, alpha = dim)
-        }
+    fun transform(): PredictivePageTransform {
+        if (session != null) return predictivePageTransform(session, outgoing, progress.value)
+        val entry = entryMotion?.transform() ?: ForwardPageTransform()
+        return PredictivePageTransform(
+            scale = entry.scale,
+            offset = entry.offset,
+            offsetY = entry.offsetY,
+            alpha = entry.alpha,
+        )
+    }
     Box(
-        Modifier
-            .fillMaxSize()
-            .onGloballyPositioned {
-                screenShape = ScreenShape.fromInsets(view.rootWindowInsets)
+        Modifier.fillMaxSize()
+            .onGloballyPositioned { screenShape = ScreenShape.fromInsets(view.rootWindowInsets) }
+            .graphicsLayer {
+                val current = transform()
+                if (pageLayer?.frozen == false) pageLayer.pose = current
+                scaleX = current.scale
+                scaleY = current.scale
+                translationX = size.width * current.offset
+                translationY = size.height * current.offsetY
+                alpha = current.alpha
+                shape = screenShape
+                clip = session != null || entryMotion?.finished == false ||
+                    transition.isRunning || transition.currentState != transition.targetState
+                shadowElevation = if (session != null && outgoing) 16.dp.toPx() * progress.value else 0f
             }
-            .then(if (predictiveBackEnabled) animatedModifier else Modifier),
+            .drawWithContent {
+                if (backdrop != null && pageLayer != null) {
+                    backdrop.record(pageLayer, this, screenShape.createOutline(size, layoutDirection, this))
+                } else drawContent()
+                val dim = if (session != null && !outgoing) {
+                    predictivePageTransform(session, outgoing = false, progress.value).dim
+                } else 0f
+                if (dim > 0f) drawRect(Color.Black, alpha = dim)
+            },
     ) {
-        if (predictiveBackEnabled) BackgroundLayer()
-        content(if (predictiveBackEnabled) Modifier else animatedModifier)
+        if (LocalPredictiveBackEnabled.current) BackgroundLayer()
+        content()
     }
 }
