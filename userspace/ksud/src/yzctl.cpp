@@ -635,7 +635,17 @@ int yzctl_run(const std::vector<std::string>& args) {
             (void)fprintf(stderr, "yzctl: configuration save failed: %s\n", strerror(errno));
             return 1;
         }
-        return yzctl_run({"reload"});
+        yz_event_channel_cmd channel{};
+        if (ksuctl(KSU_IOCTL_YZ_GET_EVENT_CHANNEL, &channel) != 0 && errno == ENOTCONN) {
+            if (refresh_yukizygisk_early_snapshot() != 0)
+                return 1;
+            puts("Configuration saved; it will be loaded when YukiZygisk starts");
+            return 0;
+        }
+        const int result = yzctl_run({"reload"});
+        if (result != 0)
+            (void)fprintf(stderr, "yzctl: configuration saved, but runtime reload failed\n");
+        return result;
     }
 
     if (args[0] == "status") {

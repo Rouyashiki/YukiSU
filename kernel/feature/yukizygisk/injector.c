@@ -246,7 +246,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 	if (current->flags & PF_EXITING)
 		goto out;
 	if (!READ_ONCE(yukizygisk_enabled) &&
-	    !(native && tw->early_native && yz_early_native_active()))
+	    !(native && tw->early_native && yz_early_native_ready()))
 		goto out;
 	if (!native && yz_tango_is_process()) {
 		pr_info("yukizygisk: Tango host exec pid=%d; waiting for guest "
@@ -333,7 +333,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 
 	/* Prepare the loader before replacing AT_ENTRY. */
 	if ((READ_ONCE(yukizygisk_enabled) ||
-	     (native && tw->early_native && yz_early_native_active())) &&
+	     (native && tw->early_native && yz_early_native_ready())) &&
 	    at_entry_uaddr && at_entry_uval == saved && saved) {
 		/* Trampolines load the staged library, then resume AT_ENTRY. */
 		static const u32 tmpl[] = {
@@ -668,7 +668,7 @@ void yz_schedule_injection(bool native, u8 target_type, bool early_native,
 	struct yz_inject_tw *tw;
 
 	if (!READ_ONCE(yukizygisk_enabled) &&
-	    !(native && early_native && yz_early_native_active()))
+	    !(native && early_native && yz_early_native_ready()))
 		return;
 	tw = kzalloc(sizeof(*tw), GFP_ATOMIC);
 	if (!tw)

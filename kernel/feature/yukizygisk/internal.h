@@ -64,7 +64,7 @@ void yz_exec_init(void);
 void yz_exec_exit(void);
 int yz_exec_enable(void);
 void yz_exec_disable(void);
-void yz_events_init(void);
+int yz_events_init(void);
 void yz_events_exit(void);
 void yz_emit_specialize(u32 pid, u32 appid);
 void yz_emit_safemode(u32 pid, u32 crashes);
@@ -138,6 +138,7 @@ bool yz_parse_zygote_args(struct mm_struct *mm, char *socket_name,
 			  size_t socket_name_len);
 
 bool yz_early_native_active(void);
+bool yz_early_native_ready(void);
 void yz_early_native_disable(void);
 bool yz_match_early_native_target(const char *filename, char *label,
 				  size_t label_len, u8 *target_type);

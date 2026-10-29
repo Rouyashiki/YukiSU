@@ -2031,7 +2031,22 @@ void handle_client(int client) {
 
 int bind_listen() { return yukizygisk::endpoint::listen(); }
 
+uint32_t g_event_generation;
+
+bool event_channel_current() {
+  yz_event_channel_cmd channel{};
+  return ksud::ksuctl(KSU_IOCTL_YZ_GET_EVENT_CHANNEL, &channel) == 0 &&
+         channel.version == 1 && channel.generation == g_event_generation;
+}
+
 int nl_listen() {
+  yz_event_channel_cmd channel{};
+  if (ksud::ksuctl(KSU_IOCTL_YZ_GET_EVENT_CHANNEL, &channel) != 0 ||
+      channel.version != 1 || channel.generation == 0) {
+    DLOGE("event channel identity unavailable; matching kernel required");
+    return -1;
+  }
+  g_event_generation = channel.generation;
   int fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, YZ_NETLINK_PROTO);
   if (fd < 0) {
     DLOGE("netlink socket: %s", strerror(errno));
@@ -2043,6 +2058,10 @@ int nl_listen() {
   addr.nl_groups = 1U;
   if (bind(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
     DLOGE("netlink bind: %s", strerror(errno));
+    close(fd);
+    return -1;
+  }
+  if (!event_channel_current()) {
     close(fd);
     return -1;
   }
@@ -2100,7 +2119,8 @@ bool nl_receive_one(int fd) {
   int len = static_cast<int>(got);
   for (nlmsghdr *nlh = reinterpret_cast<nlmsghdr *>(buf); NLMSG_OK(nlh, len);
        nlh = NLMSG_NEXT(nlh, len)) {
-    if (nlh->nlmsg_type != YZ_NL_MSG_EVENT)
+    if (nlh->nlmsg_type != YZ_NL_MSG_EVENT ||
+        nlh->nlmsg_seq != g_event_generation)
       continue;
     if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(yz_event)))
       continue;
@@ -2389,6 +2409,8 @@ int run_daemon() {
     if (!g_terminating_companions.empty())
       poll_timeout = poll_timeout < 0 ? 1000 : std::min(poll_timeout, 1000);
 
+    // Netlink does not guarantee a HUP when its kernel provider is removed.
+    poll_timeout = poll_timeout < 0 ? 1000 : std::min(poll_timeout, 1000);
     const int poll_result =
         poll(poll_fds.data(), poll_fds.size(), poll_timeout);
     if (poll_result < 0) {
@@ -2431,6 +2453,14 @@ int run_daemon() {
         (void)refresh_native_companion(native_companion_indices[index]);
     }
 
+    // Check ownership before consuming a protocol that another module can
+    // reuse.
+    if (!event_channel_current()) {
+      DLOGI("event channel stopped or replaced; exiting");
+      close(nlfd);
+      close(srv);
+      return 0;
+    }
     // Apply crash decisions before serving new module image requests.
     nl_drain(nlfd);
     if (poll_fds[history_index].revents & POLLNVAL)

@@ -32,6 +32,7 @@ netlink = r'''
 
 struct Packet { std::vector<char> data; uint32_t sender = 0; int error = 0; };
 static std::deque<Packet> packets;
+static uint32_t g_event_generation = 123;
 static std::vector<uint32_t> generations;
 static ssize_t fake_recvfrom(int, void *buffer, size_t capacity, int flags,
                              sockaddr *address, socklen_t *length) {
@@ -54,6 +55,7 @@ static void enqueue(uint32_t type, uint32_t generation, uint32_t sender = 0) {
     packet.data.resize(NLMSG_SPACE(sizeof(yz_zygote_exit_event)));
     nlmsghdr header{};
     header.nlmsg_type = YZ_NL_MSG_EVENT;
+    header.nlmsg_seq = g_event_generation;
     header.nlmsg_len = NLMSG_LENGTH(sizeof(yz_zygote_exit_event));
     yz_zygote_exit_event event{};
     event.event.type = type;
@@ -80,6 +82,8 @@ static void handle_refresh_request(uint32_t) {}
 int main() {
     enqueue(YZ_EV_SPECIALIZE, 0);
     enqueue(YZ_EV_ZYGOTE_EXIT, 99, 1234);
+    enqueue(YZ_EV_ZYGOTE_EXIT, 6);
+    reinterpret_cast<nlmsghdr *>(packets.back().data.data())->nlmsg_seq = 0;
     enqueue(YZ_EV_ZYGOTE_EXIT, 7);
     packets.push_back({{}, 0, EINTR});
     enqueue(YZ_EV_ZYGOTE_EXIT, 8);

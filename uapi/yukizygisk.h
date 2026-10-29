@@ -8,6 +8,12 @@
 #define YZ_NL_GROUP_EVENTS 1
 #define YZ_NL_MSG_EVENT 0x10
 
+struct yz_event_channel_cmd {
+  __u32 version;
+  __u32 generation;
+};
+#define KSU_IOCTL_YZ_GET_EVENT_CHANNEL _IOC(_IOC_READ, 'K', 87, 0)
+
 enum yz_event_type {
   YZ_EV_SPECIALIZE = 1,
   YZ_EV_RELOAD = 2,
@@ -451,7 +457,8 @@ struct yz_runtime_report_cmd {
   __u32 pid;
   __u32 generation;
   __u8 kind;
-  __u8 module_state; // Zero preserves success-only reports from older daemons.
+  __u8 module_state; // Zero preserves success-only reports from older
+                     // daemons.
   __u8 reserved[2];
   char module_id[YZ_NATIVE_MODULE_ID_MAX];
 };

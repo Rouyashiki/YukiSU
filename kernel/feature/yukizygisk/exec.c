@@ -245,7 +245,7 @@ static void __nocfi yz_bprm_committed_creds_impl(yz_bprm_arg_t *bprm)
 
 	((bprm_committed_creds_fn)yz_exec_hook.original)(bprm);
 	live_enabled = READ_ONCE(yukizygisk_enabled);
-	early_enabled = yz_early_native_active();
+	early_enabled = yz_early_native_ready();
 	if (unlikely(!live_enabled && !early_enabled))
 		return;
 	by_sid = live_enabled && is_zygote(current_cred());

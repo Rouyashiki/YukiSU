@@ -1250,8 +1250,7 @@ static int do_yz_set_dlopen32(void __user *arg)
 static int do_yz_reload(void __user *arg)
 {
 	(void)arg;
-	ksu_yukizygisk_emit_reload();
-	return 0;
+	return ksu_yukizygisk_emit_reload();
 }
 
 static int do_yz_set_yukilinker(void __user *arg)
@@ -1972,6 +1971,10 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
     {.cmd = KSU_IOCTL_YZ_PATCH_TEXT_V2,
      .name = "YZ_PATCH_TEXT_V2",
      .handler = do_yz_patch_text_v2,
+     .perm_check = only_root},
+    {.cmd = KSU_IOCTL_YZ_GET_EVENT_CHANNEL,
+     .name = "YZ_GET_EVENT_CHANNEL",
+     .handler = yz_events_get_channel,
      .perm_check = only_root},
     {.cmd = KSU_IOCTL_YZ_RELOAD,
      .name = "YZ_RELOAD",
