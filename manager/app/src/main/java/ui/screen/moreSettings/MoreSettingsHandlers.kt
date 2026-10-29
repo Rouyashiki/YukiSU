@@ -6,11 +6,6 @@ import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Groups
@@ -30,6 +25,8 @@ import com.anatdx.yukisu.ui.component.rememberConfirmDialog
 import com.anatdx.yukisu.ui.screen.SettingItem
 import com.anatdx.yukisu.ui.screen.SwitchItem
 import com.anatdx.yukisu.ui.theme.*
+import com.anatdx.yukisu.ui.motion.MotionPreset
+import com.anatdx.yukisu.ui.motion.PageTransitionStyle
 import com.anatdx.yukisu.ui.util.DynamicManagerSettings
 import com.anatdx.yukisu.ui.util.*
 import com.anatdx.yukisu.ui.util.getRootShell
@@ -127,6 +124,16 @@ class MoreSettingsHandlers(
         val uiStyle = if (index == 1) UiStyle.Expressive else UiStyle.Classic
         state.uiStyleIndex = index.coerceIn(0, 1)
         context.saveUiStyle(uiStyle)
+    }
+
+    fun handleMotionPresetChange(index: Int) {
+        val preset = MotionPreset.entries.getOrNull(index) ?: MotionPreset.QBouncy
+        context.saveMotionPreset(preset)
+    }
+
+    fun handlePageTransitionStyleChange(index: Int) {
+        val style = PageTransitionStyle.entries.getOrNull(index) ?: PageTransitionStyle.Reveal
+        context.savePageTransitionStyle(style)
     }
 
     fun handleThemeColorChange(theme: ThemeColors) {

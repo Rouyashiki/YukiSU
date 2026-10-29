@@ -38,6 +38,8 @@ class WebUIActivity : ComponentActivity() {
         ThemeManager.loadThemeColors(this)
         ThemeManager.loadDynamicColorState(this)
         ThemeManager.loadUiStyle(this)
+        ThemeManager.loadMotionPreset(this)
+        ThemeManager.loadPageTransitionStyle(this)
 
         setContent {
             KernelSUTheme {

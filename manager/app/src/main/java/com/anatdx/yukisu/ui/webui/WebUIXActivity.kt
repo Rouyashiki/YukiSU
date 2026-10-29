@@ -47,6 +47,8 @@ class WebUIXActivity : WXActivity() {
         ThemeManager.loadThemeColors(this)
         ThemeManager.loadDynamicColorState(this)
         ThemeManager.loadUiStyle(this)
+        ThemeManager.loadMotionPreset(this)
+        ThemeManager.loadPageTransitionStyle(this)
         super.onCreate(savedInstanceState)
     }
 

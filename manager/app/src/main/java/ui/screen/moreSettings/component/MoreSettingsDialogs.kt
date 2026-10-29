@@ -48,6 +48,26 @@ fun MoreSettingsDialogs(
         )
     }
 
+    if (state.showMotionPresetDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.motion_preset_title),
+            options = state.motionPresetOptions,
+            selectedIndex = ThemeConfig.motionPreset.ordinal,
+            onOptionSelected = handlers::handleMotionPresetChange,
+            onDismiss = { state.showMotionPresetDialog = false },
+        )
+    }
+
+    if (state.showPageTransitionStyleDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.page_transition_title),
+            options = state.pageTransitionStyleOptions,
+            selectedIndex = ThemeConfig.pageTransitionStyle.ordinal,
+            onOptionSelected = handlers::handlePageTransitionStyleChange,
+            onDismiss = { state.showPageTransitionStyleDialog = false },
+        )
+    }
+
     if (state.showThemeModeDialog) {
         SingleChoiceDialog(
             title = stringResource(R.string.theme_mode),

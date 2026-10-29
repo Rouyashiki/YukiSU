@@ -23,6 +23,7 @@ libsu = "6.0.0"
 cmaker = "1.5"
 compose-material3 = "1.5.0-beta02"
 compose-ui = "1.12.1"
+robolectric = "4.17"
 documentfile = "1.1.0"
 mmrl = "v34242"
 # JitPack publishes v438 (1cd1e76d9438) under the version without the v prefix.
@@ -65,6 +66,8 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "compose-material3" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "compose-ui" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "compose-ui" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "compose-ui" }
 

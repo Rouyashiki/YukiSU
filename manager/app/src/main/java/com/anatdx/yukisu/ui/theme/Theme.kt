@@ -29,6 +29,10 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.anatdx.yukisu.ui.component.clickHapticFeedback
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
+import com.anatdx.yukisu.ui.motion.rememberYukiMotion
+import com.anatdx.yukisu.ui.motion.MotionPreset
+import com.anatdx.yukisu.ui.motion.PageTransitionStyle
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.launch
 import java.io.File
@@ -42,6 +46,8 @@ object ThemeConfig {
     var currentTheme by mutableStateOf<ThemeColors>(ThemeColors.Default)
     var useDynamicColor by mutableStateOf(false)
     var uiStyle by mutableStateOf(UiStyle.Classic)
+    var motionPreset by mutableStateOf(MotionPreset.QBouncy)
+    var pageTransitionStyle by mutableStateOf(PageTransitionStyle.Reveal)
     
     // 背景状态
     var isTransPrideUnlocked by mutableStateOf(false)
@@ -81,6 +87,8 @@ object ThemeConfig {
         currentTheme = ThemeColors.Default
         useDynamicColor = false
         uiStyle = UiStyle.Classic
+        motionPreset = MotionPreset.QBouncy
+        pageTransitionStyle = PageTransitionStyle.Reveal
         backgroundImageLoaded = false
         isThemeChanging = false
         preventBackgroundRefresh = false
@@ -145,6 +153,32 @@ object ThemeManager {
             putString("ui_style", uiStyle.persistedValue)
         }
         ThemeConfig.uiStyle = uiStyle
+    }
+
+    fun saveMotionPreset(context: Context, preset: MotionPreset) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
+            putString("motion_preset", preset.persistedValue)
+        }
+        ThemeConfig.motionPreset = preset
+    }
+
+    fun loadMotionPreset(context: Context) {
+        val savedValue = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString("motion_preset", null)
+        ThemeConfig.motionPreset = MotionPreset.fromPersistedValue(savedValue)
+    }
+
+    fun savePageTransitionStyle(context: Context, style: PageTransitionStyle) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
+            putString("page_transition_style", style.persistedValue)
+        }
+        ThemeConfig.pageTransitionStyle = style
+    }
+
+    fun loadPageTransitionStyle(context: Context) {
+        val savedValue = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString("page_transition_style", null)
+        ThemeConfig.pageTransitionStyle = PageTransitionStyle.fromPersistedValue(savedValue)
     }
 
     fun loadUiStyle(context: Context) {
@@ -303,13 +337,17 @@ fun KernelSUTheme(
         }
     }
 
-    CompositionLocalProvider(LocalUiStyle provides ThemeConfig.uiStyle) {
+    val motion = rememberYukiMotion(ThemeConfig.motionPreset)
+    CompositionLocalProvider(
+        LocalUiStyle provides ThemeConfig.uiStyle,
+        LocalYukiMotion provides motion,
+    ) {
         val expressive = ThemeConfig.uiStyle == UiStyle.Expressive
         MaterialTheme(
             colorScheme = colorScheme,
             typography = if (expressive) ExpressiveTypography else Typography,
             shapes = if (expressive) ExpressiveShapes else Shapes(),
-            motionScheme = if (expressive) MotionScheme.expressive() else MotionScheme.standard(),
+            motionScheme = motion,
             content = themedContent
         )
     }
@@ -344,6 +382,8 @@ private fun ThemeInitializer(context: Context, systemIsDark: Boolean) {
             ThemeManager.loadThemeColors(context)
             ThemeManager.loadDynamicColorState(context)
             ThemeManager.loadUiStyle(context)
+            ThemeManager.loadMotionPreset(context)
+            ThemeManager.loadPageTransitionStyle(context)
             ThemeManager.loadTransPrideState(context)
             CardConfig.load(context)
 
@@ -402,14 +442,10 @@ private fun CustomBackgroundLayer(uri: Uri, darkTheme: Boolean) {
         label = "backgroundTransition"
     )
 
+    val motion = LocalYukiMotion.current
     val alpha by transition.animateFloat(
         label = "backgroundAlpha",
-        transitionSpec = {
-            spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            )
-        }
+        transitionSpec = { motion.effects() }
     ) { loaded -> if (loaded) 1f else 0f }
 
     Box(
@@ -640,4 +676,12 @@ fun Context.saveDynamicColorState(enabled: Boolean) {
 
 fun Context.saveUiStyle(uiStyle: UiStyle) {
     ThemeManager.saveUiStyle(this, uiStyle)
+}
+
+fun Context.saveMotionPreset(preset: MotionPreset) {
+    ThemeManager.saveMotionPreset(this, preset)
+}
+
+fun Context.savePageTransitionStyle(style: PageTransitionStyle) {
+    ThemeManager.savePageTransitionStyle(this, style)
 }

@@ -45,6 +45,8 @@ import com.anatdx.yukisu.ui.component.KsuIsValid
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.*
+import com.anatdx.yukisu.ui.motion.YukiExpandableContent
+import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.yalantis.ucrop.UCrop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -247,6 +249,20 @@ private fun AppearanceSettings(
             onClick = { state.showUiStyleDialog = true }
         )
 
+        SettingItem(
+            icon = Icons.Default.Animation,
+            title = stringResource(R.string.motion_preset_title),
+            subtitle = state.motionPresetOptions[ThemeConfig.motionPreset.ordinal],
+            onClick = { state.showMotionPresetDialog = true },
+        )
+
+        SettingItem(
+            icon = Icons.Default.OpenInFull,
+            title = stringResource(R.string.page_transition_title),
+            subtitle = state.pageTransitionStyleOptions[ThemeConfig.pageTransitionStyle.ordinal],
+            onClick = { state.showPageTransitionStyleDialog = true },
+        )
+
         SwitchSettingItem(
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             title = stringResource(R.string.predictive_back_gesture),
@@ -272,11 +288,7 @@ private fun AppearanceSettings(
         )
 
 
-        AnimatedVisibility(
-            visible = !state.useDynamicColor,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
+        YukiExpandableContent(visible = !state.useDynamicColor) {
             ThemeColorSelection(state = state)
         }
 
@@ -496,11 +508,7 @@ private fun AdvancedSettings(
                 onChange = handlers::handleWebDebuggingChange
             )
 
-            AnimatedVisibility(
-                visible = state.enableWebDebugging && state.webuiEngine == "wx",
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+            YukiExpandableContent(visible = state.enableWebDebugging && state.webuiEngine == "wx") {
                 SwitchSettingItem(
                     icon = Icons.Filled.FormatListNumbered,
                     title = stringResource(R.string.use_webuix_eruda),
@@ -589,6 +597,7 @@ private fun DpiSliderControls(
     SettingsControlGroup {
         val sliderValue by animateFloatAsState(
             targetValue = state.tempDpi.toFloat(),
+            animationSpec = LocalYukiMotion.current.effects(),
             label = "DPI Slider Animation"
         )
         val sliderState = rememberSliderState(steps = 11, trackRange = 160f..600f)
@@ -700,11 +709,7 @@ private fun CustomBackgroundSettings(
         }
     )
 
-    AnimatedVisibility(
-        visible = hasCustomBackground,
-        enter = fadeIn() + slideInVertically(),
-        exit = fadeOut() + slideOutVertically()
-    ) {
+    YukiExpandableContent(visible = hasCustomBackground, large = true) {
         Column {
             SettingItem(
                 icon = Icons.Filled.Image,
@@ -766,6 +771,7 @@ private fun AlphaSlider(
 
     val alphaSliderValue by animateFloatAsState(
         targetValue = state.cardAlpha,
+        animationSpec = LocalYukiMotion.current.effects(),
         label = "Alpha Slider Animation"
     )
     val sliderState = rememberSliderState(steps = 20, trackRange = 0f..1f)
@@ -819,6 +825,7 @@ private fun DimSlider(
 
     val dimSliderValue by animateFloatAsState(
         targetValue = state.cardDim,
+        animationSpec = LocalYukiMotion.current.effects(),
         label = "Dim Slider Animation"
     )
     val sliderState = rememberSliderState(steps = 20, trackRange = 0f..1f)

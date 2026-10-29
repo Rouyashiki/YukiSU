@@ -921,4 +921,13 @@
     <string name="ui_search">搜尋</string>
     <string name="ui_close_search">關閉搜尋</string>
     <string name="ui_back">返回</string>
+    <string name="motion_preset_title">動效強度</string>
+    <string name="page_transition_title">切頁動效</string>
+    <string name="page_transition_reveal">點擊展開</string>
+    <string name="page_transition_slide">經典彈簧滑入</string>
+    <string name="motion_preset_off">關閉動效</string>
+    <string name="motion_preset_soft">柔和</string>
+    <string name="motion_preset_qbouncy">Q彈</string>
+    <string name="motion_expanded">已展開</string>
+    <string name="motion_collapsed">已收起</string>
 </resources>

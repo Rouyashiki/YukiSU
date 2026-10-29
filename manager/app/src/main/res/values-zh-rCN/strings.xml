@@ -1114,4 +1114,13 @@
     <string name="kasumi_hide_expand_options">展开规则选项</string>
     <string name="kasumi_hide_collapse_options">收起规则选项</string>
     <string name="kasumi_module_saved_applied">设置已保存，Kasumi 规则已即时应用。挂载后端变更在重启后生效。</string>
+    <string name="motion_preset_title">动效强度</string>
+    <string name="page_transition_title">切页动效</string>
+    <string name="page_transition_reveal">点击展开</string>
+    <string name="page_transition_slide">经典弹簧滑入</string>
+    <string name="motion_preset_off">关闭动效</string>
+    <string name="motion_preset_soft">柔和</string>
+    <string name="motion_preset_qbouncy">Q弹</string>
+    <string name="motion_expanded">已展开</string>
+    <string name="motion_collapsed">已收起</string>
 </resources>

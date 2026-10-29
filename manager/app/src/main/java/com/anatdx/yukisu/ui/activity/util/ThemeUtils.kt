@@ -8,6 +8,7 @@ import androidx.core.content.edit
 import com.anatdx.yukisu.ui.MainActivity
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.ThemeConfig
+import com.anatdx.yukisu.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class ThemeChangeContentObserver(
@@ -41,6 +42,8 @@ object ThemeUtils {
         loadThemeMode()
         loadThemeColors()
         loadDynamicColorState()
+        ThemeManager.loadMotionPreset(activity)
+        ThemeManager.loadPageTransitionStyle(activity)
         CardConfig.load(activity.applicationContext)
     }
 

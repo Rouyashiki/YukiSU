@@ -40,6 +40,8 @@ class MoreSettingsState(
 
     var showThemeModeDialog by mutableStateOf(false)
     var showUiStyleDialog by mutableStateOf(false)
+    var showMotionPresetDialog by mutableStateOf(false)
+    var showPageTransitionStyleDialog by mutableStateOf(false)
     var showThemeColorDialog by mutableStateOf(false)
     var showDpiConfirmDialog by mutableStateOf(false)
 
@@ -84,6 +86,17 @@ class MoreSettingsState(
     val uiStyleOptions = listOf(
         context.getString(R.string.ui_style_classic),
         context.getString(R.string.ui_style_expressive)
+    )
+
+    val motionPresetOptions = listOf(
+        context.getString(R.string.motion_preset_off),
+        context.getString(R.string.motion_preset_soft),
+        context.getString(R.string.motion_preset_qbouncy),
+    )
+
+    val pageTransitionStyleOptions = listOf(
+        context.getString(R.string.page_transition_reveal),
+        context.getString(R.string.page_transition_slide),
     )
 
     val dpiPresets = mapOf(

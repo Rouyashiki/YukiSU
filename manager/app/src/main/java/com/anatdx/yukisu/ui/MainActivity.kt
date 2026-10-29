@@ -112,6 +112,8 @@ class MainActivity : ComponentActivity() {
             }
             resetTaskDescriptionToAppName()
             ThemeManager.loadUiStyle(this)
+            ThemeManager.loadMotionPreset(this)
+            ThemeManager.loadPageTransitionStyle(this)
 
             // Note: ksud installation moved to KsuCli.refreshShells()
             // which is called after SuperKey authentication succeeds.
