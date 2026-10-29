@@ -22,7 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.activity.util.PREDICTIVE_BACK_PREFERENCE
@@ -185,8 +184,7 @@ class MoreSettingsHandlers(
     fun handleCustomBackground(transformedUri: Uri) {
         context.saveAndApplyCustomBackground(transformedUri)
         state.isCustomBackgroundEnabled = true
-        CardConfig.cardElevation = 0.dp
-        CardConfig.isCustomBackgroundEnabled = true
+        CardConfig.updateBackground(true)
         saveCardConfig(context)
 
         Toast.makeText(
@@ -203,7 +201,8 @@ class MoreSettingsHandlers(
         CardConfig.cardDim = 0f
         CardConfig.isCustomAlphaSet = false
         CardConfig.isCustomDimSet = false
-        CardConfig.isCustomBackgroundEnabled = false
+        state.cardAlpha = CardConfig.cardAlpha
+        state.cardDim = CardConfig.cardDim
         saveCardConfig(context)
         ThemeConfig.preventBackgroundRefresh = false
 

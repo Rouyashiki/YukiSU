@@ -1,6 +1,7 @@
 package com.anatdx.yukisu.ui.theme
 
 import android.content.Context
+import android.content.res.Configuration
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -13,19 +14,19 @@ import androidx.compose.ui.unit.dp
 
 @Stable
 object CardConfig {
-    // 卡片透明度
     var cardAlpha by mutableFloatStateOf(1f)
         internal set
-    // 卡片亮度
     var cardDim by mutableFloatStateOf(0f)
         internal set
-    // 卡片阴影
-    var cardElevation by mutableStateOf(0.dp)
-        internal set
 
-    // 功能开关
-    var isShadowEnabled by mutableStateOf(true)
-        internal set
+    private var defaultCardElevation by mutableStateOf(0.dp)
+
+    val cardElevation: Dp
+        get() = if (isShadowEnabled) defaultCardElevation else 0.dp
+
+    val isShadowEnabled: Boolean
+        get() = !isCustomBackgroundEnabled
+
     var isCustomBackgroundEnabled by mutableStateOf(false)
         internal set
 
@@ -59,17 +60,8 @@ object CardConfig {
         if (isCustom) isCustomDimSet = true
     }
 
-    fun updateShadow(enabled: Boolean, elevation: Dp = cardElevation) {
-        isShadowEnabled = enabled
-        cardElevation = if (enabled) elevation else cardElevation
-    }
-
     fun updateBackground(enabled: Boolean) {
         isCustomBackgroundEnabled = enabled
-        // 自定义背景时自动禁用阴影以获得更好的视觉效果
-        if (enabled) {
-            updateShadow(false)
-        }
     }
 
     fun updateThemePreference(darkMode: Boolean?, lightMode: Boolean?) {
@@ -80,8 +72,7 @@ object CardConfig {
     fun reset() {
         cardAlpha = 1f
         cardDim = 0f
-        cardElevation = 0.dp
-        isShadowEnabled = true
+        defaultCardElevation = 0.dp
         isCustomBackgroundEnabled = false
         isCustomAlphaSet = false
         isCustomDimSet = false
@@ -96,10 +87,7 @@ object CardConfig {
         if (!isCustomDimSet) {
             updateDim(if (isDarkMode) 0.25f else 0f, false)
         }
-        // 暗色模式下默认启用轻微阴影
-        if (isDarkMode && !isCustomBackgroundEnabled) {
-            updateShadow(true, 2.dp)
-        }
+        defaultCardElevation = if (isDarkMode) 2.dp else 0.dp
     }
 
     fun save(context: Context) {
@@ -108,7 +96,7 @@ object CardConfig {
             putFloat(Keys.CARD_ALPHA, cardAlpha)
             putFloat(Keys.CARD_DIM, cardDim)
             putBoolean(Keys.CUSTOM_BACKGROUND_ENABLED, isCustomBackgroundEnabled)
-            putBoolean(Keys.IS_SHADOW_ENABLED, isShadowEnabled)
+            remove(Keys.IS_SHADOW_ENABLED)
             putBoolean(Keys.IS_CUSTOM_ALPHA_SET, isCustomAlphaSet)
             putBoolean(Keys.IS_CUSTOM_DIM_SET, isCustomDimSet)
             putBoolean(Keys.IS_USER_DARK_MODE_ENABLED, isUserDarkModeEnabled)
@@ -122,13 +110,19 @@ object CardConfig {
         cardAlpha = prefs.getFloat(Keys.CARD_ALPHA, 1f).coerceIn(0f, 1f)
         cardDim = prefs.getFloat(Keys.CARD_DIM, 0f).coerceIn(0f, 1f)
         isCustomBackgroundEnabled = prefs.getBoolean(Keys.CUSTOM_BACKGROUND_ENABLED, false)
-        isShadowEnabled = prefs.getBoolean(Keys.IS_SHADOW_ENABLED, true)
         isCustomAlphaSet = prefs.getBoolean(Keys.IS_CUSTOM_ALPHA_SET, false)
         isCustomDimSet = prefs.getBoolean(Keys.IS_CUSTOM_DIM_SET, false)
         isUserDarkModeEnabled = prefs.getBoolean(Keys.IS_USER_DARK_MODE_ENABLED, false)
         isUserLightModeEnabled = prefs.getBoolean(Keys.IS_USER_LIGHT_MODE_ENABLED, false)
 
-        updateShadow(isShadowEnabled, if (isShadowEnabled) cardElevation else 0.dp)
+        // Restore elevation without changing saved opacity or dimming.
+        val isDarkMode = when {
+            isUserLightModeEnabled -> false
+            isUserDarkModeEnabled -> true
+            else -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        }
+        defaultCardElevation = if (isDarkMode) 2.dp else 0.dp
     }
 
 }
@@ -190,18 +184,10 @@ object CardStyleProvider {
     @Composable
     fun getCardElevation() = CardDefaults.cardElevation(
         defaultElevation = CardConfig.cardElevation,
-        pressedElevation = if (CardConfig.isShadowEnabled) {
-            (CardConfig.cardElevation.value + 0).dp
-        } else 0.dp,
-        focusedElevation = if (CardConfig.isShadowEnabled) {
-            (CardConfig.cardElevation.value + 0).dp
-        } else 0.dp,
-        hoveredElevation = if (CardConfig.isShadowEnabled) {
-            (CardConfig.cardElevation.value + 0).dp
-        } else 0.dp,
-        draggedElevation = if (CardConfig.isShadowEnabled) {
-            (CardConfig.cardElevation.value + 0).dp
-        } else 0.dp,
+        pressedElevation = CardConfig.cardElevation,
+        focusedElevation = CardConfig.cardElevation,
+        hoveredElevation = CardConfig.cardElevation,
+        draggedElevation = CardConfig.cardElevation,
         disabledElevation = 0.dp
     )
 
