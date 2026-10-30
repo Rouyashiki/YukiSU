@@ -1119,4 +1119,6 @@
     <string name="motion_preset_qbouncy">Q弹</string>
     <string name="motion_expanded">已展开</string>
     <string name="motion_collapsed">已收起</string>
+    <string name="webui_download_saved">已将 %1$s 保存到下载目录</string>
+    <string name="webui_download_failed">无法保存 %1$s，请重试下载。</string>
 </resources>

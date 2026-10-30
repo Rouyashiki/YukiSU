@@ -1,5 +1,6 @@
 package com.anatdx.yukisu.ui.webui
 
+import com.anatdx.yukisu.ui.webui.file.KsuIO
 import android.app.Activity
 import android.content.pm.ApplicationInfo
 import android.text.TextUtils
@@ -26,6 +27,13 @@ open class WebViewInterface(
     protected val webView: WebView,
     private val moduleId: String,
 ) {
+    private val io = KsuIO()
+
+    @JavascriptInterface
+    fun io() = io
+
+    fun destroy() = io.destroy()
+
     private val modDir get() = "/data/adb/modules/$moduleId"
 
     @JavascriptInterface

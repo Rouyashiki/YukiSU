@@ -1123,4 +1123,6 @@
     <string name="motion_preset_qbouncy" tools:ignore="MissingTranslation">Q-bouncy</string>
     <string name="motion_expanded" tools:ignore="MissingTranslation">Expanded</string>
     <string name="motion_collapsed" tools:ignore="MissingTranslation">Collapsed</string>
+    <string name="webui_download_saved" tools:ignore="MissingTranslation">Saved %1$s to Downloads</string>
+    <string name="webui_download_failed" tools:ignore="MissingTranslation">Could not save %1$s. Try downloading again.</string>
 </resources>

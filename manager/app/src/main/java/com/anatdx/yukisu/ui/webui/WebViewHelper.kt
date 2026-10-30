@@ -53,6 +53,7 @@ internal suspend fun prepareWebView(activity: Activity, moduleId: String, state:
             SuperUserViewModel().fetchAppList()
         }
 
+        val downloadScript = activity.assets.open("webview/download.js").bufferedReader().use { it.readText() }
         val shell = createRootShell(true)
         var attached = false
         try {
@@ -99,6 +100,7 @@ internal suspend fun prepareWebView(activity: Activity, moduleId: String, state:
                     { view ->
                         state.webCanGoBack = view.canGoBack()
                         if (state.isInsetsEnabled) view.evaluateJavascript(state.currentInsets.js, null)
+                        view.evaluateJavascript(downloadScript, null)
                     },
                 )
                 webView.webChromeClient = object : WebChromeClient() {
@@ -136,9 +138,13 @@ internal suspend fun prepareWebView(activity: Activity, moduleId: String, state:
                     }
                 }
 
-                webView.addJavascriptInterface(
-                    KsuWebViewInterface(activity, webView, moduleId, state), "ksu"
-                )
+                val webViewInterface = KsuWebViewInterface(activity, webView, moduleId, state)
+                val downloadInterface = WebUIDownloadInterface(state)
+                state.webViewInterface = webViewInterface
+                state.downloadInterface = downloadInterface
+                webView.addJavascriptInterface(webViewInterface, "ksu")
+                webView.addJavascriptInterface(downloadInterface, "ksu_download")
+                webView.setDownloadListener { url, _, _, _, _ -> downloadInterface.openExternal(url) }
                 state.uiEvent = WebUIEvent.WebViewReady
             }
         } finally {
