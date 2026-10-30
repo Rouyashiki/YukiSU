@@ -14,6 +14,12 @@ internal class WebUIXBridge(
     private val bridge = WebViewInterface(activity, view, moduleId)
 
     @JavascriptInterface
+    fun io() = bridge.io()
+
+    @JavascriptInterface
+    fun pm() = bridge.pm()
+
+    @JavascriptInterface
     fun exec(command: String): String = bridge.exec(command)
 
     @JavascriptInterface
@@ -35,12 +41,19 @@ internal class WebUIXBridge(
     @JavascriptInterface
     fun moduleInfo(): String = bridge.moduleInfo()
 
+    @Suppress("DEPRECATION")
     @JavascriptInterface
     fun listPackages(type: String): String = bridge.listPackages(type)
 
+    @Suppress("DEPRECATION")
     @JavascriptInterface
     fun getPackagesInfo(packages: String): String = bridge.getPackagesInfo(packages)
 
     @JavascriptInterface
     fun exit() = bridge.exit()
+
+    override fun onDestroy() {
+        bridge.destroy()
+        super.onDestroy()
+    }
 }

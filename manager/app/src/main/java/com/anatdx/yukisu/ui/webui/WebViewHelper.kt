@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
@@ -19,10 +20,23 @@ import com.anatdx.yukisu.ui.util.createRootShell
 import com.anatdx.yukisu.ui.util.listModules
 import com.anatdx.yukisu.ui.util.setTaskDescriptionLabel
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
+
+internal fun webUIApps(): List<SuperUserViewModel.AppInfo> = runBlocking {
+    try {
+        SuperUserViewModel.loadAppsForWebUI()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Log.e("WebUI", "Failed to load package inventory", error)
+        emptyList()
+    }
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 internal suspend fun prepareWebView(activity: Activity, moduleId: String, state: WebUIState) {
@@ -47,10 +61,6 @@ internal suspend fun prepareWebView(activity: Activity, moduleId: String, state:
                 state.uiEvent = WebUIEvent.Error(activity.getString(R.string.module_unavailable, name))
             }
             return@withContext
-        }
-
-        if (SuperUserViewModel.apps.isEmpty()) {
-            SuperUserViewModel().fetchAppList()
         }
 
         val downloadScript = activity.assets.open("webview/download.js").bufferedReader().use { it.readText() }

@@ -74,7 +74,7 @@ class SuperUserViewModel : ViewModel() {
 
         @JvmStatic
         fun getAppIconDrawable(context: Context, packageName: String): Drawable? {
-            val appList = synchronized(appsLock) { apps }
+            val appList = cachedPackageApps ?: synchronized(appsLock) { apps }
             return appList.find { it.packageName == packageName }
                 ?.packageInfo?.applicationInfo?.loadIcon(context.packageManager)
         }
@@ -105,6 +105,97 @@ class SuperUserViewModel : ViewModel() {
                 }
             }
         }
+
+        private suspend fun connectKsuService(): IBinder? = withContext(Dispatchers.Main.immediate) {
+            var staleConnection: ServiceConnection? = null
+            val cachedBinder = synchronized(ksuServiceLock) {
+                ksuServiceBinder?.takeIf { it.isBinderAlive } ?: run {
+                    ksuServiceBinder = null
+                    staleConnection = ksuServiceConnection
+                    ksuServiceConnection = null
+                    null
+                }
+            }
+            if (cachedBinder != null) return@withContext cachedBinder
+
+            staleConnection?.let { connection ->
+                try {
+                    com.topjohnwu.superuser.ipc.RootService.unbind(connection)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unbind stale KsuService connection", e)
+                }
+            }
+
+            suspendCancellableCoroutine<IBinder?> { continuation ->
+                val connection = KsuServiceConnection(continuation)
+                synchronized(ksuServiceLock) {
+                    ksuServiceConnection = connection
+                }
+                val intent = Intent(ksuApp, KsuService::class.java)
+                try {
+                    val task = com.topjohnwu.superuser.ipc.RootService.bindOrTask(
+                        intent, Shell.EXECUTOR, connection
+                    )
+                    task?.let { Shell.getShell().execTask(it) }
+                } catch (e: Exception) {
+                    connection.fail()
+                    Log.e(TAG, "Failed to bind KsuService", e)
+                }
+            }
+        }
+
+        private suspend fun queryPackageApps(
+            forceRefresh: Boolean,
+            onProgress: (Float) -> Unit = {},
+        ): List<AppInfo>? {
+            if (!withContext(Dispatchers.IO) { KsuCli.SHELL.isRoot }) {
+                Log.w(TAG, "Root access is required to load the app list")
+                return null
+            }
+
+            val binder = connectKsuService() ?: return null
+
+            return withContext(Dispatchers.IO) {
+                val pm = ksuApp.packageManager
+                val allPackages = IKsuInterface.Stub.asInterface(binder)
+                val total = if (forceRefresh) {
+                    allPackages.refreshPackages()
+                } else {
+                    allPackages.packageCount
+                }
+                val pageSize = 100
+                val result = mutableListOf<AppInfo>()
+
+                var start = 0
+                while (start < total) {
+                    val page = allPackages.getPackages(start, pageSize)
+                    if (page.isEmpty()) break
+
+                    result += page.mapNotNull { packageInfo ->
+                        packageInfo.applicationInfo?.takeIf { it.uid != WEBVIEW_ZYGOTE_UID }?.let { appInfo ->
+                            AppInfo(
+                                label = appInfo.loadLabel(pm).toString(),
+                                packageInfo = packageInfo,
+                                profile = null
+                            )
+                        }
+                    }
+                    start += page.size
+                    onProgress(start.toFloat() / total)
+                }
+
+                result.toList()
+            }
+        }
+
+        @Volatile
+        private var cachedPackageApps: List<AppInfo>? = null
+
+        suspend fun loadAppsForWebUI(): List<AppInfo> = cachedPackageApps
+            ?: fetchAppListMutex.withLock {
+                cachedPackageApps ?: queryPackageApps(forceRefresh = false)
+                    ?.also { cachedPackageApps = it }.orEmpty()
+            }
 
         private class KsuServiceConnection(
             private var continuation: CancellableContinuation<IBinder?>?
@@ -393,44 +484,6 @@ class SuperUserViewModel : ViewModel() {
         }
     }
 
-    private suspend fun connectKsuService(): IBinder? = withContext(Dispatchers.Main.immediate) {
-        var staleConnection: ServiceConnection? = null
-        val cachedBinder = synchronized(ksuServiceLock) {
-            ksuServiceBinder?.takeIf { it.isBinderAlive } ?: run {
-                ksuServiceBinder = null
-                staleConnection = ksuServiceConnection
-                ksuServiceConnection = null
-                null
-            }
-        }
-        if (cachedBinder != null) return@withContext cachedBinder
-
-        staleConnection?.let { connection ->
-            try {
-                com.topjohnwu.superuser.ipc.RootService.unbind(connection)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to unbind stale KsuService connection", e)
-            }
-        }
-
-        suspendCancellableCoroutine<IBinder?> { continuation ->
-            val connection = KsuServiceConnection(continuation)
-            synchronized(ksuServiceLock) {
-                ksuServiceConnection = connection
-            }
-            val intent = Intent(ksuApp, KsuService::class.java)
-            try {
-                val task = com.topjohnwu.superuser.ipc.RootService.bindOrTask(
-                    intent, Shell.EXECUTOR, connection
-                )
-                task?.let { Shell.getShell().execTask(it) }
-            } catch (e: Exception) {
-                connection.fail()
-                Log.e(TAG, "Failed to bind KsuService", e)
-            }
-        }
-    }
-
     suspend fun fetchAppList(forceRefresh: Boolean = false) {
         isRefreshing = true
         loadingProgress = 0f
@@ -583,41 +636,11 @@ class SuperUserViewModel : ViewModel() {
     }
 
     private suspend fun fetchAppListFromService(forceRefresh: Boolean) {
-        if (!withContext(Dispatchers.IO) { KsuCli.SHELL.isRoot }) {
-            Log.w(TAG, "Root access is required to load the app list")
-            return
-        }
-
-        val binder = connectKsuService() ?: return
-
+        val packages = queryPackageApps(forceRefresh) { loadingProgress = it } ?: return
+        cachedPackageApps = packages
         withContext(Dispatchers.IO) {
             val pm = ksuApp.packageManager
-            val allPackages = IKsuInterface.Stub.asInterface(binder)
-            val total = if (forceRefresh) {
-                allPackages.refreshPackages()
-            } else {
-                allPackages.packageCount
-            }
-            val pageSize = 100
-            val result = mutableListOf<AppInfo>()
-
-            var start = 0
-            while (start < total) {
-                val page = allPackages.getPackages(start, pageSize)
-                if (page.isEmpty()) break
-
-                result += page.mapNotNull { packageInfo ->
-                    packageInfo.applicationInfo?.takeIf { it.uid != WEBVIEW_ZYGOTE_UID }?.let { appInfo ->
-                        AppInfo(
-                            label = appInfo.loadLabel(pm).toString(),
-                            packageInfo = packageInfo,
-                            profile = null
-                        )
-                    }
-                }
-                start += page.size
-                loadingProgress = start.toFloat() / total
-            }
+            val result = packages.toMutableList()
 
             val systemInfo = ApplicationInfo(pm.getApplicationInfo("android", 0)).apply {
                 uid = WEBVIEW_ZYGOTE_UID

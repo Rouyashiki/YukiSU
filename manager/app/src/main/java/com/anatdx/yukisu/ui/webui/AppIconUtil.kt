@@ -21,6 +21,7 @@ object AppIconUtil {
         if (cached != null) return cached
 
         try {
+            webUIApps()
             val drawable = getAppIconDrawable(context, packageName) ?: return null
             val raw = drawableToBitmap(drawable, sizePx)
             val icon = raw.scale(sizePx, sizePx)

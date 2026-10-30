@@ -1,6 +1,5 @@
 package com.anatdx.yukisu.ui.webui
 
-import com.anatdx.yukisu.ui.webui.file.KsuIO
 import android.app.Activity
 import android.content.pm.ApplicationInfo
 import android.text.TextUtils
@@ -11,8 +10,9 @@ import android.widget.Toast
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import com.anatdx.yukisu.ui.util.*
+import com.anatdx.yukisu.ui.webui.file.KsuIO
+import com.anatdx.yukisu.ui.webui.pm.KsuPm
 import com.topjohnwu.superuser.CallbackList
 import com.topjohnwu.superuser.ShellUtils
 import com.topjohnwu.superuser.internal.UiThreadHandler
@@ -28,6 +28,10 @@ open class WebViewInterface(
     private val moduleId: String,
 ) {
     private val io = KsuIO()
+    private val pm = KsuPm()
+
+    @JavascriptInterface
+    fun pm() = pm
 
     @JavascriptInterface
     fun io() = io
@@ -204,9 +208,10 @@ open class WebViewInterface(
         return currentModuleInfo.toString()
     }
 
+    @Deprecated("Use ksu.pm().listPackages() instead")
     @JavascriptInterface
     fun listPackages(type: String): String {
-        val packageNames = SuperUserViewModel.apps
+        val packageNames = webUIApps()
             .filter { appInfo ->
                 if (appInfo.special) return@filter false
                 val flags = appInfo.packageInfo.applicationInfo?.flags ?: 0
@@ -226,11 +231,12 @@ open class WebViewInterface(
         return jsonArray.toString()
     }
 
+    @Deprecated("Use ksu.pm().getPackagesInfo() instead")
     @JavascriptInterface
     fun getPackagesInfo(packageNamesJson: String): String {
         val packageNames = JSONArray(packageNamesJson)
         val jsonArray = JSONArray()
-        val appMap = SuperUserViewModel.apps.filterNot { it.special }.associateBy { it.packageName }
+        val appMap = webUIApps().filterNot { it.special }.associateBy { it.packageName }
         for (i in 0 until packageNames.length()) {
             val pkgName = packageNames.getString(i)
             val appInfo = appMap[pkgName]
