@@ -1,19 +1,21 @@
+#include "core_bindings.hpp"
 #include "hyos_runtime.hpp"
 #include "inline_hook.hpp"
 #include "load_config.hpp"
 #include "loader_handoff.hpp"
 #include "log.hpp"
 #include "native_bionic.hpp"
-#include "plt_state.hpp"
+#include "plt_lifecycle.hpp"
 #include "solist.hpp"
 #include "userspace/zygisk/endpoint.hpp"
 #include "yukilinker.hpp"
 #include "zygiskd.hpp"
+#include <yukiplt.hpp>
 
 #include "uapi/yukizygisk.h"
 #include "zygisk_next_api.h"
 
-#include "lsplt.hpp"
+#include "process_maps.hpp"
 
 #include <android/dlext.h>
 #include <dlfcn.h>
@@ -35,6 +37,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -496,11 +499,11 @@ bool has_pending_early_report() {
   return false;
 }
 
-bool map_from_base(void *base_addr, lsplt::MapInfo *out) {
+bool map_from_base(void *base_addr, yukizygisk::MapInfo *out) {
   uintptr_t base = reinterpret_cast<uintptr_t>(base_addr);
   auto maps = yukizygisk::hyos::in_specialized_child()
-                  ? lsplt::MapInfo::ScanCached()
-                  : lsplt::MapInfo::Scan();
+                  ? yukizygisk::MapInfo::Scan()
+                  : yukizygisk::MapInfo::Scan();
   if (base == 0) {
     std::string exe = self_exe_path();
     for (const auto &m : maps) {
@@ -545,8 +548,8 @@ bool path_matches_map(const std::string &want, const std::string &map_path) {
          clean[clean.size() - want.size() - 1] == '/';
 }
 
-bool find_library_map(const char *path, void *base_addr, lsplt::MapInfo *out,
-                      uintptr_t *load_base) {
+bool find_library_map(const char *path, void *base_addr,
+                      yukizygisk::MapInfo *out, uintptr_t *load_base) {
   if (base_addr != nullptr && map_from_base(base_addr, out)) {
     *load_base = out->start - out->offset;
     return true;
@@ -562,8 +565,8 @@ bool find_library_map(const char *path, void *base_addr, lsplt::MapInfo *out,
   }
 
   auto maps = yukizygisk::hyos::in_specialized_child()
-                  ? lsplt::MapInfo::ScanCached()
-                  : lsplt::MapInfo::Scan();
+                  ? yukizygisk::MapInfo::Scan()
+                  : yukizygisk::MapInfo::Scan();
   for (const auto &m : maps) {
     if (m.inode == 0 || m.offset != 0)
       continue;
@@ -762,31 +765,161 @@ bool load_symbols(ZnSymbolResolver *r, const std::string &file_path) {
   return ok;
 }
 
+struct NativePltBinding {
+  yukiplt::NamedImage image;
+  std::string symbol;
+  void *replacement = nullptr;
+  void *original = nullptr;
+  std::vector<void **> outputs;
+  yukiplt::HookHandle handle;
+  yukiplt::SlotReport slot;
+  yukiplt::OperationDiagnostic install;
+  yukiplt::OperationDiagnostic restore;
+  bool recovery = false;
+};
+std::vector<std::unique_ptr<NativePltBinding>> g_native_plt;
+
+bool same_native_image(const yukiplt::NamedImage &left,
+                       const yukiplt::NamedImage &right) {
+  return left.image.load_bias == right.image.load_bias &&
+         left.image.phdr_table == right.image.phdr_table &&
+         left.image.phdr_count == right.image.phdr_count &&
+         left.image.instance_token == right.image.instance_token &&
+         left.path == right.path;
+}
+
+yukiplt::Result<yukiplt::NamedImage> native_plt_image(void *address) {
+  if (address != nullptr) {
+    auto containing = yukiplt::find_image_containing(address);
+    if (containing ||
+        containing.error().code != yukiplt::ErrorCode::kImageNotFound)
+      return containing;
+  }
+  auto images = yukiplt::find_images(
+      {address == nullptr ? yukiplt::ImageMatch::kMainExecutable
+                          : yukiplt::ImageMatch::kLoadBias,
+       nullptr, reinterpret_cast<uintptr_t>(address)});
+  if (!images)
+    return images.error();
+  if (images.value().size() != 1)
+    return yukiplt::Error::Make(yukiplt::ErrorCode::kAmbiguousImage);
+  return std::move(images.value().front());
+}
+
 int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
-                 void **original) {
-  if (symbol == nullptr || hook_handler == nullptr) {
-    LOGE("plt hook: invalid args base=%p symbol=%p handler=%p", base_addr,
-         static_cast<const void *>(symbol), hook_handler);
+                 void **original) noexcept {
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation || symbol == nullptr || *symbol == '\0' ||
+      hook_handler == nullptr ||
+      (original != nullptr &&
+       reinterpret_cast<uintptr_t>(original) % alignof(void *) != 0))
     return kFailed;
+  try {
+    auto image = native_plt_image(base_addr);
+    if (!image) {
+      LOGE("PLT discovery: %s errno=%d",
+           yukiplt::error_name(image.error().code), image.error().sys_errno);
+      return kFailed;
+    }
+    NativePltBinding *existing = nullptr;
+    for (const auto &binding : g_native_plt) {
+      if (same_native_image(binding->image, image.value()) &&
+          binding->symbol == symbol && binding->handle.valid()) {
+        if (binding->replacement != hook_handler || binding->recovery)
+          return kFailed;
+        existing = binding.get();
+      }
+    }
+    if (original != nullptr) {
+      if (!yukizygisk::hyos::original_output_allowed(original))
+        return kFailed;
+      for (const auto &binding : g_native_plt) {
+        if (original == &binding->original)
+          return kFailed;
+        if (binding.get() != existing &&
+            std::find(binding->outputs.begin(), binding->outputs.end(),
+                      original) != binding->outputs.end())
+          return kFailed;
+        if (binding->handle.valid()) {
+          yukiplt::SlotReport slot;
+          size_t count = 0;
+          if (!yukiplt::query(binding->handle, &slot, 1, &count).ok() ||
+              count != 1 ||
+              slot.address == reinterpret_cast<uintptr_t>(original))
+            return kFailed;
+        }
+      }
+    }
+    if (existing != nullptr) {
+      yukiplt::SlotReport current;
+      size_t count = 0;
+      const auto error = yukiplt::query(existing->handle, &current, 1, &count);
+      if (!error.ok() || count != 1 ||
+          current.status != yukiplt::SlotStatus::kInstalled ||
+          current.value_observed != reinterpret_cast<uintptr_t>(hook_handler))
+        return kFailed;
+      if (original != nullptr) {
+        if (std::find(existing->outputs.begin(), existing->outputs.end(),
+                      original) == existing->outputs.end())
+          existing->outputs.push_back(original);
+        __atomic_store_n(original, yukiplt::load_original(&existing->original),
+                         __ATOMIC_RELEASE);
+      }
+      return kSuccess;
+    }
+    auto binding = std::make_unique<NativePltBinding>();
+    binding->image = std::move(image.value());
+    binding->symbol = symbol;
+    binding->replacement = hook_handler;
+    if (original != nullptr)
+      binding->outputs.push_back(original);
+    g_native_plt.reserve(g_native_plt.size() + 1);
+    const yukiplt::HookRequest request{
+        binding->symbol.c_str(), hook_handler,
+        original != nullptr ? original : &binding->original};
+    auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
+        binding->image, &request, 1, &binding->slot, &binding->install);
+    binding->handle = std::move(result.handle);
+    const bool published =
+        binding->install.stage >= yukiplt::OperationStage::kCommit;
+    if (published && original != nullptr)
+      __atomic_store_n(&binding->original, yukiplt::load_original(original),
+                       __ATOMIC_RELEASE);
+    yukizygisk::plt_lifecycle::set_recovery(
+        binding->recovery, !result.ok() && binding->handle.valid());
+    LOGI("PLT hook: path=%s symbol=%s result=%s cause=%s errno=%d recovery=%d",
+         binding->image.path.c_str(), symbol,
+         yukiplt::error_name(result.error.code),
+         yukiplt::error_cause_name(binding->install.cause),
+         result.error.sys_errno, binding->recovery);
+    if (binding->handle.valid() || published)
+      g_native_plt.push_back(std::move(binding));
+    return result.ok() ? kSuccess : kFailed;
+  } catch (const std::bad_alloc &) {
+    LOGE("PLT preparation: OutOfMemory");
+  } catch (...) {
+    LOGE("PLT preparation failed");
   }
-  lsplt::MapInfo info{};
-  if (!map_from_base(base_addr, &info)) {
-    LOGE("plt hook: map not found base=%p symbol=%s", base_addr, symbol);
-    return kFailed;
+  return kFailed;
+}
+
+void recover_native_plt() {
+  yukizygisk::plt_lifecycle::Operation operation(
+      yukizygisk::plt_lifecycle::Access::Recover);
+  if (!operation)
+    return;
+  for (auto &binding : g_native_plt) {
+    if (!binding->recovery)
+      continue;
+    yukiplt::SlotReport slot;
+    const auto error =
+        yukiplt::unhook_diagnosed(binding->handle, &slot, 1, &binding->restore);
+    yukizygisk::plt_lifecycle::set_recovery(binding->recovery,
+                                            binding->handle.valid());
+    LOGI("native PLT recovery: symbol=%s result=%s errno=%d consumed=%d",
+         binding->symbol.c_str(), yukiplt::error_name(error.code),
+         error.sys_errno, binding->restore.handle_consumed);
   }
-  const auto report = yukizygisk::apply_plt(
-      yukizygisk::hyos::in_specialized_child(),
-      {{info.dev, info.inode, symbol, hook_handler, original}});
-  const bool ok = yukizygisk::plt_request_succeeded(report, 0) &&
-                  (original == nullptr ||
-                   (*original != nullptr && *original != hook_handler));
-  const auto &result = report.results.front();
-  LOGI("plt hook: path=%s symbol=%s result=%u status=%d reason=%s errno=%d "
-       "rollback_pending=%d recovery_count=%zu",
-       info.path.c_str(), symbol, ok ? 0U : 1U, static_cast<int>(result.status),
-       yukizygisk::hook_error_name(result.error), result.error_number,
-       report.rollback_pending, report.recoveries.size());
-  return ok ? kSuccess : kFailed;
 }
 
 int api_inline_hook(void *target, void *addr, void **original) {
@@ -869,7 +1002,7 @@ int api_inline_unhook(void *target) {
 }
 
 ZnSymbolResolver *api_new_symbol_resolver(const char *path, void *base_addr) {
-  lsplt::MapInfo info{};
+  yukizygisk::MapInfo info{};
   uintptr_t base = 0;
   if (!find_library_map(path, base_addr, &info, &base)) {
     LOGE("symbol resolver: map not found path=%s base=%p",
@@ -1118,6 +1251,7 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
       yukizygisk::hyos::registered_module_count();
   yukizygisk::hyos::begin_module_registration(&handle->index);
   mod->onModuleLoaded(handle, &g_api);
+  recover_native_plt();
   yukizygisk::hyos::end_module_registration();
   handle->hyos_registered =
       yukizygisk::hyos::registered_module_count() > registrations_before;
@@ -1329,11 +1463,8 @@ void core_start() {
   g_inline_hooks.reserve(YZ_NATIVE_TARGET_MAX);
   g_runtime_generation = request_runtime_generation();
   load_config();
-  if (g_self_base == 0 && yukizygisk::config::anonymous(g_yz_config))
-    (void)yuki::solist::spoof_loaded_object_maps(
-        reinterpret_cast<uintptr_t>(core_start), true);
   (void)yukizygisk::hyos::initialize(open_hyos_control_session,
-                                     report_hyos_callback);
+                                     report_hyos_callback, recover_native_plt);
   load_early_modules();
   load_matching_modules();
   if (yukizygisk::hyos::available()) {
@@ -1478,7 +1609,12 @@ zygisk_core_entry(const char * /*self_path*/, void *loader_self,
                 reinterpret_cast<uintptr_t>(core_start), g_loader_base)
           : yukizygisk::handoff::verify(g_self_base, g_self_size,
                                         g_loader_base);
-  g_loader_unmap_safe = result.complete;
+  if (!result.complete && !result.tls_retained)
+    LOGE("native loader verification failed: %s", result.reason);
+  g_loader_unmap_safe =
+      result.complete &&
+      yukizygisk::handoff::anonymous_image_matches(g_self_base, g_self_size) &&
+      core_runtime_profile_ready(g_self_base, g_self_size);
   LOGI("native loader handoff: %s; slot=%p target=%p; retain=%d", result.reason,
        reinterpret_cast<void *>(result.slot),
        reinterpret_cast<void *>(result.target), !g_loader_unmap_safe);
@@ -1494,23 +1630,6 @@ zygisk_bootstrap_handoff_complete() {
   return g_loader_unmap_safe && yukizygisk::handoff::retirement_ready();
 }
 
-extern "C" [[gnu::visibility("default")]] void
-zygisk_core_entry_direct(int /*core_fd*/, int early_packet_fd_plus1) {
-  g_loader_base = 0;
-  g_self_base = 0;
-  g_self_size = 0;
-  g_early_packet_fd =
-      early_packet_fd_plus1 > 0 ? early_packet_fd_plus1 - 1 : -1;
-  if (!yukizygisk::endpoint::initialize(g_early_packet_fd, true)) {
-    yukizygisk::endpoint::close_packet(g_early_packet_fd, false);
-    g_early_packet_fd = -1;
-    return;
-  }
-
-  g_loader_unmap_safe = true;
-  core_start();
-}
-
 extern "C" [[gnu::visibility("default")]] void zygisk_finalize_loader(int,
                                                                       int) {
   if (!zygisk_bootstrap_handoff_complete()) {
@@ -1518,6 +1637,8 @@ extern "C" [[gnu::visibility("default")]] void zygisk_finalize_loader(int,
     return;
   }
 
-  int n = yuki::solist::drop_lib_containing(g_loader_base, false);
-  LOGI("native finalize_loader: unloaded %d soinfo(s)", n);
+  const bool released = yukizygisk::handoff::close_loader_reference();
+  LOGI("native finalize_loader: bootstrap reference released=%d", released);
+  if (released)
+    g_loader_base = 0;
 }

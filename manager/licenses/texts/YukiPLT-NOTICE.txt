@@ -1,0 +1,8 @@
+YukiPLT
+Copyright 2026 Rouyashiki <https://rouyashiki.org>
+
+Licensed under the Apache License, Version 2.0.
+The complete license is included with this component.
+
+Source: https://github.com/Rouyashiki/YukiPLT
+YukiSU statically links the pinned submodule into the Zygisk and native cores.

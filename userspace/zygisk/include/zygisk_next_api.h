@@ -17,7 +17,16 @@ extern "C" {
 struct ZnSymbolResolver;
 struct ZygiskNextRuntime;
 
+// Keep original storage live; replacements must use this publication protocol.
+static inline void *zn_plt_load_original(void *const *original) {
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  return __atomic_load_n(original, __ATOMIC_ACQUIRE);
+}
+
 struct ZygiskNextAPI {
+  // Unique non-null JUMP_SLOT, one owner. A competing replacement is rejected.
+  // Repeating the same image/symbol/handler verifies the live owned slot.
+  // Failure may retain recovery state; keep code and original storage alive.
   int (*pltHook)(void *base_addr, const char *symbol, void *hook_handler,
                  void **original);
   int (*inlineHook)(void *target, void *addr, void **original);

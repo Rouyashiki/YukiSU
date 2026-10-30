@@ -1,10 +1,15 @@
-#include <lsplt.hpp>
+#include "core_bindings.hpp"
+
+#include "plt_lifecycle.hpp"
+#include "process_maps.hpp"
+#include <yukiplt.hpp>
 
 #include <jni.h>
 
 #include <algorithm>
 #include <android/fdsan.h>
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
@@ -21,12 +26,10 @@
 #include <unistd.h>
 #include <vector>
 
-#include "../../third_party/lsplt/lsplt/src/main/jni/elf_util.hpp"
 #include "art_method.hpp"
 #include "hook.hpp"
 #include "inline_hook.hpp"
 #include "log.hpp"
-#include "plt_state.hpp"
 
 namespace {
 
@@ -41,10 +44,6 @@ bool ends_with(std::string_view value, std::string_view suffix) {
          value.compare(value.size() - suffix.size(), suffix.size(), suffix) ==
              0;
 }
-
-template <class F> struct Hook {
-  F *original = nullptr;
-};
 
 #if defined(__aarch64__) || defined(__arm__)
 extern "C" {
@@ -64,10 +63,41 @@ __attribute__((visibility("hidden"))) void *g_yz_jni_targets[10] = {};
 }
 #endif
 
-Hook<char *(const char *)> g_strdup;
-Hook<void(void *, bool, bool)> g_art_post_fork_child;
+std::atomic<unsigned> g_plt_callbacks{0};
+struct PltCallback {
+  PltCallback() { g_plt_callbacks.fetch_add(1, std::memory_order_acq_rel); }
+  ~PltCallback() { g_plt_callbacks.fetch_sub(1, std::memory_order_acq_rel); }
+  PltCallback(const PltCallback &) = delete;
+  PltCallback &operator=(const PltCallback &) = delete;
+  PltCallback(PltCallback &&) = delete;
+  PltCallback &operator=(PltCallback &&) = delete;
+};
+bool g_strdup_quiet = false;
+bool g_fork_quiet = false;
+bool g_art_quiet = false;
+std::atomic<pid_t> g_art_prepared_pid{0};
+std::atomic<pid_t> g_art_completed_pid{0};
+bool g_art_requires_callback = false;
+void retire_child_plt(bool include_art);
+
+yukiplt::OriginalSlot<char *(*)(const char *)> g_strdup;
+yukiplt::HookHandle g_strdup_handle;
+yukiplt::OperationDiagnostic g_strdup_diagnostic;
+bool g_strdup_recovery = false;
+yukiplt::OriginalSlot<void (*)(void *, bool, bool)> g_art_post_fork_child;
+yukiplt::HookHandle g_art_handle;
+yukiplt::OperationDiagnostic g_art_diagnostic;
+bool g_art_recovery = false;
 bool g_jni_hooked = false;
-yukizygisk::ArtHookLifecycle g_art_hook;
+enum class ArtHookState {
+  NotAttempted,
+  Deferred,
+  Installed,
+  Failed,
+  NeedsCleanup,
+  Retired
+};
+ArtHookState g_art_state = ArtHookState::NotAttempted;
 pid_t g_zygote_pid = 0;
 
 void hook_zygote_jni();
@@ -78,14 +108,19 @@ struct RuntimeHeaderRange {
   size_t size = 0;
 };
 
-struct RuntimeMapCache {
-  dev_t dev = 0;
-  ino_t inode = 0;
-  bool ready = false;
-};
+yukiplt::NamedImage g_runtime_image{};
+yukiplt::NamedImage g_art_image{};
+bool g_runtime_ready = false;
 
-RuntimeMapCache g_runtime_maps;
-RuntimeMapCache g_art_maps;
+yukiplt::Result<yukiplt::NamedImage> find_unique_image(const char *name) {
+  const auto images =
+      yukiplt::find_images({yukiplt::ImageMatch::kBasename, name, 0});
+  if (!images)
+    return images.error();
+  if (images.value().size() != 1)
+    return yukiplt::Error::Make(yukiplt::ErrorCode::kAmbiguousImage);
+  return images.value().front();
+}
 
 int find_runtime_header(dl_phdr_info *info, size_t, void *data) {
   if (info == nullptr || info->dlpi_name == nullptr ||
@@ -118,51 +153,13 @@ int find_runtime_header(dl_phdr_info *info, size_t, void *data) {
 
 /* ZygoteInit means JNI is ready. */
 char *new_strdup(const char *str) {
+  PltCallback callback;
   if (!g_jni_hooked && str != nullptr && std::strcmp(str, kZygoteInit) == 0) {
     g_jni_hooked = true;
     ZLOGI("reached ZygoteInit -- VM is up, JNI is now safe");
     hook_zygote_jni();
   }
-  return g_strdup.original ? g_strdup.original(str) : nullptr;
-}
-
-bool cache_libandroid_runtime() {
-  if (g_runtime_maps.ready)
-    return true;
-
-  for (const auto &map : lsplt::MapInfo::Scan()) {
-    if (map.offset != 0 || !(map.perms & PROT_READ) || map.dev == 0 ||
-        map.inode == 0 || !ends_with(map.path, kAndroidRuntime))
-      continue;
-    g_runtime_maps = {map.dev, map.inode, true};
-    return true;
-  }
-  return false;
-}
-
-bool find_libandroid_runtime(dev_t &dev, ino_t &inode) {
-  if (!g_runtime_maps.ready)
-    return false;
-  dev = g_runtime_maps.dev;
-  inode = g_runtime_maps.inode;
-  return true;
-}
-
-bool retire_art_fork_hook() {
-  if (!yukizygisk::apply_plt(true, {}).success)
-    return g_art_hook.finish_cleanup(false);
-  if (!g_art_hook.unhook_required)
-    return g_art_hook.finish_cleanup(true);
-  if (g_art_post_fork_child.original == nullptr || !g_art_maps.ready)
-    return g_art_hook.finish_cleanup(false);
-  const auto report = yukizygisk::apply_plt(
-      true, {yukizygisk::restore_plt(
-                g_art_maps.dev, g_art_maps.inode, kArtPostForkChild,
-                reinterpret_cast<void *>(g_art_post_fork_child.original),
-                reinterpret_cast<void *>(new_art_post_fork_child))});
-  if (yukizygisk::plt_request_succeeded(report, 0))
-    g_art_hook.unhook_required = false;
-  return g_art_hook.finish_cleanup(!g_art_hook.unhook_required);
+  return g_strdup.load() ? g_strdup.load()(str) : nullptr;
 }
 
 bool reset_art_method_fd(void *jit, size_t jit_size, int fd) {
@@ -225,14 +222,20 @@ void hide_art_method_fds(void *jit) {
 }
 
 void new_art_post_fork_child(void *jit, bool is_system_server, bool is_zygote) {
+  PltCallback callback;
   if (g_zygote_pid != 0 && getpid() != g_zygote_pid) {
     const int saved_errno = errno;
     // Clear ART's owner before it can queue MapBootImageMethodsTask. The
     // child keeps its existing image pages; the parent's shared fd is intact.
     hide_art_method_fds(jit);
+    g_art_prepared_pid.store(getpid(), std::memory_order_release);
+    if (!is_zygote)
+      retire_child_plt(true);
     errno = saved_errno;
   }
-  g_art_post_fork_child.original(jit, is_system_server, is_zygote);
+  g_art_post_fork_child.load()(jit, is_system_server, is_zygote);
+  if (getpid() != g_zygote_pid)
+    g_art_completed_pid.store(getpid(), std::memory_order_release);
 }
 
 int current_thread_count() {
@@ -240,127 +243,124 @@ int current_thread_count() {
   if (dir == nullptr)
     return -1;
   int count = 0;
+  errno = 0;
   while (dirent *entry = readdir(dir)) {
     if (entry->d_name[0] >= '0' && entry->d_name[0] <= '9')
       ++count;
   }
-  closedir(dir);
-  return count;
+  const int error = errno;
+  const int closed = closedir(dir);
+  return error == 0 && closed == 0 ? count : -1;
 }
 
 void hook_art_post_fork_child(bool early) {
-  if (!g_art_hook.begin(early))
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation || (g_art_state != ArtHookState::NotAttempted &&
+                     (early || g_art_state != ArtHookState::Deferred)))
     return;
-  const char *stage = early ? "bootstrap" : "jni-ready";
-  const int threads = current_thread_count();
-  const auto reject = [&](const char *reason) {
-    g_art_hook.reject_probe(early);
-    ZLOGE("ART post-fork hook: stage=%s threads=%d state=%s reason=%s", stage,
-          threads, yukizygisk::art_hook_state_name(g_art_hook.state), reason);
-  };
-  const auto maps = lsplt::MapInfo::Scan();
-  for (const auto &map : maps) {
-    if (map.offset != 0 || !(map.perms & PROT_READ) || !map.is_private ||
-        map.dev == 0 || map.inode == 0 ||
-        (!ends_with(map.path, "/libart.so") &&
-         !ends_with(map.path, "/libartd.so")))
-      continue;
-    Elf elf(map.start);
-    if (!elf.Valid()) {
-      reject("invalid-elf");
+  try {
+    auto art = find_unique_image("libart.so");
+    if (!art && art.error().code == yukiplt::ErrorCode::kImageNotFound)
+      art = find_unique_image("libartd.so");
+    if (!art) {
+      g_art_state = early ? ArtHookState::Deferred : ArtHookState::Failed;
+      ZLOGE("ART discovery: %s", yukiplt::error_name(art.error().code));
       return;
     }
-    const auto slots = elf.FindPltAddr(kArtPostForkChild);
-    if (slots.empty()) {
-      reject("symbol-not-found");
-      return;
-    }
-    uintptr_t original = 0;
-    for (uintptr_t slot : slots) {
-      const bool readable =
-          slot % alignof(uintptr_t) == 0 &&
-          std::any_of(maps.begin(), maps.end(), [&](const auto &region) {
-            return region.dev == map.dev && region.inode == map.inode &&
-                   region.is_private && !region.path.empty() &&
-                   region.path[0] != '[' && (region.perms & PROT_READ) &&
-                   slot >= region.start && slot < region.end &&
-                   region.end - slot >= sizeof(uintptr_t);
-          });
-      if (!readable) {
-        reject("invalid-slot");
-        return;
-      }
-      const auto value = __atomic_load_n(reinterpret_cast<uintptr_t *>(slot),
-                                         __ATOMIC_ACQUIRE);
-      if (value == 0 || (original != 0 && value != original)) {
-        reject(value == 0 ? "null-slot" : "inconsistent-original");
-        return;
-      }
-      original = value;
-    }
-    g_art_maps = {map.dev, map.inode, true};
-    const auto report = yukizygisk::apply_plt(
-        false, {{map.dev, map.inode, kArtPostForkChild,
-                 reinterpret_cast<void *>(new_art_post_fork_child),
-                 reinterpret_cast<void **>(&g_art_post_fork_child.original)}});
-    const auto callback = reinterpret_cast<uintptr_t>(new_art_post_fork_child);
-    const auto backup =
-        reinterpret_cast<uintptr_t>(g_art_post_fork_child.original);
-    bool committed = false, installed = false, dirty = false;
-    for (const auto &entry : report.results) {
-      const bool entry_committed =
-          entry.status == lsplt::CommitStatus::Applied ||
-          entry.status == lsplt::CommitStatus::NoChange;
-      committed |= entry_committed;
-      installed =
-          entry_committed && !report.rollback_pending && backup != 0 &&
-          backup != callback && !entry.slots.empty() &&
-          std::all_of(entry.slots.begin(), entry.slots.end(),
-                      [&](const auto &slot) {
-                        return slot.observed && slot.after == callback &&
-                               (entry.status == lsplt::CommitStatus::NoChange ||
-                                slot.before == backup) &&
-                               slot.permissions_restored;
-                      });
-      for (const auto &slot : entry.slots) {
-        dirty |= !slot.observed || slot.after == callback ||
-                 !slot.permissions_restored;
-        ZLOGI("ART post-fork slot=%p old=%p new=%p expected=%p observed=%d "
-              "restored=%d",
-              reinterpret_cast<void *>(slot.address),
-              reinterpret_cast<void *>(slot.before),
-              reinterpret_cast<void *>(slot.after),
-              reinterpret_cast<void *>(callback), slot.observed,
-              slot.permissions_restored);
-      }
-      ZLOGI("ART post-fork result: status=%d reason=%s errno=%d rollback=%s "
-            "rollback_errno=%d published=%d",
-            static_cast<int>(entry.status),
-            yukizygisk::hook_error_name(entry.error), entry.error_number,
-            yukizygisk::hook_error_name(entry.rollback_error),
-            entry.rollback_error_number, entry.ever_published);
-    }
-    g_art_hook.finish(early, committed, installed, dirty, report);
-    ZLOGI("ART post-fork hook: stage=%s threads=%d slots=%zu installed=%d "
-          "state=%s retain_core=%d",
-          stage, threads, slots.size(), installed,
-          yukizygisk::art_hook_state_name(g_art_hook.state),
-          yukizygisk::plt_lifetime.retain_core.load());
-    return;
+    g_art_image = std::move(art.value());
+    const yukiplt::HookRequest request{
+        kArtPostForkChild, reinterpret_cast<void *>(new_art_post_fork_child),
+        g_art_post_fork_child.output_address()};
+    yukiplt::SlotReport slot;
+    auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
+        g_art_image, &request, 1, &slot, &g_art_diagnostic);
+    const bool installed = result.ok();
+    g_art_requires_callback =
+        installed || g_art_diagnostic.stage >= yukiplt::OperationStage::kCommit;
+    g_art_handle = std::move(result.handle);
+    yukizygisk::plt_lifecycle::set_recovery(g_art_recovery,
+                                            !installed && g_art_handle.valid());
+    g_art_state =
+        installed        ? ArtHookState::Installed
+        : g_art_recovery ? ArtHookState::NeedsCleanup
+        : early && g_art_diagnostic.stage < yukiplt::OperationStage::kCommit
+            ? ArtHookState::Deferred
+            : ArtHookState::Failed;
+    ZLOGI("ART hook: early=%d threads=%d result=%s cause=%s errno=%d slot=%p "
+          "state=%d",
+          early, current_thread_count(), yukiplt::error_name(result.error.code),
+          yukiplt::error_cause_name(g_art_diagnostic.cause),
+          result.error.sys_errno, reinterpret_cast<void *>(slot.address),
+          static_cast<int>(g_art_state));
+  } catch (const std::bad_alloc &) {
+    g_art_state = early ? ArtHookState::Deferred : ArtHookState::Failed;
+    ZLOGE("ART preparation: OutOfMemory");
+  } catch (...) {
+    g_art_state = ArtHookState::Failed;
+    ZLOGE("ART preparation failed");
   }
-  reject("library-not-mapped");
 }
 
 struct ZygiskContext {
   JNIEnv *env = nullptr;
-  pid_t pid = -1; // <0 not forked; ==0 child; >0 zygote (parent)
+  pid_t pid = -1;
+  bool fork_attempted = false;
+  int fork_errno = 0;
+  jboolean *child_zygote = nullptr;
   jintArray *fds_to_ignore = nullptr; // app fork only -- the exempt channel
   std::vector<bool> allowed_fds;
   std::vector<int> exempted_fds;
 };
 
 ZygiskContext *g_ctx = nullptr;
-int (*g_orig_fork)() = nullptr;
+yukiplt::OriginalSlot<int (*)()> g_orig_fork;
+yukiplt::HookHandle g_fork_handle;
+yukiplt::OperationDiagnostic g_fork_diagnostic;
+bool g_fork_recovery = false;
+
+void retire_child_plt(bool include_art) {
+  if (g_zygote_pid == 0 || getpid() == g_zygote_pid)
+    return;
+  const int threads = current_thread_count();
+  yukizygisk::plt_lifecycle::Operation operation(
+      yukizygisk::plt_lifecycle::Access::Recover);
+  if (!operation)
+    return;
+  struct Owned {
+    yukiplt::HookHandle *handle;
+    yukiplt::OperationDiagnostic *diagnostic;
+    bool *recovery;
+    bool *quiet;
+  };
+  const Owned hooks[] = {
+      {&g_fork_handle, &g_fork_diagnostic, &g_fork_recovery, &g_fork_quiet},
+      {&g_strdup_handle, &g_strdup_diagnostic, &g_strdup_recovery,
+       &g_strdup_quiet},
+      {&g_art_handle, &g_art_diagnostic, &g_art_recovery, &g_art_quiet}};
+  for (size_t i = 0; i < (include_art ? 3U : 2U); ++i) {
+    const auto &hook = hooks[i];
+    if (i == 2 && hook.handle->valid() &&
+        g_art_prepared_pid.load(std::memory_order_acquire) != getpid())
+      continue;
+    if (hook.handle->valid()) {
+      yukiplt::SlotReport slot;
+      const auto error =
+          yukiplt::unhook_diagnosed(*hook.handle, &slot, 1, hook.diagnostic);
+      yukizygisk::plt_lifecycle::set_recovery(*hook.recovery,
+                                              hook.handle->valid());
+      if (!error.ok())
+        ZLOGE("child PLT retirement: %s errno=%d consumed=%d",
+              yukiplt::error_name(error.code), error.sys_errno,
+              hook.diagnostic->handle_consumed);
+    }
+    if (!hook.handle->valid() && threads == 1)
+      *hook.quiet = true;
+  }
+  if (include_art && !g_art_handle.valid())
+    g_art_state = ArtHookState::Retired;
+  ZLOGI("child PLT retirement: threads=%d fork=%d bootstrap=%d art=%d", threads,
+        g_fork_quiet, g_strdup_quiet, g_art_quiet);
+}
 
 bool is_isolated(int uid) {
   int app_id = uid % 100000;
@@ -398,26 +398,30 @@ bool yz_app_zygote_can_unmap(JNIEnv *env, jstring nice_name, jint uid) {
   const bool app_uid = app_id >= 10000 && app_id <= 19999;
   if (named_app_zygote)
     ZLOGI("app zygote %s (uid=%d, app_id=%d): %s", name, static_cast<int>(uid),
-          app_id, app_uid ? "dropping the core" : "keeping the core");
+          app_id, app_uid ? "retiring child hooks" : "keeping zygote hooks");
   env->ReleaseStringUTFChars(nice_name, name);
   return named_app_zygote && app_uid;
 }
 
 void finish_app_child(JNIEnv *env, bool can_unmap, bool isolated) {
-  // Every fully specialized app child drops the inherited core. Zygotes that
-  // must keep injecting their own descendants set can_unmap to false.
+  // Retire child-only state; zygotes that inject descendants keep their hooks.
   if (!can_unmap)
-    return;
-  if (!zygisk_app_core_unload_safe())
     return;
   zygisk_self_destruct(env, isolated);
 }
 
 /* The native specialize fork becomes a no-op after ctx_fork_pre. */
 int new_fork() {
-  return (g_ctx != nullptr && g_ctx->pid >= 0)
-             ? g_ctx->pid
-             : (g_orig_fork != nullptr ? g_orig_fork() : fork());
+  PltCallback callback;
+  if (g_ctx != nullptr && (g_ctx->fork_attempted || g_ctx->pid >= 0)) {
+    if (g_ctx->pid < 0)
+      errno = g_ctx->fork_errno;
+    if (g_ctx->pid == 0 &&
+        (g_ctx->child_zygote == nullptr || *g_ctx->child_zygote == JNI_FALSE))
+      retire_child_plt(false);
+    return g_ctx->pid;
+  }
+  return yukizygisk::plt_lifecycle::fork_process(g_orig_fork.load());
 }
 
 size_t fd_table_size() {
@@ -449,7 +453,9 @@ bool set_fifo_ui_scheduler(int policy, int priority) {
 void ctx_fork_pre(ZygiskContext *ctx, bool fifo_ui = false) {
   if (fifo_ui)
     set_fifo_ui_scheduler(SCHED_FIFO, 1);
-  ctx->pid = g_orig_fork != nullptr ? g_orig_fork() : fork();
+  ctx->fork_attempted = true;
+  ctx->pid = yukizygisk::plt_lifecycle::fork_process(g_orig_fork.load());
+  ctx->fork_errno = ctx->pid < 0 ? errno : 0;
   if (fifo_ui) {
     if (ctx->pid == 0) {
       if (!set_fifo_ui_scheduler(SCHED_FIFO | SCHED_RESET_ON_FORK, 1))
@@ -587,6 +593,8 @@ void *const kYzJniEntryTable[kZygoteMethodCount] = {
 };
 #endif
 
+// Lambda bodies are not executed while initializing this function table.
+// NOLINTNEXTLINE(cert-err58-cpp)
 std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
     {"nativeForkAndSpecialize",
      "(II[II[[IILjava/lang/String;Ljava/lang/String;[I[IZLjava/lang/String;"
@@ -613,6 +621,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            ZygiskContext ctx;
            ctx.env = env;
            ctx.fds_to_ignore = &fds_to_ignore;
+           ctx.child_zygote = &is_child_zygote;
            g_ctx = &ctx;
            ctx_fork_pre(&ctx); // real fork; child snapshots fds
            bool run_modules =
@@ -677,6 +686,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            ZygiskContext ctx;
            ctx.env = env;
            ctx.fds_to_ignore = &fds_to_ignore;
+           ctx.child_zygote = &is_child_zygote;
            g_ctx = &ctx;
            const bool fifo_ui =
                is_top_app == JNI_TRUE && use_fifo_ui == JNI_TRUE;
@@ -747,6 +757,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            ZygiskContext ctx;
            ctx.env = env;
            ctx.fds_to_ignore = &fds_to_ignore;
+           ctx.child_zygote = &is_child_zygote;
            g_ctx = &ctx;
            ctx_fork_pre(&ctx); // real fork; child snapshots fds
            bool run_modules =
@@ -812,6 +823,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            ZygiskContext ctx;
            ctx.env = env;
            ctx.fds_to_ignore = &fds_to_ignore;
+           ctx.child_zygote = &is_child_zygote;
            g_ctx = &ctx;
            const bool fifo_ui =
                is_top_app == JNI_TRUE && use_fifo_ui == JNI_TRUE;
@@ -1244,7 +1256,7 @@ bool restore_jni_hooks(JNIEnv *env, int owner) {
 /* Drop the spent AT_ENTRY stub. */
 void yz_unmap_injection_stub() {
   zygisk_cleanup_tango_stub();
-  for (auto &m : lsplt::MapInfo::Scan()) {
+  for (auto &m : yukizygisk::MapInfo::Scan()) {
     if ((m.perms & (PROT_READ | PROT_WRITE | PROT_EXEC)) !=
             (PROT_READ | PROT_WRITE | PROT_EXEC) ||
         !m.path.empty() || m.end - m.start != 0x1000)
@@ -1282,22 +1294,35 @@ void hook_zygote_jni() {
     return;
   }
   // Fork early; specialize then runs in our child.
-  dev_t rt_dev = 0;
-  ino_t rt_inode = 0;
   bool fork_plt_hooked = false;
-  if (find_libandroid_runtime(rt_dev, rt_inode)) {
-    const auto report = yukizygisk::apply_plt(
-        false, {{rt_dev, rt_inode, "fork", reinterpret_cast<void *>(new_fork),
-                 reinterpret_cast<void **>(&g_orig_fork)}});
-    fork_plt_hooked = yukizygisk::plt_request_succeeded(report, 0) &&
-                      g_orig_fork != nullptr && g_orig_fork != new_fork;
+  {
+    yukizygisk::plt_lifecycle::Operation operation;
+    if (operation && g_runtime_ready && !g_fork_handle.valid() &&
+        g_fork_diagnostic.stage < yukiplt::OperationStage::kCommit) {
+      const yukiplt::HookRequest request{"fork",
+                                         reinterpret_cast<void *>(new_fork),
+                                         g_orig_fork.output_address()};
+      yukiplt::SlotReport slot;
+      auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
+          g_runtime_image, &request, 1, &slot, &g_fork_diagnostic);
+      fork_plt_hooked = result.ok();
+      g_fork_handle = std::move(result.handle);
+      yukizygisk::plt_lifecycle::set_recovery(
+          g_fork_recovery, !result.ok() && g_fork_handle.valid());
+      if (!result.ok())
+        ZLOGE("fork hook: %s cause=%s errno=%d",
+              yukiplt::error_name(result.error.code),
+              yukiplt::error_cause_name(g_fork_diagnostic.cause),
+              result.error.sys_errno);
+    }
   }
   if (!fork_plt_hooked) {
     ZLOGE("fork hook failed -- not hooking zygote natives");
     yz_unmap_injection_stub();
     return;
   }
-  ZLOGI("fork hook armed (orig=%p)", reinterpret_cast<void *>(g_orig_fork));
+  ZLOGI("fork hook armed (orig=%p)",
+        reinterpret_cast<void *>(g_orig_fork.load()));
   hook_jni_methods(env, kZygote, g_zygote_methods.data(),
                    static_cast<int>(kNativeZygoteInit),
                    yuki::ihook::UnhookMode::DiscardCowPages, -1);
@@ -1358,7 +1383,8 @@ bool yz_capture_outside(uintptr_t base, size_t span) {
 /* Drop libandroid_runtime header pages faulted by symbol scans. */
 void yz_drop_runtime_header_pages() {
   RuntimeHeaderRange range;
-  if (dl_iterate_phdr(find_runtime_header, &range) != 0 && range.size != 0)
+  if (core_system_iterate_phdr(find_runtime_header, &range) != 0 &&
+      range.size != 0)
     madvise(reinterpret_cast<void *>(range.start), range.size, MADV_DONTNEED);
 }
 
@@ -1366,27 +1392,41 @@ void yz_drop_runtime_header_pages() {
 bool zygisk_hook_bootstrap(const char *self_path) {
   ZLOGI("hook bootstrap, self=%s", self_path ? self_path : "(null)");
   g_zygote_pid = getpid();
-
-  if (!cache_libandroid_runtime()) {
-    ZLOGE("libandroid_runtime.so not mapped yet; cannot bootstrap");
-    return false;
+  {
+    yukizygisk::plt_lifecycle::Operation operation;
+    if (!operation || g_strdup_handle.valid() ||
+        g_strdup_diagnostic.stage >= yukiplt::OperationStage::kCommit)
+      return false;
+    try {
+      auto image = find_unique_image("libandroid_runtime.so");
+      if (!image) {
+        ZLOGE("bootstrap image: %s", yukiplt::error_name(image.error().code));
+        return false;
+      }
+      g_runtime_image = std::move(image.value());
+      g_runtime_ready = true;
+      const yukiplt::HookRequest request{"strdup",
+                                         reinterpret_cast<void *>(new_strdup),
+                                         g_strdup.output_address()};
+      yukiplt::SlotReport slot;
+      auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
+          g_runtime_image, &request, 1, &slot, &g_strdup_diagnostic);
+      g_strdup_handle = std::move(result.handle);
+      yukizygisk::plt_lifecycle::set_recovery(
+          g_strdup_recovery, !result.ok() && g_strdup_handle.valid());
+      if (!result.ok()) {
+        ZLOGE("bootstrap hook: %s cause=%s errno=%d",
+              yukiplt::error_name(result.error.code),
+              yukiplt::error_cause_name(g_strdup_diagnostic.cause),
+              result.error.sys_errno);
+        return false;
+      }
+    } catch (...) {
+      ZLOGE("bootstrap preparation failed");
+      return false;
+    }
   }
-  dev_t dev = 0;
-  ino_t inode = 0;
-  if (!find_libandroid_runtime(dev, inode))
-    return false;
-
-  const auto report = yukizygisk::apply_plt(
-      false, {{dev, inode, "strdup", reinterpret_cast<void *>(new_strdup),
-               reinterpret_cast<void **>(&g_strdup.original)}});
-  if (!yukizygisk::plt_request_succeeded(report, 0) ||
-      g_strdup.original == nullptr || g_strdup.original == new_strdup) {
-    ZLOGE("bootstrap PLT installation failed");
-    return false;
-  }
-
-  ZLOGI("lifecycle bootstrap armed on libandroid_runtime (dev=%u,%u inode=%lu)",
-        major(dev), minor(dev), static_cast<unsigned long>(inode));
+  ZLOGI("lifecycle bootstrap armed on %s", g_runtime_image.path.c_str());
   hook_art_post_fork_child(true);
   return true;
 }
@@ -1396,13 +1436,6 @@ void zygisk_hook_jni_methods(JNIEnv *env, const char *cls,
   hook_jni_methods(env, cls, methods, n, yuki::ihook::UnhookMode::RestoreBytes,
                    owner);
 }
-
-bool zygisk_plt_hook_register(dev_t dev, ino_t inode, const char *symbol,
-                              void *new_func, void **old_func) {
-  return lsplt::RegisterHook(dev, inode, symbol, new_func, old_func);
-}
-
-bool zygisk_plt_hook_commit() { return yukizygisk::commit_plt(true).success; }
 
 bool zygisk_exempt_fd(int fd) {
   if (g_ctx == nullptr || g_ctx->fds_to_ignore == nullptr || fd < 0)
@@ -1415,51 +1448,48 @@ bool zygisk_specialize_fully_inline_hooked() {
   return g_app_specialize_hooks_complete && !g_zygote_uses_fallback;
 }
 
+bool zygisk_original_output_allowed(void **output) {
+  return output == nullptr ||
+         (output != g_strdup.output_address() &&
+          output != g_orig_fork.output_address() &&
+          output != g_art_post_fork_child.output_address());
+}
+
 bool zygisk_restore_module_hooks(JNIEnv *env, int owner) {
   return owner >= 0 && restore_jni_hooks(env, owner);
 }
 
-/* Restore hooks before self-unmap. */
-bool zygisk_self_unhook(JNIEnv *env) {
-  if (g_art_hook.needs_cleanup())
-    retire_art_fork_hook();
-  const bool lifecycle_restored = restore_jni_hooks(env, -1);
-  bool unhooked =
-      lifecycle_restored && !g_art_hook.needs_cleanup() && g_jni_hooks.empty();
-  dev_t dev = 0;
-  ino_t inode = 0;
-  if (find_libandroid_runtime(dev, inode)) {
-    std::vector<lsplt::HookRequest> requests;
-    if (g_strdup.original != nullptr)
-      requests.push_back(yukizygisk::restore_plt(
-          dev, inode, "strdup", reinterpret_cast<void *>(g_strdup.original),
-          reinterpret_cast<void *>(new_strdup)));
-    if (g_orig_fork != nullptr)
-      requests.push_back(yukizygisk::restore_plt(
-          dev, inode, "fork", reinterpret_cast<void *>(g_orig_fork),
-          reinterpret_cast<void *>(new_fork)));
-    const auto report = yukizygisk::apply_plt(true, requests);
-    if (!report.success)
-      unhooked = false;
-  } else if (g_strdup.original != nullptr || g_orig_fork != nullptr) {
-    unhooked = false;
+/* Restore this core's hooks without touching module-owned hooks. */
+CoreCleanupResult zygisk_self_unhook(JNIEnv *env) {
+  CoreCleanupResult result;
+  retire_child_plt(true);
+  result.jni_restored = restore_jni_hooks(env, -1);
+  result.plt_pending =
+      g_art_handle.valid() || g_fork_handle.valid() || g_strdup_handle.valid();
+  result.plt_quiescent =
+      g_fork_quiet && g_strdup_quiet && g_art_quiet &&
+      g_plt_callbacks.load(std::memory_order_acquire) == 0 &&
+      (!g_art_requires_callback ||
+       g_art_completed_pid.load(std::memory_order_acquire) == getpid());
+  // Post-specialize descriptors may belong to resident modules or Java.
+  // A module-directory pathname does not transfer their ownership to Core.
+  ZLOGI("core cleanup: jni=%d plt_pending=%d quiescent=%d", result.jni_restored,
+        result.plt_pending, result.plt_quiescent);
+  return result;
+}
+
+bool zygisk_release_hook_storage() {
+  if (!g_jni_hooks.empty() || g_art_handle.valid() || g_fork_handle.valid() ||
+      g_strdup_handle.valid() ||
+      g_plt_callbacks.load(std::memory_order_acquire) != 0)
+    return false;
+  std::vector<JniHookRecord>().swap(g_jni_hooks);
+  std::string().swap(g_runtime_image.path);
+  std::string().swap(g_art_image.path);
+  if (g_ctx != nullptr) {
+    std::vector<bool>().swap(g_ctx->allowed_fds);
+    std::vector<int>().swap(g_ctx->exempted_fds);
+    g_ctx = nullptr;
   }
-  int nc = close_inherited_module_fds();
-  if (nc != 0)
-    ZLOGI("self-destruct: closed %d leaked module fd", nc);
-  if (unhooked && !lsplt::ReleaseInactiveCache())
-    unhooked = false;
-  if (yukizygisk::plt_lifetime.retain_core.load()) {
-    ZLOGE("self-unmap blocked: PLT callback lifetime is uncertain");
-    unhooked = false;
-  }
-  if (unhooked) {
-    std::vector<JniHookRecord>().swap(g_jni_hooks);
-    if (g_ctx != nullptr) {
-      std::vector<bool>().swap(g_ctx->allowed_fds);
-      std::vector<int>().swap(g_ctx->exempted_fds);
-      g_ctx = nullptr;
-    }
-  }
-  return unhooked;
+  return true;
 }

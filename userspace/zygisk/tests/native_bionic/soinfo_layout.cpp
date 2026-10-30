@@ -68,7 +68,7 @@ struct Fixture {
   alignas(void *) std::array<unsigned char, 1024> main_si{}, linker_si{},
       vdso_si{};
   char path[32] = "/system/bin/linker64";
-  std::vector<lsplt::MapInfo> maps;
+  std::vector<yukizygisk::MapInfo> maps;
   Image mi{}, li{};
 
   static uintptr_t address(const void *p) {

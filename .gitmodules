@@ -13,9 +13,6 @@
 [submodule "userspace/ksud/third_party/ndk-busybox"]
 	path = userspace/ksud/third_party/ndk-busybox
 	url = https://github.com/Rouyashiki/ndk-busybox.git
-[submodule "userspace/zygisk/third_party/lsplt"]
-	path = userspace/zygisk/third_party/lsplt
-	url = https://github.com/Rouyashiki/LSPlt.git
 [submodule "userspace/ksud/third_party/mkbootfsAlone"]
 	path = userspace/ksud/third_party/mkbootfsAlone
 	url = https://github.com/Rouyashiki/mkbootfsAlone.git
@@ -37,3 +34,6 @@
 [submodule "userspace/ksud/third_party/mbedtls"]
 	path = userspace/ksud/third_party/mbedtls
 	url = https://github.com/Rouyashiki/mbedtls.git
+[submodule "userspace/zygisk/third_party/yukiplt"]
+	path = userspace/zygisk/third_party/yukiplt
+	url = https://github.com/Rouyashiki/YukiPLT.git

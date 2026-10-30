@@ -11,6 +11,7 @@
 #endif // #ifndef YUKILINKER_FULL
 
 #include "yukilinker.hpp"
+#include "core_bindings.hpp"
 #include "load_config.hpp"
 #include "loader_handoff.hpp"
 #include "userspace/zygisk/endpoint.hpp"
@@ -19,6 +20,7 @@
 #include <android/dlext.h>
 #include <cerrno>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -389,6 +391,15 @@ struct ImageState {
 #endif // #if YUKILINKER_FULL
 };
 
+// Bootstrap retirement is serialized by its caller. Seal this loader copy
+// before releasing metadata; retries use only this DSO-owned record.
+struct BootstrapRetirement {
+  uintptr_t identity = 0;
+  yukizygisk::handoff::TakeDependencies receiver = nullptr;
+  bool complete = false;
+};
+BootstrapRetirement g_bootstrap_retirement;
+
 ImageState *g_first_image = nullptr;
 ImageState *g_last_image = nullptr;
 
@@ -436,8 +447,10 @@ void unregister_image(ImageState *image) {
 }
 
 ImageState *state_of(SoHandle *handle) {
-  return handle == nullptr ? nullptr
-                           : static_cast<ImageState *>(handle->private_state);
+  if (handle == nullptr ||
+      __atomic_load_n(&g_bootstrap_retirement.identity, __ATOMIC_ACQUIRE) != 0)
+    return nullptr;
+  return static_cast<ImageState *>(handle->private_state);
 }
 
 bool address_space_contains(const AddressSpace &memory, const void *pointer,
@@ -2137,6 +2150,8 @@ void release_failed_image(ImageState *image) {
 
 SoHandle *dlopen_memfd(int memfd, const char *vma_name, bool file_backed) {
   (void)vma_name;
+  if (__atomic_load_n(&g_bootstrap_retirement.identity, __ATOMIC_ACQUIRE) != 0)
+    return nullptr;
   struct stat status{};
   if (memfd < 0 || fstat(memfd, &status) != 0 || status.st_size <= 0)
     return nullptr;
@@ -2176,15 +2191,28 @@ SoHandle *dlopen_memfd(int memfd, const char *vma_name, bool file_backed) {
       parse_dynamic_tags(image, layout.dynamic_index, &dynamic) &&
       establish_symbol_count(image, dynamic);
   if (metadata_ready && requires_system_tls_runtime(image)) {
+    ZLOGE("yukilinker: image requires unsupported system TLS runtime");
     munmap(source, file_size);
     release_failed_image(image);
     return nullptr;
   }
   if (metadata_ready)
     build_symbol_index(image);
-  if (!metadata_ready || !open_dependencies(image, dynamic) ||
-      !activate_tls(image) || !relocate_image(image) ||
-      !restore_anonymous_protections(image) || !protect_relro(image)) {
+  const char *failed_stage = nullptr;
+  if (!metadata_ready)
+    failed_stage = "dynamic metadata";
+  else if (!open_dependencies(image, dynamic))
+    failed_stage = "dependencies";
+  else if (!activate_tls(image))
+    failed_stage = "TLS activation";
+  else if (!relocate_image(image))
+    failed_stage = "relocations";
+  else if (!restore_anonymous_protections(image))
+    failed_stage = "segment protections";
+  else if (!protect_relro(image))
+    failed_stage = "RELRO";
+  if (failed_stage != nullptr) {
+    ZLOGE("yukilinker: image load failed at %s", failed_stage);
     munmap(source, file_size);
     release_failed_image(image);
     return nullptr;
@@ -2270,9 +2298,11 @@ bool shutdown() {
   if (__atomic_load_n(&g_thread_tls_key_valid, __ATOMIC_ACQUIRE)) {
     auto *thread =
         static_cast<ThreadTlsState *>(pthread_getspecific(g_thread_tls_key));
-    pthread_setspecific(g_thread_tls_key, nullptr);
+    if (pthread_setspecific(g_thread_tls_key, nullptr) != 0)
+      return false;
     destroy_thread_tls_state(thread);
-    pthread_key_delete(g_thread_tls_key);
+    if (pthread_key_delete(g_thread_tls_key) != 0)
+      return false;
     __atomic_store_n(&g_thread_tls_key_valid, false, __ATOMIC_RELEASE);
   }
 #endif // #if YUKILINKER_FULL
@@ -2299,6 +2329,16 @@ bool shutdown() {
 
 bool release_bootstrap_metadata(SoHandle *handle,
                                 yukizygisk::handoff::TakeDependencies take) {
+  const uintptr_t retired =
+      __atomic_load_n(&g_bootstrap_retirement.identity, __ATOMIC_ACQUIRE);
+  if (retired != 0) {
+    if (retired != reinterpret_cast<uintptr_t>(handle) ||
+        take != g_bootstrap_retirement.receiver)
+      return false;
+    if (!g_bootstrap_retirement.complete)
+      g_bootstrap_retirement.complete = shutdown();
+    return g_bootstrap_retirement.complete;
+  }
   ImageState *image = state_of(handle);
   if (take == nullptr || image == nullptr || image->tls.active ||
       g_first_image != image || g_last_image != image)
@@ -2324,22 +2364,27 @@ bool release_bootstrap_metadata(SoHandle *handle,
   free(handles);
   if (!accepted)
     return false;
+  g_bootstrap_retirement.receiver = take;
+  __atomic_store_n(&g_bootstrap_retirement.identity,
+                   reinterpret_cast<uintptr_t>(handle), __ATOMIC_RELEASE);
   // Ownership moved to the core. Closing here could invalidate its imports.
   for (auto *dependency = image->dependencies; dependency != nullptr;
        dependency = dependency->next)
     dependency->system_handle = nullptr;
   unregister_image(image);
   handle->private_state = nullptr;
-  return shutdown();
+  g_bootstrap_retirement.complete = shutdown();
+  return g_bootstrap_retirement.complete;
 }
 
 bool prepare_bootstrap_retirement(SoHandle *core, bool has_finalizer,
                                   bool (*references_ready)(),
                                   yukizygisk::handoff::TakeDependencies take,
                                   yukizygisk::handoff::FinishHandoff finish) {
-  if (!has_finalizer || references_ready == nullptr || finish == nullptr ||
-      !references_ready()) {
-    ZLOGE("bootstrap handoff unverified; retaining loader and dependencies");
+  if (core_private_tsd_used() || !has_finalizer ||
+      references_ready == nullptr || finish == nullptr || !references_ready()) {
+    ZLOGI(
+        "bootstrap retirement unavailable; retaining loader and dependencies");
     return false;
   }
   if (core != nullptr && !release_bootstrap_metadata(core, take)) {
@@ -2428,82 +2473,244 @@ yuki_core_dlopen_memfd(int memfd, const char *vma_name, bool file_backed) {
   yukilinker::dlclose(static_cast<yukilinker::SoHandle *>(handle));
 }
 
-[[gnu::visibility("default")]] void yuki_bootstrap(int core_fd,
-                                                   int early_packet_fd_plus1) {
-  int packet_fd = early_packet_fd_plus1 > 0 ? early_packet_fd_plus1 - 1 : -1;
+struct TangoBootstrap {
+  uint32_t got;
+  uint32_t original;
+  uint32_t stub;
+};
+using FinalizeLoader = void (*)(int, int);
+using FinalizeTango = void (*)(uint32_t, uint32_t, uint32_t, int, int);
+struct BootstrapTarget {
+  FinalizeLoader normal = nullptr;
+  FinalizeTango tango = nullptr;
+};
+
+struct TangoProtection {
+  uintptr_t page = 0;
+  size_t size = 0;
+  int original = 0;
+};
+TangoProtection g_tango_protection;
+
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static bool tango_mapping_protection(uintptr_t page, size_t size,
+                                     int &protection) {
+  FILE *maps = fopen("/proc/self/maps", "re");
+  if (maps == nullptr)
+    return false;
+  char line[256];
+  bool beginning = true;
+  bool valid = true;
+  bool found = false;
+  unsigned long long previous_end = 0;
+  while (fgets(line, sizeof(line), maps) != nullptr) {
+    const bool complete = strchr(line, '\n') != nullptr;
+    if (!beginning) {
+      beginning = complete;
+      continue;
+    }
+    beginning = complete;
+    unsigned long long low = 0;
+    unsigned long long high = 0;
+    char permissions[5]{};
+    // Kernel-generated maps addresses fit the native address width.
+    // NOLINTNEXTLINE(cert-err34-c)
+    if (sscanf(line, "%llx-%llx %4s", &low, &high, permissions) != 3 ||
+        low >= high || low < previous_end) {
+      valid = false;
+      break;
+    }
+    previous_end = high;
+    if (page < low || page >= high || size > high - page)
+      continue;
+    if (found || permissions[0] != 'r' || permissions[2] != '-' ||
+        permissions[3] != 'p' ||
+        (permissions[1] != '-' && permissions[1] != 'w')) {
+      valid = false;
+      break;
+    }
+    protection = PROT_READ | (permissions[1] == 'w' ? PROT_WRITE : 0);
+    found = true;
+  }
+  valid = valid && beginning && ferror(maps) == 0;
+  const int closed = fclose(maps);
+  return valid && closed == 0 && found;
+}
+
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static bool finish_tango_protection() {
+  if (g_tango_protection.page == 0)
+    return true;
+  int actual = 0;
+  if (!tango_mapping_protection(g_tango_protection.page,
+                                g_tango_protection.size, actual))
+    return false;
+  if (actual != g_tango_protection.original) {
+    if (actual != (g_tango_protection.original | PROT_WRITE) ||
+        mprotect(reinterpret_cast<void *>(g_tango_protection.page),
+                 g_tango_protection.size, g_tango_protection.original) != 0)
+      return false;
+  }
+  g_tango_protection = {};
+  return true;
+}
+
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static bool restore_tango_slot(const TangoBootstrap &tango) {
+  const long queried = sysconf(_SC_PAGESIZE);
+  if (queried <= 0 || (queried & (queried - 1)) != 0 || tango.got == 0 ||
+      (tango.got & 3U) != 0 || tango.original == 0 || tango.stub == 0 ||
+      tango.stub > UINT32_MAX - YZ_TANGO_BOOTSTRAP_SIZE)
+    return false;
+  const size_t size = static_cast<size_t>(queried);
+  const uintptr_t page = static_cast<uintptr_t>(tango.got) & ~(size - 1);
+  if (g_tango_protection.page != 0 &&
+      (g_tango_protection.page != page || !finish_tango_protection()))
+    return false;
+  int protection = 0;
+  if (!tango_mapping_protection(page, size, protection))
+    return false;
+  auto *slot = reinterpret_cast<uint32_t *>(static_cast<uintptr_t>(tango.got));
+  const uint32_t current = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
+  if (current == tango.original)
+    return true;
+  if (current != (tango.stub | 1U))
+    return false;
+  if ((protection & PROT_WRITE) == 0) {
+    if (mprotect(reinterpret_cast<void *>(page), size,
+                 protection | PROT_WRITE) != 0)
+      return false;
+    g_tango_protection = {page, size, protection};
+  }
+  uint32_t expected = tango.stub | 1U;
+  const bool restored =
+      __atomic_compare_exchange_n(slot, &expected, tango.original, false,
+                                  __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+  const bool protected_again =
+      g_tango_protection.page == 0 ||
+      mprotect(reinterpret_cast<void *>(page), size, protection) == 0;
+  if (protected_again)
+    g_tango_protection = {};
+  return protected_again && (restored || expected == tango.original);
+}
+
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static BootstrapTarget prepare_bootstrap(int core_fd, int early_packet_fd_plus1,
+                                         const TangoBootstrap *tango) {
+  const int packet_fd =
+      early_packet_fd_plus1 > 0 ? early_packet_fd_plus1 - 1 : -1;
   if (core_fd < 0) {
     close_early_packet(packet_fd);
-    return;
+    return {};
   }
-
   if (!yukizygisk::endpoint::initialize(packet_fd, false)) {
     raw_close_descriptor(core_fd);
     close_early_packet(packet_fd);
-    return;
+    return {};
+  }
+  if (tango != nullptr && !restore_tango_slot(*tango)) {
+    raw_close_descriptor(core_fd);
+    close_early_packet(packet_fd);
+    return {};
   }
   yz_config config = yukizygisk::config::early_config(packet_fd);
   (void)yukizygisk::config::read_runtime(&config);
-  yukilinker::SoHandle *core = nullptr;
-  void *system_core = nullptr;
-  if (config.yukilinker) {
-    core = yukilinker::dlopen_memfd(core_fd, "",
-                                    !yukizygisk::config::anonymous(config));
-  } else {
-    android_dlextinfo ext{};
-    ext.flags = ANDROID_DLEXT_USE_LIBRARY_FD | ANDROID_DLEXT_FORCE_LOAD;
-    ext.library_fd = core_fd;
-    system_core = android_dlopen_ext("/jit-cache", RTLD_NOW, &ext);
-  }
+  auto *core = yukilinker::dlopen_memfd(core_fd, kCorePath, false);
   raw_close_descriptor(core_fd);
-  if (core == nullptr && system_core == nullptr) {
+  if (core == nullptr) {
+    ZLOGE("yukilinker: bootstrap failed at anonymous Core load");
     close_early_packet(packet_fd);
-    return;
+    return {};
   }
-
-  const auto symbol = [core, system_core](const char *name) {
-    return core != nullptr ? yukilinker::dlsym(core, name)
-                           : ::dlsym(system_core, name);
+  const auto symbol = [core](const char *name) {
+    return yukilinker::dlsym(core, name);
   };
   using CoreEntry = void (*)(const char *, void *, void *, void *, int);
-  auto entry = reinterpret_cast<CoreEntry>(symbol("zygisk_core_entry"));
-  if (entry == nullptr) {
-    if (core != nullptr)
-      yukilinker::dlclose(core);
-    else
-      ::dlclose(system_core);
-    close_early_packet(packet_fd);
-    return;
-  }
   using SetConfig = void (*)(const yz_config *);
+  using AdoptImage = bool (*)(uintptr_t, size_t, void *);
+  using SetTango = bool (*)(uint32_t, uint32_t);
+  using Ready = bool (*)();
+  auto entry = reinterpret_cast<CoreEntry>(symbol("zygisk_core_entry"));
   auto set_config =
       reinterpret_cast<SetConfig>(symbol("zygisk_set_load_config"));
-  if (set_config != nullptr)
-    set_config(&config);
-  entry(kCorePath, reinterpret_cast<void *>(&yuki_bootstrap),
-        core != nullptr ? reinterpret_cast<void *>(core->load_bias) : nullptr,
-        core != nullptr ? reinterpret_cast<void *>(core->map_size) : nullptr,
-        early_packet_fd_plus1);
-  using FinalizeLoader = void (*)(int, int);
+  auto adopt =
+      reinterpret_cast<AdoptImage>(symbol("zygisk_adopt_anonymous_image"));
   auto finalize =
       reinterpret_cast<FinalizeLoader>(symbol("zygisk_finalize_loader"));
-  using HandoffReady = bool (*)();
-  auto references_ready =
-      reinterpret_cast<HandoffReady>(symbol("zygisk_bootstrap_handoff_ready"));
-  auto take_dependencies =
-      reinterpret_cast<yukizygisk::handoff::TakeDependencies>(
-          symbol("zygisk_bootstrap_take_dependencies"));
-  auto finish_handoff = reinterpret_cast<yukizygisk::handoff::FinishHandoff>(
+  auto finalize_tango =
+      reinterpret_cast<FinalizeTango>(symbol("zygisk_finalize_loader_tango"));
+  auto set_tango = reinterpret_cast<SetTango>(symbol("zygisk_set_tango_stub"));
+  auto ready =
+      reinterpret_cast<Ready>(symbol("zygisk_bootstrap_handoff_ready"));
+  auto take = reinterpret_cast<yukizygisk::handoff::TakeDependencies>(
+      symbol("zygisk_bootstrap_take_dependencies"));
+  auto finish = reinterpret_cast<yukizygisk::handoff::FinishHandoff>(
       symbol("zygisk_bootstrap_finish_handoff"));
-  if (!yukilinker::prepare_bootstrap_retirement(
-          core, finalize != nullptr, references_ready, take_dependencies,
-          finish_handoff)) {
-    yukizygisk::endpoint::release();
-    return;
+  if (entry == nullptr || adopt == nullptr || finalize == nullptr ||
+      ready == nullptr || take == nullptr || finish == nullptr ||
+      (tango != nullptr &&
+       (finalize_tango == nullptr || set_tango == nullptr))) {
+    ZLOGE("yukilinker: bootstrap failed at Core entry lookup");
+    yukilinker::dlclose(core);
+    close_early_packet(packet_fd);
+    return {};
   }
-  yukilinker::finalize_self_dso();
+  if (set_config != nullptr)
+    set_config(&config);
+  if (tango != nullptr && !set_tango(tango->stub, YZ_TANGO_BOOTSTRAP_SIZE)) {
+    ZLOGE("yukilinker: bootstrap failed at Tango handoff");
+    yukilinker::dlclose(core);
+    close_early_packet(packet_fd);
+    return {};
+  }
+  void *loader_handle = yukizygisk::handoff::bootstrap_reference(
+      reinterpret_cast<void *>(raw_close_descriptor), "yuki_bootstrap",
+      sizeof(void *) == 8 ? "libyukilinker64.so" : "libyukilinker32.so");
+  if (loader_handle == nullptr) {
+    ZLOGE("yukilinker: bootstrap failed at loader reference lookup");
+    yukilinker::dlclose(core);
+    close_early_packet(packet_fd);
+    return {};
+  }
+  if (!adopt(reinterpret_cast<uintptr_t>(core->load_bias), core->map_size,
+             loader_handle)) {
+    ZLOGE("yukilinker: bootstrap failed at anonymous Core adoption");
+    yukilinker::dlclose(core);
+    close_early_packet(packet_fd);
+    return {};
+  }
+  entry(kCorePath, reinterpret_cast<void *>(raw_close_descriptor),
+        reinterpret_cast<void *>(core->load_bias),
+        reinterpret_cast<void *>(core->map_size), early_packet_fd_plus1);
+  if (!yukilinker::prepare_bootstrap_retirement(core, true, ready, take,
+                                                finish)) {
+    ZLOGE("yukilinker: bootstrap retirement incomplete");
+    yukizygisk::endpoint::release();
+    return {};
+  }
   yukizygisk::endpoint::release();
-  if (finalize != nullptr) [[clang::musttail]]
-    return finalize(0, 0); // NOLINT(readability-avoid-return-with-void-value)
+  return {finalize, finalize_tango};
 }
+
+[[gnu::visibility("default")]] void yuki_bootstrap(int core_fd,
+                                                   int early_packet_fd_plus1) {
+  const auto target =
+      prepare_bootstrap(core_fd, early_packet_fd_plus1, nullptr);
+  if (target.normal != nullptr) [[clang::musttail]]
+    // NOLINTNEXTLINE(readability-avoid-return-with-void-value)
+    return target.normal(0, 0);
+}
+
+#if defined(__arm__)
+[[gnu::visibility("default")]] void
+yuki_bootstrap_tango(uint32_t got, uint32_t original, uint32_t stub,
+                     int core_fd, int early_packet_fd_plus1) {
+  const TangoBootstrap tango{got, original, stub};
+  const auto target = prepare_bootstrap(core_fd, early_packet_fd_plus1, &tango);
+  if (target.tango != nullptr) [[clang::musttail]]
+    return target.tango(0, 0, 0, 0,
+                        0); // NOLINT(readability-avoid-return-with-void-value)
+}
+#endif
 
 } // extern "C"

@@ -12,13 +12,10 @@ def generate(root, build):
     source = (core / 'solist.cpp').read_text()
     (build / 'ctor_writer_under_test.inc').write_text(function(source, 'inline void u_set_ctor('))
     generate_linker(core, build)
-    lsplt = root / 'userspace/zygisk/third_party/lsplt/lsplt/src/main/jni/lsplt.cc'
-    scan = function(lsplt.read_text(), '[[maybe_unused]] std::vector<MapInfo> MapInfo::Scan(')
     begin = source.index('/* Runtime soinfo unload glue. */')
     end = source.index('\n} // namespace', begin)
     runtime = source[begin:end]
     (build / 'layout_runtime_under_test.inc').write_text(
-        'namespace lsplt { inline namespace v2 {\n' + scan + '\n}}\n'
         'namespace yuki::solist { namespace {\n'
         '#define SLOGE(...) ((void)fprintf(stderr, __VA_ARGS__))\n'
         '#define SLOGI(...) ((void)printf(__VA_ARGS__))\n'
@@ -34,12 +31,13 @@ def build_one(root, build, compiler, flags, runner=None):
     fixture = root / 'userspace/zygisk/tests/native_bionic'
     command = [str(compiler), '-std=c++17', '-O1', '-g', '-fno-exceptions', '-fno-rtti',
                *flags, '-I' + str(build), '-I' + str(root / 'userspace/zygisk/core/src'),
-               '-I' + str(root / 'userspace/zygisk/third_party/lsplt/lsplt/src/main/jni/include')]
+               '-I' + str(root / 'userspace/zygisk/core/src')]
+    maps = root / 'userspace/zygisk/core/src/process_maps.cpp'
     run([*command, fixture / 'soinfo_layout.cpp', '-o', build / 'soinfo_layout'])
     if runner is not None:
         run([*runner, build / 'soinfo_layout'], cwd=build)
     if any('--target=' in flag for flag in flags):
-        run([*command, fixture / 'soinfo_layout_bionic.cpp', '-ldl',
+        run([*command, fixture / 'soinfo_layout_bionic.cpp', maps, '-fexceptions', '-ldl',
              '-o', build / 'soinfo_layout_bionic'])
         run([*command, '-shared', '-fPIC', fixture / 'caller_anchor_payload.cpp',
              '-o', build / 'payload.so'])

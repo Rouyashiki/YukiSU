@@ -49,8 +49,6 @@ def generate(core, build):
             'std::string module_id_of(', 'bool load_native_module_from_fd(')))
     (build / 'native_map_under_test.inc').write_text(
         function(source, 'bool map_from_base('))
-    (build / 'native_plt_under_test.inc').write_text(
-        function(source, 'int api_plt_hook('))
 
 
 def run(command, **kwargs):
@@ -61,30 +59,21 @@ def run(command, **kwargs):
 def build_tests(root, build, compiler, flags, runner=None):
     core = root / 'userspace/zygisk/core/src'
     sources = Path(__file__).with_name('native_bionic')
-    lsplt = root / 'userspace/zygisk/third_party/lsplt/lsplt/src/main/jni'
+    vendor = root / 'userspace/zygisk/third_party/yukiplt'
     build.mkdir(parents=True, exist_ok=True)
     generate(core, build)
     common = [*compiler, '-std=c++17', '-O1', '-g', '-fPIC', '-fno-exceptions', '-fno-rtti', *flags,
               '-I' + str(root), '-I' + str(core), '-I' + str(build),
               '-I' + str(core.parents[1] / 'include'),
-              '-I' + str(lsplt / 'include'), '-I' + str(lsplt),
+              '-I' + str(vendor / 'include'),
               '-DLOG_DISABLED', '-DDT_ANDROID_REL=0x6000000f',
               '-DDT_ANDROID_RELSZ=0x60000010', '-DDT_ANDROID_RELA=0x60000011',
               '-DDT_ANDROID_RELASZ=0x60000012']
     android = any('--target=' in flag for flag in flags)
-    elf_source = lsplt / 'elf_util.cc'
     if not android:
-        common += ['-I' + str(lsplt.parents[3] / 'test/host'), '-I' + str(sources / 'host')]
-        # glibc rebases DT_* pointers in place; Bionic leaves them relative.
-        elf = elf_source.read_text()
-        old = 'auto val = bias + off;'
-        assert elf.count(old) == 1
-        elf = elf.replace(old, 'auto val = off >= base ? off : bias + off;')
-        old = 'bias_addr_ + dynamic->d_un.d_ptr'
-        assert elf.count(old) == 2
-        elf = elf.replace(old, '(dynamic->d_un.d_ptr >= base_addr_ ? dynamic->d_un.d_ptr : bias_addr_ + dynamic->d_un.d_ptr)')
-        elf_source = build / 'elf_util_glibc_adapter.cc'
-        elf_source.write_text(elf)
+        common += ['-I' + str(sources / 'host')]
+    from run_plt_tests import build_backend
+    build_backend(root, build, compiler, flags)
 
     def library(name, source, extra=()):
         run([*common, '-shared', sources / source, *extra,
@@ -101,7 +90,7 @@ def build_tests(root, build, compiler, flags, runner=None):
     library('null', 'invalid.cpp', ['-DNULL_ENTRY'])
     (build / 'malformed.so').write_bytes(b'not an ELF shared object\n')
     run([*common, '-fPIE', '-pie', sources / 'runner.cpp',
-         lsplt / 'lsplt.cc', elf_source,
+         '-lyz_plt_backend', core / 'process_maps.cpp', '-fexceptions',
          '-L' + str(build), '-lyz_native_target', '-ldl',
          '-Wl,--export-dynamic', '-Wl,-z,now', '-Wl,-rpath,$ORIGIN',
          '-o', build / 'native_bionic_test'])
@@ -153,7 +142,7 @@ def main():
                                 ('armeabi-v7a', 'armv7a-linux-androideabi31')]:
                 build_tests(root, out / abi, compiler,
                             ['--target=' + target, '--sysroot=' + str(toolchain / 'sysroot'),
-                             '-static-libstdc++'])
+                             '-lc++_shared'])
         else:
             build_tests(root, out / 'host', [os.environ.get('CXX', 'clang++')],
                         ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'], [])

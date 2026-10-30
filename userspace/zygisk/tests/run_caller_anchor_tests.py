@@ -24,7 +24,7 @@ def build_one(root, build, compiler, flags, runner=None):
     command = [*compiler, '-std=c++17', '-O1', '-g', '-fno-exceptions', '-fno-rtti',
                *flags,
                '-I' + str(core), '-I' + str(build),
-               '-I' + str(root / 'userspace/zygisk/third_party/lsplt/lsplt/src/main/jni/include')]
+               '-I' + str(core)]
     if not android:
         command += ['-I' + str(fixture / 'host')]
     run([*command, fixture / 'caller_anchor.cpp', '-ldl', '-o', build / 'caller_anchor_test'])

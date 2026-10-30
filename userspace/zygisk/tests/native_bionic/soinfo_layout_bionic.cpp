@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
   main_padding[0] = 1;
   main_padding[sizeof(main_padding) - 1] = 2;
   CHECK(yuki::solist::u_init());
-  const auto maps = lsplt::MapInfo::Scan();
+  const auto maps = yukizygisk::MapInfo::Scan();
   yuki::solist::layout::Image executable;
   CHECK(yuki::solist::layout::main_image({maps}, getauxval(AT_PHDR),
                                          getauxval(AT_PHNUM), getpagesize(),
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
   CHECK(yuki::solist::drop_lib_containing(address, keep) == 1);
   Dl_info identity{};
   CHECK(dladdr(reinterpret_cast<void *>(address), &identity) == 0);
-  const auto after = lsplt::MapInfo::Scan();
+  const auto after = yukizygisk::MapInfo::Scan();
   CHECK(yuki::solist::layout::Memory{after}.covers(address & ~uintptr_t{1},
                                                    1) == keep);
   if (keep)

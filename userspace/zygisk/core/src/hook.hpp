@@ -12,7 +12,14 @@ void zygisk_cleanup_tango_stub();
 
 /* 0=inject, 1=inject+umount, 2=skip+umount. */
 int zygisk_inject_decision(int uid);
-bool zygisk_self_unhook(JNIEnv *env);
+struct CoreCleanupResult {
+  bool jni_restored = false;
+  bool plt_pending = false;
+  bool plt_quiescent = false;
+};
+CoreCleanupResult zygisk_self_unhook(JNIEnv *env);
+bool zygisk_release_hook_storage();
+bool zygisk_original_output_allowed(void **output);
 bool zygisk_restore_module_hooks(JNIEnv *env, int owner);
 bool yz_capture_ready();
 bool yz_capture_outside(uintptr_t base, size_t span);
@@ -30,8 +37,4 @@ void zygisk_run_server_post(JNIEnv *env,
 /* Module API hook glue. */
 void zygisk_hook_jni_methods(JNIEnv *env, const char *cls,
                              JNINativeMethod *methods, int n, int owner);
-bool zygisk_plt_hook_register(dev_t dev, ino_t inode, const char *symbol,
-                              void *new_func, void **old_func);
-bool zygisk_plt_hook_commit();
-
 bool zygisk_exempt_fd(int fd);

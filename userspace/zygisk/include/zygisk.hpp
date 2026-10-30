@@ -32,6 +32,13 @@
 
 namespace zygisk {
 
+// Read a live PLT original after the replacement becomes reachable.
+template <typename Function>
+inline Function loadPltOriginal(const Function &original) {
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  return __atomic_load_n(&original, __ATOMIC_ACQUIRE);
+}
+
 struct Api;
 struct AppSpecializeArgs;
 struct ServerSpecializeArgs;
@@ -165,6 +172,9 @@ struct Api {
 
   // Register a PLT hook: for the ELF identified by (dev, inode), replace
   // `symbol` with `newFunc`; if `oldFunc` != nullptr, save the original.
+  // The YukiPLT host requires a unique, non-null JUMP_SLOT and one owner.
+  // Keep original storage alive and read it with loadPltOriginal; do not reuse
+  // it.
   void pltHookRegister(dev_t dev, ino_t inode, const char *symbol,
                        void *newFunc, void **oldFunc);
 

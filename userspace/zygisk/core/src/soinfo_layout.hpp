@@ -1,6 +1,6 @@
 #pragma once
 
-#include <lsplt.hpp>
+#include "process_maps.hpp"
 
 #include <elf.h>
 #include <link.h>
@@ -14,7 +14,7 @@
 namespace yuki::solist::layout {
 
 struct Memory {
-  const std::vector<lsplt::MapInfo> &maps;
+  const std::vector<yukizygisk::MapInfo> &maps;
 
   [[nodiscard]] bool covers(uintptr_t address, size_t size,
                             bool readable = true) const {

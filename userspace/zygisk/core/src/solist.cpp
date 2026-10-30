@@ -1,7 +1,9 @@
-#include "solist.hpp"
+#include "core_bindings.hpp"
+
 #include "log.hpp"
 #include "native_bionic.hpp"
 #include "soinfo_layout.hpp"
+#include "solist.hpp"
 
 #include <climits>
 #include <elf.h>
@@ -581,7 +583,7 @@ bool u_init() {
     return false;
   }
 
-  const auto maps = lsplt::MapInfo::Scan();
+  const auto maps = yukizygisk::MapInfo::Scan();
   const layout::Memory memory{maps};
   void *somain = nullptr, *vdso = nullptr;
   if (!memory.read(head_var, g_solist_head) ||
@@ -1031,7 +1033,8 @@ int spoof_loaded_object_maps(uintptr_t address, bool private_only) {
 #endif
   LoadedObjectScan scan;
   scan.address = address;
-  if (dl_iterate_phdr(collect_loaded_object, &scan) == 0 || scan.count == 0)
+  if (core_system_iterate_phdr(collect_loaded_object, &scan) == 0 ||
+      scan.count == 0)
     return 0;
   if (!private_only)
     SLOGI("maps-spoof: loaded objects are private mappings");

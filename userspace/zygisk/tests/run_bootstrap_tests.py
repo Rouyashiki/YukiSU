@@ -22,9 +22,13 @@ arrays = section(injector, 'static const u32 tmpl[]', '\n\t\tu32 code[')
 patch = section(injector, '\t\tif (yuki)\n\t\t\tcleanup_fds', '\n\t\tif (yuki) {\n\t\t\tlib_str')
 patch_imm = section(injector, 'static void __maybe_unused yz_patch_imm64', '\n/* bionic').replace('__maybe_unused ', '')
 tango_function = section(tango, 'static void yz_tango_bootstrap', '\nstatic bool yz_tango_claim')
-tango_size = re.search(r'#define YZ_TANGO_STUB_SIZE (\d+)', tango).group(1)
+tango_size = re.search(r'#define YZ_TANGO_BOOTSTRAP_SIZE (\d+)',
+                       (root / 'uapi/yukizygisk.h').read_text()).group(1)
+loader = (root / 'userspace/zygisk/core/src/yukilinker.cpp').read_text()
+tango_restore = section(loader, 'struct TangoProtection {', 'static BootstrapTarget prepare_bootstrap(')
 
-fixture = '''
+
+fixture = ('''
 using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
@@ -62,7 +66,8 @@ static void prepare(void *stub, uintptr_t saved, uintptr_t dlopen_addr,
   strcpy(reinterpret_cast<char *>(bytes + 0xc00), "test-loader.so");
   strcpy(reinterpret_cast<char *>(bytes + 0xd00), "test-entry");
 }
-''' + f'#define YZ_TANGO_STUB_SIZE {tango_size}\n' + tango_function
+''' + f'#define YZ_TANGO_STUB_SIZE {tango_size}\n' + tango_function + '\n' +
+    'struct TangoBootstrap { uint32_t got, original, stub; };\n' + tango_restore)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--abi', choices=('32', '64', 'all'), default='all')
@@ -76,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix='yz-bootstrap-') as directory:
         compiler = arch + '-linux-' + ('gnu' if abi == '64' else 'gnueabihf') + '-g++'
         binary = build / ('bootstrap' + abi)
         command = [compiler, '-std=c++17', '-O2', '-static', '-pthread',
-                   '-I' + str(build), '-I' + str(root), '-I' + str(root / 'kernel'),
+                   '-Wl,--wrap=mprotect', '-I' + str(build), '-I' + str(root), '-I' + str(root / 'kernel'),
                    str(root / 'userspace/zygisk/tests/bootstrap_stub_test.cpp'),
                    str(root / 'userspace/zygisk/endpoint.cpp'), '-o', str(binary)]
         if abi == '32':

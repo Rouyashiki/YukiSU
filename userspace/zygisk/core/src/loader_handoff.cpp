@@ -250,7 +250,8 @@ bool pointer_relocation(uint64_t info) {
 
 Result verify_snapshot(const Maps &maps, uintptr_t core, size_t size,
                        uintptr_t loader_reference,
-                       const uintptr_t *capabilities, size_t count) {
+                       const uintptr_t *capabilities, size_t count,
+                       bool system_tls = false) {
   Image self, loader;
   Map identity{};
   if (!image_at(maps, core, self) || size == 0 || size > UINTPTR_MAX - core ||
@@ -270,8 +271,8 @@ Result verify_snapshot(const Maps &maps, uintptr_t core, size_t size,
         return {false, "invalid dynamic segment"};
       dynamic_size = segment.p_memsz;
     }
-    if (segment.p_type == PT_TLS && segment.p_memsz != 0)
-      return {false, "bootstrap TLS ownership is unsupported"};
+    if (!system_tls && segment.p_type == PT_TLS && segment.p_memsz != 0)
+      return {false, "anonymous TLS ownership is not transferable", 0, 0, true};
   }
   if (dynamic_size == 0 || dynamic_size % sizeof(ElfW(Dyn)) != 0 ||
       !contains(self, dynamic, dynamic_size) ||
@@ -375,6 +376,33 @@ Result verify_snapshot(const Maps &maps, uintptr_t core, size_t size,
              sizeof(relocation));
       if (relocation.r_info == 0)
         continue;
+#if defined(__aarch64__)
+      if (system_tls && ELF64_R_SYM(relocation.r_info) == 0 &&
+          ELF64_R_TYPE(relocation.r_info) == R_AARCH64_TLSDESC) {
+        uintptr_t descriptor = 0;
+        if (!add(core, relocation.r_offset, descriptor) ||
+            !contains(self, descriptor, 2 * sizeof(uintptr_t)) ||
+            !readable(maps, descriptor, 2 * sizeof(uintptr_t)))
+          return {false, "invalid Bionic TLS descriptor", descriptor};
+        const auto result = check_slot(relocation.r_offset);
+        if (!result.complete)
+          return result;
+        continue;
+      }
+#elif defined(__arm__)
+      if (system_tls && ELF32_R_SYM(relocation.r_info) == 0 &&
+          ELF32_R_TYPE(relocation.r_info) == R_ARM_TLS_DTPMOD32) {
+        uintptr_t slot = 0, module = 0;
+        if (!add(core, relocation.r_offset, slot) ||
+            !contains(self, slot, sizeof(module)) ||
+            !readable(maps, slot, sizeof(module)))
+          return {false, "invalid Bionic TLS module slot", slot};
+        memcpy(&module, reinterpret_cast<void *>(slot), sizeof(module));
+        if (module == 0)
+          return {false, "unbound Bionic TLS module", slot};
+        continue;
+      }
+#endif
       if (!pointer_relocation(relocation.r_info))
         return {false, "unsupported relocation type"};
       const auto result = check_slot(relocation.r_offset);
@@ -407,15 +435,21 @@ Result verify_loaded(uintptr_t core_reference, uintptr_t loader,
       !contains(self, core_reference, 1))
     return {false, "Bionic core bounds unavailable"};
   return verify_snapshot(maps, self.bias, self.end - self.bias, loader,
-                         capabilities, count);
+                         capabilities, count, true);
 }
 
 } // namespace yukizygisk::handoff
 
 namespace {
 void **g_bootstrap_dependencies = nullptr;
+size_t g_dependency_count = 0;
+uintptr_t g_anonymous_base = 0;
+size_t g_anonymous_span = 0;
 bool g_dependencies_transferred = false;
 bool g_retirement_ready = false;
+void *g_system_core_handle = nullptr;
+void *g_system_loader_handle = nullptr;
+void core_identity_anchor() {}
 } // namespace
 
 bool yukizygisk::handoff::retirement_ready() { return g_retirement_ready; }
@@ -445,9 +479,90 @@ zygisk_bootstrap_take_dependencies(void *const *handles, size_t count) {
       return false;
     std::copy_n(handles, count, owned);
   }
-  // Anonymous cores have no Bionic dependency edges. Pin the transferred
-  // references for process lifetime, including after a child retires its core.
+  // Transfer exactly the references acquired by the first stage.
   g_bootstrap_dependencies = owned;
+  g_dependency_count = count;
   g_dependencies_transferred = true;
+  return true;
+}
+
+extern "C" [[gnu::visibility("default")]] bool
+zygisk_adopt_bootstrap_handles(void *core, void *loader) {
+  if (core == nullptr || g_system_core_handle != nullptr)
+    return false;
+  Dl_info self{}, found{};
+  const void *entry = dlsym(core, "zygisk_bootstrap_finish_handoff");
+  if (entry == nullptr ||
+      dladdr(reinterpret_cast<void *>(core_identity_anchor), &self) == 0 ||
+      dladdr(entry, &found) == 0 || self.dli_fbase != found.dli_fbase)
+    return false;
+  if (loader != nullptr) {
+    const void *bootstrap = dlsym(loader, "yuki_bootstrap");
+    if (bootstrap == nullptr || dladdr(bootstrap, &found) == 0 ||
+        found.dli_fbase == self.dli_fbase)
+      return false;
+  }
+  g_system_core_handle = core;
+  g_system_loader_handle = loader;
+  return true;
+}
+
+bool yukizygisk::handoff::adopt_anonymous_loader(uintptr_t base, size_t span,
+                                                 void *loader) {
+  const uintptr_t anchor = reinterpret_cast<uintptr_t>(core_identity_anchor);
+  if (base == 0 || span == 0 || span > UINTPTR_MAX - base || anchor < base ||
+      anchor - base >= span || loader == nullptr ||
+      g_system_loader_handle != nullptr || g_system_core_handle != nullptr ||
+      g_anonymous_base != 0)
+    return false;
+  const void *bootstrap = dlsym(loader, "yuki_bootstrap");
+  Dl_info provider{};
+  if (bootstrap == nullptr || dladdr(bootstrap, &provider) == 0 ||
+      (reinterpret_cast<uintptr_t>(bootstrap) >= base &&
+       reinterpret_cast<uintptr_t>(bootstrap) - base < span))
+    return false;
+  g_anonymous_base = base;
+  g_anonymous_span = span;
+  g_system_loader_handle = loader;
+  return true;
+}
+
+bool yukizygisk::handoff::anonymous_image_matches(uintptr_t base, size_t span) {
+  return base != 0 && base == g_anonymous_base && span == g_anonymous_span;
+}
+
+bool yukizygisk::handoff::release_dependencies() {
+  if (!g_dependencies_transferred)
+    return false;
+  for (size_t i = g_dependency_count; i != 0; --i) {
+    void *&handle = g_bootstrap_dependencies[i - 1];
+    if (handle != nullptr) {
+      if (dlclose(handle) != 0)
+        return false;
+      handle = nullptr;
+    }
+  }
+  // The POD handoff retains this allocation across retirement retries.
+  // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
+  free(static_cast<void *>(g_bootstrap_dependencies));
+  g_bootstrap_dependencies = nullptr;
+  g_dependency_count = 0;
+  return true;
+}
+
+bool yukizygisk::handoff::owns_core_reference() {
+  return g_system_core_handle != nullptr;
+}
+void *yukizygisk::handoff::take_core_reference() {
+  void *handle = g_system_core_handle;
+  g_system_core_handle = nullptr;
+  return handle;
+}
+bool yukizygisk::handoff::close_loader_reference() {
+  if (g_system_loader_handle == nullptr)
+    return false;
+  if (dlclose(g_system_loader_handle) != 0)
+    return false;
+  g_system_loader_handle = nullptr;
   return true;
 }

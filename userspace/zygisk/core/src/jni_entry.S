@@ -5,7 +5,7 @@
  * passes through the inline-hook capture trampoline that records the caller
  * context. Each stub records the same context into g_yz_ret_ctx and then
  * tail-branches to the C++ wrapper, which lets yz_self_unmap_tail restore a
- * continuation outside the core before unmapping it.
+ * continuation outside the core before the anonymous mapping is released.
  *
  * The saved layout matches yz_self_unmap_tail:
  *   AArch64  x19-x28, x29, x30, sp, d8-d15

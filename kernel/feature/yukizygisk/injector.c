@@ -403,7 +403,9 @@ static void yz_inject_tw_func(struct callback_head *cb)
 		dlopen_addr = at_base + dlopen_off;
 		dlsym_addr = at_base + dlsym_off;
 
-		yuki = native || yz_yukilinker_enabled;
+		/* Core always uses the anonymous bootstrap; userspace selects
+		 * module policy. */
+		yuki = true;
 		loader_path =
 		    native && tw->early_native
 			? yz_early_loader_path(compat)
@@ -696,12 +698,14 @@ void yz_tango_linker_offsets(u64 *dlopen, u64 *dlsym)
 	*dlsym = READ_ONCE(yz_dlsym32_off);
 }
 
-int yz_tango_prepare(u32 *generation)
+int yz_tango_prepare(u32 *generation, int *core_fd)
 {
 	struct ksu_file_load_policy *policy;
 	char socket_name[YZ_ZYGOTE_NAME_MAX];
 	char process[YZ_RUNTIME_PROCESS_MAX];
 	int fd;
+
+	*core_fd = -1;
 
 	if (!yz_tango_active() ||
 	    !yz_parse_zygote_args(current->mm, socket_name,
@@ -724,15 +728,25 @@ int yz_tango_prepare(u32 *generation)
 				     YZ_RUNTIME_STATE_FAILED);
 		return PTR_ERR(policy);
 	}
-	fd = yz_stage_fd(YZ_CORE32_PATH, YZ_VMA_NAME, policy);
+	fd = yz_stage_fd(YZ_LOADER32_PATH, YZ_VMA_NAME, policy);
 	if (fd < 0) {
 		yz_restore_native_policy_state(policy);
 		yz_runtime_set_state(current->tgid, *generation,
 				     YZ_RUNTIME_STATE_FAILED);
 		return fd;
 	}
+	*core_fd = yz_stage_fd(YZ_CORE32_PATH, YZ_VMA_NAME, NULL);
+	if (*core_fd < 0) {
+		yz_close_current_fd(fd);
+		yz_restore_native_policy_state(policy);
+		yz_runtime_set_state(current->tgid, *generation,
+				     YZ_RUNTIME_STATE_FAILED);
+		return *core_fd;
+	}
 	if (ksu_file_load_policy_allow_execmem_current(policy)) {
 		yz_close_current_fd(fd);
+		yz_close_current_fd(*core_fd);
+		*core_fd = -1;
 		yz_restore_native_policy_state(policy);
 		yz_runtime_set_state(current->tgid, *generation,
 				     YZ_RUNTIME_STATE_FAILED);
@@ -742,10 +756,11 @@ int yz_tango_prepare(u32 *generation)
 	return fd;
 }
 
-void yz_tango_finish(u32 generation, int fd, bool redirected)
+void yz_tango_finish(u32 generation, int fd, int core_fd, bool redirected)
 {
 	if (!redirected) {
 		yz_close_current_fd(fd);
+		yz_close_current_fd(core_fd);
 		ksu_yukizygisk_restore_native_load_policy(current->tgid);
 	}
 	yz_runtime_set_state(current->tgid, generation,

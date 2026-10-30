@@ -835,19 +835,18 @@
     "versionFrom": "userspace/ksud/third_party/ndk-busybox"
   },
   {
-    "id": "lsplt",
-    "name": "LSPlt",
-    "license": "LGPL-3.0",
-    "source": "https://github.com/Rouyashiki/LSPlt/tree/{revision}",
+    "id": "yukiplt",
+    "name": "YukiPLT",
+    "license": "Apache-2.0",
+    "source": "https://github.com/Rouyashiki/YukiPLT/tree/{revision}",
+    "versionFrom": "userspace/zygisk/third_party/yukiplt",
     "texts": [
-      "lsplt.txt",
-      "GPL-3.0.txt"
+      "YukiPLT-NOTICE.txt"
     ],
-    "evidence": "userspace/zygisk/third_party/lsplt/LICENSE; userspace/zygisk/core/CMakeLists.txt links lsplt_static into libzygisk and libyukizncore for arm64-v8a and armeabi-v7a. These are separate ELF payloads embedded by ksud, not LSPlt objects linked into ksud itself.",
+    "evidence": "Pinned YukiPLT submodule, statically linked into libzygisk and libyukizncore with private ownership and runtime state. The submodule provides the non-null JUMP_SLOT batch API used by the cores.",
     "sourceTexts": [
-      "userspace/zygisk/third_party/lsplt/LICENSE"
-    ],
-    "versionFrom": "userspace/zygisk/third_party/lsplt"
+      "userspace/zygisk/third_party/yukiplt/LICENSE"
+    ]
   },
   {
     "id": "lua",

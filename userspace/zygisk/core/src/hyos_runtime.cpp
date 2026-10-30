@@ -1,9 +1,10 @@
 #include "hyos_runtime.hpp"
-#include "plt_state.hpp"
+#include "plt_lifecycle.hpp"
+#include <yukiplt.hpp>
 
 #include "log.hpp"
 
-#include "lsplt.hpp"
+#include "process_maps.hpp"
 
 #include <elf.h>
 #include <fcntl.h>
@@ -17,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace yukizygisk::hyos {
@@ -55,16 +57,20 @@ struct RegisteredModule {
 
 std::vector<RegisteredModule> g_modules;
 
-dev_t g_target_dev = 0;
-ino_t g_target_inode = 0;
+yukiplt::NamedImage g_target_image{};
+yukiplt::HookHandle g_hook_handle;
+yukiplt::OperationDiagnostic g_install_diagnostic;
+yukiplt::OperationDiagnostic g_restore_diagnostic;
+bool g_recovery = false;
 bool g_available = false;
 bool g_registration_open = false;
 bool g_hooks_ready = false;
 
-ForkFn g_original_fork = nullptr;
-SetContextFn g_original_setcontext = nullptr;
+yukiplt::OriginalSlot<ForkFn> g_original_fork;
+yukiplt::OriginalSlot<SetContextFn> g_original_setcontext;
 OpenControlSessionFn g_open_control_session = nullptr;
 ReportCallbackFn g_report_callback = nullptr;
+void (*g_recover_plt)() = nullptr;
 const uint32_t *g_registering_module_index = nullptr;
 int g_child_control_session = -1;
 std::atomic_flag g_child_control_lock = ATOMIC_FLAG_INIT;
@@ -76,27 +82,6 @@ bool g_child_dispatched = false;
 char g_process_name[kValueCapacity]{};
 char g_package_name[kValueCapacity]{};
 char g_se_info[kValueCapacity]{};
-
-std::string clean_map_path(const std::string &path) {
-  constexpr char kDeleted[] = " (deleted)";
-  constexpr size_t kDeletedLength = sizeof(kDeleted) - 1;
-  if (path.size() >= kDeletedLength &&
-      path.compare(path.size() - kDeletedLength, kDeletedLength, kDeleted) == 0)
-    return path.substr(0, path.size() - kDeletedLength);
-  return path;
-}
-
-bool valid_spawner_mapping(const lsplt::MapInfo &mapping) {
-  if ((mapping.perms & PROT_READ) == 0 ||
-      mapping.end - mapping.start < sizeof(Elf64_Ehdr))
-    return false;
-  const auto *header = reinterpret_cast<const Elf64_Ehdr *>(mapping.start);
-  return memcmp(header->e_ident, ELFMAG, SELFMAG) == 0 &&
-         header->e_ident[EI_CLASS] == ELFCLASS64 &&
-         header->e_ident[EI_DATA] == ELFDATA2LSB &&
-         (header->e_type == ET_DYN || header->e_type == ET_EXEC) &&
-         header->e_machine == EM_AARCH64;
-}
 
 bool copy_value(char *destination, size_t capacity, const char *source) {
   if (source == nullptr || capacity == 0)
@@ -166,6 +151,8 @@ void dispatch_specialized(const char *se_info, const char *package_name) {
   };
   for (const auto &entry : g_modules) {
     entry.module.onAppSpecialized(&args);
+    if (g_recover_plt != nullptr)
+      g_recover_plt();
     if (g_report_callback != nullptr && entry.module_index != nullptr &&
         *entry.module_index != UINT32_MAX)
       (void)g_report_callback(*entry.module_index);
@@ -173,13 +160,17 @@ void dispatch_specialized(const char *se_info, const char *package_name) {
 }
 
 pid_t replacement_fork() {
-  if (g_original_fork == nullptr)
+  if (g_original_fork.load() == nullptr)
     return -1;
-  while (g_fork_lock.test_and_set(std::memory_order_acquire)) {
+  if (g_fork_lock.test_and_set(std::memory_order_acquire)) {
+    errno = EBUSY;
+    return -1;
   }
   const int control_session =
       g_open_control_session != nullptr ? g_open_control_session() : -1;
-  const pid_t result = g_original_fork();
+  const pid_t result =
+      yukizygisk::plt_lifecycle::fork_process(g_original_fork.load());
+  const int fork_error = errno;
   if (result == 0) {
     g_fork_lock.clear(std::memory_order_release);
     if (g_child_control_session >= 0)
@@ -191,15 +182,16 @@ pid_t replacement_fork() {
   }
   if (result != 0)
     g_fork_lock.clear(std::memory_order_release);
+  errno = fork_error;
   return result;
 }
 
 int replacement_setcontext(uid_t uid, bool is_system_server,
                            const char *se_info, const char *package_name) {
-  if (g_original_setcontext == nullptr)
+  if (g_original_setcontext.load() == nullptr)
     return -1;
-  const int result =
-      g_original_setcontext(uid, is_system_server, se_info, package_name);
+  const int result = g_original_setcontext.load()(uid, is_system_server,
+                                                  se_info, package_name);
   if (result == 0)
     dispatch_specialized(se_info, package_name);
   return result;
@@ -224,33 +216,29 @@ const ZygiskNextRuntime g_runtime = {
     .registerModule = register_module,
 };
 
-bool rollback_partial_hooks(const lsplt::HookBatchReport &report) {
-  std::vector<lsplt::HookRequest> requests;
-  for (const auto &entry : report.results) {
-    if (entry.status != lsplt::CommitStatus::Applied)
-      continue;
-    void *original = nullptr;
-    if (entry.symbol == "fork")
-      original = reinterpret_cast<void *>(g_original_fork);
-    else if (entry.symbol == "selinux_android_setcontext")
-      original = reinterpret_cast<void *>(g_original_setcontext);
-    else
-      continue;
-    if (entry.ever_published)
-      yukizygisk::plt_lifetime.retain_core.store(true);
-    requests.push_back(yukizygisk::restore_plt(
-        entry.dev, entry.inode, entry.symbol, original, entry.callback));
-  }
-  return yukizygisk::apply_plt(false, requests).success;
+bool restore_runtime_hooks() {
+  if (!g_hook_handle.valid())
+    return true;
+  yukiplt::SlotReport slots[2];
+  const auto error =
+      yukiplt::unhook_diagnosed(g_hook_handle, slots, 2, &g_restore_diagnostic);
+  yukizygisk::plt_lifecycle::set_recovery(g_recovery, g_hook_handle.valid());
+  if (!error.ok())
+    ZLOGE("HyperOS restoration: %s cause=%s errno=%d consumed=%d",
+          yukiplt::error_name(error.code),
+          yukiplt::error_cause_name(g_restore_diagnostic.cause),
+          error.sys_errno, g_restore_diagnostic.handle_consumed);
+  return !g_hook_handle.valid();
 }
 
 } // namespace
 
 bool initialize(OpenControlSessionFn open_control_session,
-                ReportCallbackFn report_callback) {
+                ReportCallbackFn report_callback, void (*recover_plt)()) {
 #ifndef __aarch64__
   (void)open_control_session;
   (void)report_callback;
+  (void)recover_plt;
   return false;
 #else
   g_available = false;
@@ -259,22 +247,34 @@ bool initialize(OpenControlSessionFn open_control_session,
   g_modules.clear();
   g_open_control_session = open_control_session;
   g_report_callback = report_callback;
+  g_recover_plt = recover_plt;
   g_registering_module_index = nullptr;
 
-  for (const auto &mapping : lsplt::MapInfo::Scan()) {
-    if (mapping.offset != 0 || mapping.dev == 0 || mapping.inode == 0 ||
-        clean_map_path(mapping.path) != kSpawnerPath ||
-        !valid_spawner_mapping(mapping))
-      continue;
-    g_target_dev = mapping.dev;
-    g_target_inode = mapping.inode;
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation)
+    return false;
+  try {
+    auto images = yukiplt::find_images(
+        {yukiplt::ImageMatch::kMainExecutable, nullptr, 0});
+    if (!images || images.value().size() != 1)
+      return false;
+    char executable[512];
+    const ssize_t length =
+        readlink("/proc/self/exe", executable, sizeof(executable));
+    if (length <= 0 || static_cast<size_t>(length) >= sizeof(executable) ||
+        std::string_view(executable, static_cast<size_t>(length)) !=
+            kSpawnerPath)
+      return false;
+    g_target_image = std::move(images.value().front());
     g_available = true;
     g_registration_open = true;
     ZLOGI("HyperOS Rust Runtime detected at %p",
-          reinterpret_cast<void *>(mapping.start));
+          reinterpret_cast<void *>(g_target_image.image.load_bias));
     return true;
+  } catch (...) {
+    ZLOGE("HyperOS discovery failed");
+    return false;
   }
-  return false;
 #endif
 }
 
@@ -291,33 +291,59 @@ bool install_registered_hooks() {
   const size_t count = registered_module_count();
   if (!g_available || count == 0)
     return true;
-
-  const auto report = yukizygisk::apply_plt(
-      false, {{g_target_dev, g_target_inode, "fork",
-               reinterpret_cast<void *>(replacement_fork),
-               reinterpret_cast<void **>(&g_original_fork)},
-              {g_target_dev, g_target_inode, "selinux_android_setcontext",
-               reinterpret_cast<void *>(replacement_setcontext),
-               reinterpret_cast<void **>(&g_original_setcontext)}});
-  const bool committed = yukizygisk::plt_request_succeeded(report, 0) &&
-                         yukizygisk::plt_request_succeeded(report, 1);
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation)
+    return false;
+  if (g_hooks_ready)
+    return true;
+  if (g_hook_handle.valid() ||
+      g_install_diagnostic.stage >= yukiplt::OperationStage::kCommit)
+    return false;
+  const yukiplt::HookRequest requests[] = {
+      {"fork", reinterpret_cast<void *>(replacement_fork),
+       g_original_fork.output_address()},
+      {"selinux_android_setcontext",
+       reinterpret_cast<void *>(replacement_setcontext),
+       g_original_setcontext.output_address()}};
+  yukiplt::SlotReport slots[2];
+  auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
+      g_target_image, requests, 2, slots, &g_install_diagnostic);
+  g_hook_handle = std::move(result.handle);
+  yukizygisk::plt_lifecycle::set_recovery(
+      g_recovery, !result.ok() && g_hook_handle.valid());
   bool control_ready = false;
-  if (committed && g_original_fork != nullptr &&
-      g_original_setcontext != nullptr && g_open_control_session != nullptr) {
-    const int control_session = g_open_control_session();
-    control_ready = control_session >= 0;
-    if (control_session >= 0)
-      close(control_session);
+  if (result.ok() && g_open_control_session != nullptr) {
+    const int session = g_open_control_session();
+    control_ready = session >= 0;
+    if (session >= 0)
+      close(session);
   }
   if (!control_ready) {
-    const bool rolled_back = rollback_partial_hooks(report);
-    ZLOGE("failed to install HyperOS Rust Runtime hooks; rollback=%u",
-          rolled_back ? 1U : 0U);
+    const bool restored = restore_runtime_hooks();
+    ZLOGE("HyperOS installation: %s cause=%s errno=%d restored=%d",
+          yukiplt::error_name(result.error.code),
+          yukiplt::error_cause_name(g_install_diagnostic.cause),
+          result.error.sys_errno, restored);
     return false;
   }
-
   g_hooks_ready = true;
   ZLOGI("HyperOS Rust Runtime hooks installed for %zu module(s)", count);
+  return true;
+}
+
+bool original_output_allowed(void **output) {
+  if (output == g_original_fork.output_address() ||
+      output == g_original_setcontext.output_address())
+    return false;
+  if (!g_hook_handle.valid() || output == nullptr)
+    return true;
+  yukiplt::SlotReport slots[2];
+  size_t count = 0;
+  if (!yukiplt::query(g_hook_handle, slots, 2, &count).ok() || count != 2)
+    return false;
+  for (const auto &slot : slots)
+    if (slot.address == reinterpret_cast<uintptr_t>(output))
+      return false;
   return true;
 }
 

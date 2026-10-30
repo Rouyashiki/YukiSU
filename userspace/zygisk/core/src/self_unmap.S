@@ -71,9 +71,37 @@ yz_self_unmap_tail:
     ldp  d10, d11, [x16, #120]
     ldp  d12, d13, [x16, #136]
     ldp  d14, d15, [x16, #152]
+    str  xzr, [x16, #96]
     mov  sp, x17
-    b    munmap
+    cbz  x2, .Lretain_retired_core
+    mov  x16, x2
+    br   x16
+.Lretain_retired_core:
+    mov  w0, wzr
+    ret
 .size yz_self_unmap_tail, .-yz_self_unmap_tail
+.global yz_self_dlclose_tail
+.hidden yz_self_dlclose_tail
+.type yz_self_dlclose_tail, %function
+yz_self_dlclose_tail:
+    hint #34 // bti c
+    adrp x16, g_yz_ret_ctx
+    add  x16, x16, :lo12:g_yz_ret_ctx
+    ldp  x19, x20, [x16, #0]
+    ldp  x21, x22, [x16, #16]
+    ldp  x23, x24, [x16, #32]
+    ldp  x25, x26, [x16, #48]
+    ldp  x27, x28, [x16, #64]
+    ldp  x29, x30, [x16, #80]
+    ldr  x17, [x16, #96]
+    ldp  d8, d9, [x16, #104]
+    ldp  d10, d11, [x16, #120]
+    ldp  d12, d13, [x16, #136]
+    ldp  d14, d15, [x16, #152]
+    mov  sp, x17
+    mov  x16, x1
+    br   x16
+.size yz_self_dlclose_tail, .-yz_self_dlclose_tail
 #else
 .syntax unified
 
@@ -138,6 +166,7 @@ yz_cap_thumb_tmpl_end:
 .hidden yz_self_unmap_tail
 .type yz_self_unmap_tail, %function
 yz_self_unmap_tail:
+    mov  r3, r2
     adr.w r12, 1f
     ldr  r2, [r12]
     add  r12, r2
@@ -145,11 +174,34 @@ yz_self_unmap_tail:
     ldr  lr, [r12], #4
     ldr  sp, [r12], #4
     vldmia r12, {d8-d15}
-    b    munmap
+    movs r2, #0
+    str  r2, [r12, #-4]
+    cmp  r3, #0
+    beq  .Lretain_retired_core_arm
+    bx   r3
+.Lretain_retired_core_arm:
+    movs r0, #0
+    bx   lr
 .align 2
 1:
     .word g_yz_ret_ctx - 1b
 .size yz_self_unmap_tail, .-yz_self_unmap_tail
+.global yz_self_dlclose_tail
+.hidden yz_self_dlclose_tail
+.type yz_self_dlclose_tail, %function
+yz_self_dlclose_tail:
+    adr.w r12, 1f
+    ldr  r2, [r12]
+    add  r12, r2
+    ldmia.w r12!, {r4-r11}
+    ldr  lr, [r12], #4
+    ldr  sp, [r12], #4
+    vldmia r12, {d8-d15}
+    bx   r1
+.align 2
+1:
+    .word g_yz_ret_ctx - 1b
+.size yz_self_dlclose_tail, .-yz_self_dlclose_tail
 #endif
 
 .section .note.GNU-stack,"",%progbits

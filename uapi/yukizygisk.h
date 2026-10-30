@@ -228,6 +228,8 @@ struct yz_early_native_entry {
   char lib_path[YZ_NATIVE_MODULE_PATH_MAX];
 };
 
+#define YZ_TANGO_BOOTSTRAP_SIZE 224
+
 #define YZ_BOOTSTRAP_PACKET_MAGIC 0x59504e5a /* YPNZ */
 #define YZ_BOOTSTRAP_PACKET_VERSION 3
 

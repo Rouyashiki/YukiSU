@@ -1,5 +1,5 @@
 #include "check.hpp"
-#include "plt_state.hpp"
+#include "process_maps.hpp"
 #include "userspace/zygisk/daemon/zygiskd.hpp"
 #include "userspace/zygisk/load_policy.hpp"
 #include "zygisk_next_api.h"
@@ -137,9 +137,12 @@ void end_module_registration() {}
 
 namespace {
 #include "native_map_under_test.inc"
-#include "native_plt_under_test.inc"
+extern "C" int fixture_plt_hook(void *, const char *, void *, void **);
+extern "C" void fixture_recover_plt();
+extern "C" bool fixture_retire_plt();
+void recover_native_plt() { fixture_recover_plt(); }
 
-const ZygiskNextAPI g_api{api_plt_hook};
+const ZygiskNextAPI g_api{fixture_plt_hook};
 
 #include "native_load_under_test.inc"
 
@@ -161,7 +164,7 @@ bool load(const zygiskd::NativeModuleInfo &module, bool early = false) {
 }
 
 void expect_file_mapping(void *address) {
-  for (const auto &map : lsplt::MapInfo::Scan()) {
+  for (const auto &map : yukizygisk::MapInfo::Scan()) {
     const auto value = reinterpret_cast<uintptr_t>(address);
     if (value >= map.start && value < map.end) {
       CHECK(map.inode != 0 && map.is_private);
@@ -245,7 +248,10 @@ int main(int argc, char **argv) {
   CHECK(g_loaded_modules.size() == 2 && events[3] == 2);
   CHECK(events[1] == prior_ctors + 2 && events[2] == prior_dtors);
   CHECK(g_loaded_modules[0]->so != g_loaded_modules[1]->so);
-  CHECK(yz_native_original() == 375);
+  CHECK(yz_native_original() == 202);
+  const auto second_hook_status = reinterpret_cast<int (*)()>(
+      dlsym(g_loaded_modules[1]->so, "native_hook_status"));
+  CHECK(second_hook_status != nullptr && second_hook_status() == ZN_FAILED);
 #if defined(__ANDROID__)
   const int memory_fd = memfd_create("zn-native-fixture", MFD_CLOEXEC);
   const int source_fd = open(good.lib_path, O_RDONLY | O_CLOEXEC);
@@ -261,25 +267,10 @@ int main(int argc, char **argv) {
   CHECK(fcntl(memory_fd, F_GETFD) == -1 && errno == EBADF);
   CHECK(g_loaded_modules.size() == 3 && events[3] == 3);
   CHECK(events[1] == prior_ctors + 3 && events[2] == prior_dtors);
-  CHECK(yz_native_original() == 548);
+  CHECK(yz_native_original() == 202);
 #endif
-  lsplt::MapInfo executable{};
-  CHECK(map_from_base(nullptr, &executable));
-  for (auto it = g_loaded_modules.rbegin(); it != g_loaded_modules.rend();
-       ++it) {
-    const auto original =
-        reinterpret_cast<void *(*)()>(dlsym((*it)->so, "native_hook_original"));
-    const auto callback =
-        reinterpret_cast<void *(*)()>(dlsym((*it)->so, "native_hook_callback"));
-    CHECK(original != nullptr && callback != nullptr);
-    CHECK(yukizygisk::apply_plt(
-              false, {yukizygisk::restore_plt(executable.dev, executable.inode,
-                                              "yz_native_original", original(),
-                                              callback())})
-              .success);
-  }
+  CHECK(fixture_retire_plt());
   CHECK(yz_native_original() == 29);
-  CHECK(lsplt::ReleaseInactiveCache());
   puts("PASS: Native identity, local dependency, runtime PLT callback, "
        "retention, duplicate and failure paths");
   // Deliberately retain module handles until exit, as the production core does.

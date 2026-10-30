@@ -12,6 +12,7 @@ extern "C" void native_identity_probe();
 namespace {
 void *initial_base;
 int (*original)();
+int hook_status = ZN_FAILED;
 
 __attribute__((constructor)) void constructed() { fixture_event(1); }
 __attribute__((destructor)) void destroyed() { fixture_event(2); }
@@ -38,17 +39,19 @@ int find_image(dl_phdr_info *info, size_t, void *opaque) {
 int hooked() {
   native_identity_probe();
   fixture_event(4);
-  CHECK(original != nullptr);
-  return original() + yz_native_private_value();
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  const auto target = __atomic_load_n(&original, __ATOMIC_ACQUIRE);
+  CHECK(target != nullptr);
+  return target() + yz_native_private_value();
 }
 
 void loaded(void *handle, const ZygiskNextAPI *api) {
   CHECK(handle != nullptr);
   native_identity_probe();
   fixture_event(3);
-  CHECK(api->pltHook(nullptr, "yz_native_original",
-                     reinterpret_cast<void *>(hooked),
-                     reinterpret_cast<void **>(&original)) == ZN_SUCCESS);
+  hook_status = api->pltHook(nullptr, "yz_native_original",
+                             reinterpret_cast<void *>(hooked),
+                             reinterpret_cast<void **>(&original));
 }
 } // namespace
 
@@ -77,6 +80,8 @@ extern "C" void native_identity_probe() {
 extern "C" void *native_hook_original() {
   return reinterpret_cast<void *>(original);
 }
+
+extern "C" int native_hook_status() { return hook_status; }
 
 extern "C" void *native_hook_callback() {
   return reinterpret_cast<void *>(hooked);

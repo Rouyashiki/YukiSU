@@ -1,7 +1,7 @@
 #include "check.hpp"
-#include "loader_handoff.hpp"
 #include "yukilinker.hpp"
 
+#include <cstring>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -10,6 +10,8 @@
 int main(int argc, char **argv) {
   CHECK(argc == 4);
   void *stage = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+  if (stage == nullptr)
+    (void)fprintf(stderr, "stage load: %s\n", dlerror());
   CHECK(stage != nullptr);
   auto load = reinterpret_cast<void *(*)(int, const char *)>(
       dlsym(stage, "yuki_dlopen_memfd"));
@@ -18,73 +20,47 @@ int main(int argc, char **argv) {
   auto retire =
       reinterpret_cast<bool (*)(void *)>(dlsym(stage, "retire_metadata"));
   CHECK(load != nullptr && symbol != nullptr && retire != nullptr);
-  if (argv[3][0] == 's') {
-    void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
-    CHECK(core != nullptr);
-    auto check = reinterpret_cast<bool (*)(uintptr_t)>(
-        dlsym(core, "check_system_handoff"));
-    auto call = reinterpret_cast<int (*)()>(dlsym(core, "call_imports"));
-    CHECK(check != nullptr && call != nullptr);
-    CHECK(check(reinterpret_cast<uintptr_t>(load)));
-    CHECK(dlclose(stage) == 0);
-    CHECK(call() == 42);
-    CHECK(dlclose(core) == 0);
-    puts("Bionic: system-owned core handoff checked and dependency lifetime "
-         "retained");
-    return 0;
-  }
+  CHECK(strcmp(argv[3], "anonymous") == 0 ||
+        strcmp(argv[3], "anonymous-clean") == 0);
+  char target_path[4096];
+  const char *slash = strrchr(argv[2], '/');
+  CHECK(slash != nullptr);
+  CHECK(snprintf(target_path, sizeof(target_path), "%.*s/libanon_target.so",
+                 static_cast<int>(slash - argv[2]), argv[2]) > 0);
+  void *target = dlopen(target_path, RTLD_NOW | RTLD_LOCAL);
+  CHECK(target != nullptr);
+  auto call = reinterpret_cast<int (*)()>(dlsym(target, "fixture_call"));
+  CHECK(call != nullptr && call() == 17);
   int fd = open(argv[2], O_RDONLY | O_CLOEXEC);
   CHECK(fd >= 0);
   auto *core = static_cast<yukilinker::SoHandle *>(load(fd, ""));
   close(fd);
   CHECK(core != nullptr);
-  if (argv[3][0] == 'p') {
-    const auto result = yukizygisk::handoff::verify(
-        reinterpret_cast<uintptr_t>(core->load_bias), core->map_size,
-        reinterpret_cast<uintptr_t>(load));
-    (void)fprintf(stderr, "production core handoff: %s slot=%p target=%p\n",
-                  result.reason, reinterpret_cast<void *>(result.slot),
-                  reinterpret_cast<void *>(result.target));
-    CHECK(result.complete);
-    auto completed = reinterpret_cast<bool (*)()>(
-        symbol(core, "zygisk_bootstrap_handoff_complete"));
-    CHECK(completed != nullptr && !completed());
-    CHECK(retire(core));
-    CHECK(dlclose(stage) == 0);
-    CHECK(!completed());
-    puts("Bionic: production Core relocations checked; legacy completion "
-         "remains closed without initialization");
-    return 0;
-  }
-  auto check = reinterpret_cast<bool (*)(uintptr_t, size_t, uintptr_t)>(
-      symbol(core, "check_handoff"));
-  auto call = reinterpret_cast<int (*)()>(symbol(core, "call_imports"));
-  CHECK(check != nullptr && call != nullptr && call() == 42);
-  const bool expected = argv[3][0] == '1';
-  CHECK(check(reinterpret_cast<uintptr_t>(core->load_bias), core->map_size,
-              reinterpret_cast<uintptr_t>(load)) == expected);
-  if (!expected) {
-    // Unrepaired imports require retaining the actual loader.
-    CHECK(call() == 42);
-    puts("Bionic: borrowed bootstrap callbacks detected; loader retained");
-    return 0;
-  }
-  Dl_info info{};
-  CHECK(dladdr(reinterpret_cast<void *>(load), &info) != 0);
-  auto start = reinterpret_cast<bool (*)()>(symbol(core, "start_callback"));
-  auto finish = reinterpret_cast<int (*)()>(symbol(core, "finish_callback"));
-  CHECK(start != nullptr && finish != nullptr && start());
-  const uintptr_t old_loader =
-      reinterpret_cast<uintptr_t>(load) & ~uintptr_t{1};
+  const uintptr_t base = reinterpret_cast<uintptr_t>(core->load_bias);
+  const size_t span = core->map_size;
+  auto adopt = reinterpret_cast<bool (*)(uintptr_t, size_t, void *)>(
+      symbol(core, "zygisk_adopt_anonymous_image"));
+  auto run = reinterpret_cast<int (*)(int (*)(), bool)>(
+      symbol(core, "anonymous_hook_check"));
+  auto entry = reinterpret_cast<void *(*)(uintptr_t, size_t)>(
+      symbol(core, "anonymous_close_entry"));
+  auto close_stage =
+      reinterpret_cast<bool (*)()>(symbol(core, "anonymous_close_stage"));
+  CHECK(adopt != nullptr && run != nullptr && entry != nullptr &&
+        close_stage != nullptr);
+  CHECK(adopt(base, span, stage));
+  auto close_core = reinterpret_cast<int (*)(void *)>(entry(base, span));
+  CHECK(close_core != nullptr);
   CHECK(retire(core));
-  CHECK(dlclose(stage) == 0);
-  CHECK(dladdr(reinterpret_cast<void *>(old_loader), &info) == 0);
+  CHECK(close_stage());
+  CHECK(run(call, strcmp(argv[3], "anonymous") == 0) == 0);
+  CHECK(close_core(nullptr) == 0);
   unsigned char residency = 0;
-  const auto page = static_cast<uintptr_t>(getpagesize());
-  CHECK(mincore(reinterpret_cast<void *>(old_loader & ~(page - 1)), page,
-                &residency) == -1);
-  CHECK(finish() == 42);
-  CHECK(call() == 42);
-  puts("Bionic: real bootstrap unmapped; deferred core callback, iterator and "
-       "dependency still callable");
+  CHECK(mincore(reinterpret_cast<void *>(base),
+                static_cast<size_t>(getpagesize()), &residency) == -1);
+  CHECK(call() == 17);
+  CHECK(dlclose(target) == 0);
+  puts("Anonymous YukiLinker: hook, restore, private runtime cleanup and "
+       "self-unmap passed");
+  return 0;
 }

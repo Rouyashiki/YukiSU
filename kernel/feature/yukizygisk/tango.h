@@ -8,7 +8,7 @@ void yz_tango_disable(void);
 bool yz_tango_active(void);
 bool yz_tango_is_process(void);
 void yz_tango_linker_offsets(u64 *dlopen, u64 *dlsym);
-int yz_tango_prepare(u32 *generation);
-void yz_tango_finish(u32 generation, int fd, bool redirected);
+int yz_tango_prepare(u32 *generation, int *core_fd);
+void yz_tango_finish(u32 generation, int fd, int core_fd, bool redirected);
 
 #endif

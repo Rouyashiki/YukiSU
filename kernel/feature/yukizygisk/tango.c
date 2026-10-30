@@ -20,7 +20,7 @@
 #include "klog.h"
 
 #define YZ_TANGO_PHNUM 32
-#define YZ_TANGO_STUB_SIZE 208
+#define YZ_TANGO_STUB_SIZE YZ_TANGO_BOOTSTRAP_SIZE
 #define YZ_TANGO_SLOTS 16
 #define YZ_R_ARM_JUMP_SLOT 22
 
@@ -285,42 +285,43 @@ static u32 yz_tango_padding(const struct yz_tango_image *image,
 }
 
 static void yz_tango_bootstrap(u8 *bytes, u32 got, u32 original, u32 stub,
-			       u32 dlopen, u32 dlsym, int fd,
+			       u32 dlopen, u32 dlsym, int fd, int core_fd,
 			       const struct yz_early_packet_state *packet)
 {
 	/* Thumb: save r0-r12/lr, dlopen(fd), close(fd), dlsym, call, restore,
 	 * then tail-call __libc_init without rewinding the translator state. */
 	/* Bionic LP32: RTLD_NOW=0; 2 is RTLD_GLOBAL and blocks unloading. */
-	static const u8 code[88] = {
-	    0x2d, 0xe9, 0xff, 0x5f, 0x0f, 0xf2, 0x50, 0x04, 0x04, 0xf1, 0x50,
-	    0x00, 0x00, 0x21, 0x04, 0xf1, 0x28, 0x02, 0x63, 0x68, 0x25, 0x69,
+	static const u8 code[92] = {
+	    0x2d, 0xe9, 0xff, 0x5f, 0x0f, 0xf2, 0x54, 0x04, 0x04, 0xf1, 0x54,
+	    0x00, 0x00, 0x21, 0x04, 0xf1, 0x2c, 0x02, 0x63, 0x68, 0x25, 0x69,
 	    0xa8, 0x47, 0x06, 0x46, 0xa0, 0x69, 0x06, 0x27, 0x00, 0xdf, 0x7e,
-	    0xb1, 0x30, 0x46, 0x04, 0xf1, 0x60, 0x01, 0x62, 0x68, 0x65, 0x69,
+	    0xb1, 0x30, 0x46, 0x04, 0xf1, 0x68, 0x01, 0x62, 0x68, 0x65, 0x69,
 	    0xa8, 0x47, 0x40, 0xb1, 0x05, 0x46, 0x82, 0xb0, 0xe0, 0x69, 0x00,
-	    0x90, 0x94, 0xe8, 0x0f, 0x00, 0xa8, 0x47, 0x02, 0xb0, 0x05, 0xe0,
+	    0x90, 0x94, 0xe8, 0x0f, 0x00, 0xa8, 0x47, 0x02, 0xb0, 0x07, 0xe0,
 	    0xe0, 0x69, 0x01, 0x38, 0x06, 0x27, 0x00, 0xdf, 0x20, 0x6a, 0x00,
-	    0xdf, 0xbd, 0xe8, 0xff, 0x5f, 0xdf, 0xf8, 0x08, 0xf0, 0x00, 0xbf,
+	    0xdf, 0xe0, 0x68, 0x00, 0xdf, 0xbd, 0xe8, 0xff, 0x5f, 0xdf, 0xf8,
+	    0x08, 0xf0, 0x00, 0xbf,
 	};
 	u32 data[] = {got,
 		      original,
 		      stub,
-		      YZ_TANGO_STUB_SIZE,
+		      (u32)core_fd,
 		      dlopen,
 		      dlsym,
-		      fd,
-		      packet->packet_fd + 1,
-		      packet->endpoint_fd,
+		      (u32)fd,
+		      (u32)(packet->packet_fd + 1),
+		      (u32)packet->endpoint_fd,
 		      0};
 	u64 flags = 0x10; /* ANDROID_DLEXT_USE_LIBRARY_FD */
 
 	memset(bytes, 0, YZ_TANGO_STUB_SIZE);
 	memcpy(bytes, code, sizeof(code));
-	memcpy(bytes + 88, data, sizeof(data));
-	memcpy(bytes + 128, &flags, sizeof(flags));
-	memcpy(bytes + 148, &fd, sizeof(fd));
-	memcpy(bytes + 168, "libzygisk32.so", sizeof("libzygisk32.so"));
-	memcpy(bytes + 184, "zygisk_core_entry_tango",
-	       sizeof("zygisk_core_entry_tango"));
+	memcpy(bytes + 92, data, sizeof(data));
+	memcpy(bytes + 136, &flags, sizeof(flags));
+	memcpy(bytes + 156, &fd, sizeof(fd));
+	memcpy(bytes + 176, "libyukilinker32.so", sizeof("libyukilinker32.so"));
+	memcpy(bytes + 196, "yuki_bootstrap_tango",
+	       sizeof("yuki_bootstrap_tango"));
 }
 
 static bool yz_tango_claim(void)
@@ -370,7 +371,7 @@ static void yz_tango_inject(struct callback_head *cb)
 	u64 dlopen_off, dlsym_off;
 	u32 got, original, stub, redirect, generation = 0;
 	u8 bytes[YZ_TANGO_STUB_SIZE];
-	int fd, n;
+	int fd, core_fd = -1, n;
 	u32 count = 0;
 	const char *stage = "images";
 	bool redirected = false;
@@ -404,7 +405,7 @@ static void yz_tango_inject(struct callback_head *cb)
 		goto skipped;
 	if (!yz_tango_claim())
 		goto out;
-	fd = yz_tango_prepare(&generation);
+	fd = yz_tango_prepare(&generation, &core_fd);
 	if (fd < 0) {
 		pr_info("yukizygisk: Tango prepare failed pid=%d err=%d\n",
 			current->tgid, fd);
@@ -430,7 +431,7 @@ static void yz_tango_inject(struct callback_head *cb)
 		goto finish;
 	yz_tango_bootstrap(bytes, got, original, stub,
 			   work->linker.bias + dlopen_off,
-			   work->linker.bias + dlsym_off, fd, &packet);
+			   work->linker.bias + dlsym_off, fd, core_fd, &packet);
 	n = access_process_vm(current, stub, bytes, sizeof(bytes),
 			      FOLL_FORCE | FOLL_WRITE);
 	if (n != sizeof(bytes))
@@ -461,7 +462,7 @@ finish:
 		current->tgid, got, stub, redirected);
 	if (!redirected)
 		yz_close_early_packet_state(&packet);
-	yz_tango_finish(generation, fd, redirected);
+	yz_tango_finish(generation, fd, core_fd, redirected);
 	goto out;
 skipped:
 	pr_info("yukizygisk: Tango guest skipped pid=%d stage=%s maps=%u "
