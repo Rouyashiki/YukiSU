@@ -55,6 +55,12 @@ class KsuIO(private val shellFactory: () -> Shell = { createRootShell(true) }) {
     }
 
     @Synchronized
+    internal fun outputStream(path: String, append: Boolean): OutputStream {
+        if (closed) throw IOException("WebUI file session is closed")
+        return RootFileOutputStream(shellFactory(), path, append).buffered(64 * 1024)
+    }
+
+    @Synchronized
     fun destroy() {
         closed = true
         fileInputStream.closeAll()

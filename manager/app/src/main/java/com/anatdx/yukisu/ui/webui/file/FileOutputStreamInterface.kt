@@ -3,8 +3,6 @@ package com.anatdx.yukisu.ui.webui.file
 import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
-import com.topjohnwu.superuser.io.SuFileOutputStream
-import java.io.BufferedOutputStream
 import java.util.UUID
 
 class FileOutputStreamInterface(private val io: KsuIO) {
@@ -15,9 +13,7 @@ class FileOutputStreamInterface(private val io: KsuIO) {
                 Log.w(TAG, "FileOutputStream open rejected: too many open streams")
                 return ""
             }
-            val file = io.file(path)
-            val fos = SuFileOutputStream.open(file, append)
-            val bos = BufferedOutputStream(fos, 64 * 1024)
+            val bos = io.outputStream(path, append)
             val id = UUID.randomUUID().toString()
             io.openOutputStreams[id] = bos
             id
