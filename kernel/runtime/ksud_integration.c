@@ -666,7 +666,6 @@ static int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code,
 {
 	if (*type == EV_KEY && *code == KEY_VOLUMEDOWN) {
 		int val = *value;
-		pr_info("KEY_VOLUMEDOWN val: %d\n", val);
 		if (val) {
 			volumedown_pressed_count += 1;
 			if (is_volumedown_enough(volumedown_pressed_count)) {
@@ -750,14 +749,12 @@ static void stop_init_rc_hook(void)
 static void stop_input_hook(void)
 {
 	static bool input_hook_stopped = false;
-	bool ret;
 
 	if (input_hook_stopped) {
 		return;
 	}
 	input_hook_stopped = true;
-	ret = schedule_work(&stop_input_hook_work);
-	pr_info("unregister input kprobe: %d!\n", ret);
+	schedule_work(&stop_input_hook_work);
 }
 
 void ksu_stop_input_hook_runtime(void)

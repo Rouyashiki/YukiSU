@@ -17,6 +17,7 @@
 #include "preinit/preinit.h"
 #include <linux/pid.h>
 #include <linux/mm.h>
+#include <linux/ratelimit.h>
 #include <linux/magic.h>
 #include <linux/ptrace.h>
 #include <linux/sched/signal.h>
@@ -2001,7 +2002,8 @@ long ksu_supercall_handle_ioctl(const struct file *filp, unsigned int cmd,
 	int i;
 
 #ifdef CONFIG_KSU_DEBUG
-	pr_info("ksu ioctl: cmd=0x%x from uid=%d\n", cmd, current_uid().val);
+	pr_info_ratelimited("ksu ioctl: cmd=0x%x from uid=%d\n", cmd,
+			    current_uid().val);
 #endif // #ifdef CONFIG_KSU_DEBUG
 
 	if (_IOC_TYPE(cmd) == KSM_IOC_MAGIC) {
@@ -2020,9 +2022,10 @@ long ksu_supercall_handle_ioctl(const struct file *filp, unsigned int cmd,
 			    !ksu_ioctl_handlers[i].perm_check() &&
 			    !(ksu_ioctl_handlers[i].allow_su_session &&
 			      ksu_is_su_session_fd(filp))) {
-				pr_warn("ksu ioctl: permission denied for "
-					"cmd=0x%x uid=%d\n",
-					cmd, current_uid().val);
+				pr_warn_ratelimited(
+				    "ksu ioctl: permission denied for "
+				    "cmd=0x%x uid=%d\n",
+				    cmd, current_uid().val);
 				return -EPERM;
 			}
 
@@ -2030,6 +2033,6 @@ long ksu_supercall_handle_ioctl(const struct file *filp, unsigned int cmd,
 		}
 	}
 
-	pr_warn("ksu ioctl: unsupported command 0x%x\n", cmd);
+	pr_warn_ratelimited("ksu ioctl: unsupported command 0x%x\n", cmd);
 	return -ENOTTY;
 }

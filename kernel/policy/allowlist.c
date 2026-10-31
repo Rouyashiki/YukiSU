@@ -74,21 +74,6 @@ static u16 allow_list_count = 0;
 
 #define KERNEL_SU_ALLOWLIST "/data/adb/ksu/.allowlist"
 
-void ksu_show_allow_list(void)
-{
-	int bucket;
-	struct perm_data *p = NULL;
-
-	pr_info("ksu_show_allow_list\n");
-	rcu_read_lock();
-	hash_for_each_rcu(allow_list, bucket, p, list)
-	{
-		pr_info("uid :%d, allow: %d\n", p->profile.curr_uid,
-			p->profile.allow_su);
-	}
-	rcu_read_unlock();
-}
-
 struct app_profile *ksu_get_app_profile(uid_t uid)
 {
 	struct perm_data *p = NULL;
@@ -569,9 +554,6 @@ static void do_persistent_allow_list(struct callback_head *_cb)
 
 	hash_for_each(allow_list, bucket, p, list)
 	{
-		pr_info("save allow list, name: %s uid :%d, allow: %d\n",
-			p->profile.key, p->profile.curr_uid,
-			p->profile.allow_su);
 
 		kernel_write(fp, &p->profile, sizeof(p->profile), &off);
 	}
@@ -707,14 +689,12 @@ void ksu_load_allow_list(void)
 		ksu_set_app_profile(&profile, false);
 	}
 
-	ksu_show_allow_list();
 	filp_close(fp, 0);
 	if (version < KSU_APP_PROFILE_VER)
 		persistent_allow_list();
 	return;
 
 exit:
-	ksu_show_allow_list();
 	filp_close(fp, 0);
 }
 
@@ -741,7 +721,6 @@ void ksu_prune_allowlist(bool (*is_uid_valid)(uid_t, char *, void *),
 					uid == WEBVIEW_ZYGOTE_UID;
 		if (!is_preserved_uid && !is_uid_valid(uid, package, data)) {
 			modified = true;
-			pr_info("prune uid: %d, package: %s\n", uid, package);
 			hlist_del_rcu(&np->list);
 			put_perm_data(np);
 			--allow_list_count;
