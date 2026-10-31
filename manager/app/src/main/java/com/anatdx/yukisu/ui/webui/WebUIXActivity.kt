@@ -84,6 +84,7 @@ class WebUIXActivity : WXActivity() {
             }
             if (!initPlatform()) failInitialization(getString(R.string.operation_failed))
 
+            preloadWebUIApps()
             val (colors, dark) = themeReady.await()
             val prefs = getSharedPreferences("settings", MODE_PRIVATE)
             val platformVersion = PlatformManager.get(-1) { moduleManager.versionCode }

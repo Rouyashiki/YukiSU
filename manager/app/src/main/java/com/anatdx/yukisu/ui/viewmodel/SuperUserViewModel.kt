@@ -191,6 +191,8 @@ class SuperUserViewModel : ViewModel() {
         @Volatile
         private var cachedPackageApps: List<AppInfo>? = null
 
+        internal fun getAppsForWebUI(): List<AppInfo> = cachedPackageApps.orEmpty()
+
         suspend fun loadAppsForWebUI(): List<AppInfo> = cachedPackageApps
             ?: fetchAppListMutex.withLock {
                 cachedPackageApps ?: queryPackageApps(forceRefresh = false)

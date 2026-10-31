@@ -22,19 +22,20 @@ import com.anatdx.yukisu.ui.util.setTaskDescriptionLabel
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
 
-internal fun webUIApps(): List<SuperUserViewModel.AppInfo> = runBlocking {
+// WebView blocks its UI thread during synchronous Java bridge calls.
+internal fun webUIApps(): List<SuperUserViewModel.AppInfo> = SuperUserViewModel.getAppsForWebUI()
+
+internal suspend fun preloadWebUIApps() {
     try {
         SuperUserViewModel.loadAppsForWebUI()
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: Exception) {
         Log.e("WebUI", "Failed to load package inventory", error)
-        emptyList()
     }
 }
 
@@ -63,6 +64,7 @@ internal suspend fun prepareWebView(activity: Activity, moduleId: String, state:
             return@withContext
         }
 
+        preloadWebUIApps()
         val downloadScript = activity.assets.open("webview/download.js").bufferedReader().use { it.readText() }
         val shell = createRootShell(true)
         var attached = false
