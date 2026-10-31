@@ -505,7 +505,9 @@ static int ksu_file_load_policy_allow_sid(struct file *file, u32 ssid,
 		return -EBUSY;
 	memset(state, 0, sizeof(*state));
 
-	isec = selinux_inode(file_inode(file));
+	isec = ksu_selinux_inode(file_inode(file));
+	if (IS_ERR(isec))
+		return PTR_ERR(isec);
 	if (!isec)
 		return -EINVAL;
 	tsid = isec->sid;

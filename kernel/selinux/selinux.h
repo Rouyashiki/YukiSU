@@ -73,4 +73,17 @@ int handle_sepolicy(void __user *user_data, u64 data_len);
 void setup_ksu_cred(void);
 void escape_to_root_for_adb_root(void);
 
+struct inode;
+struct inode_security_struct;
+struct inode_security_struct *ksu_selinux_inode(const struct inode *inode);
+
+#if defined(MODULE) && defined(CONFIG_DEBUG_INFO_BTF)
+int __init ksu_selinux_inode_init(void);
+#else
+static inline int ksu_selinux_inode_init(void)
+{
+	return 0;
+}
+#endif
+
 #endif // #ifndef __KSU_H_SELINUX

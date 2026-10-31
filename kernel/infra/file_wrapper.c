@@ -583,9 +583,12 @@ int ksu_install_file_wrapper(int fd)
 	// buffer type.
 	wrapper_inode->i_mode = file_inode(orig_file)->i_mode;
 	struct inode_security_struct *wrapper_sec =
-	    selinux_inode(wrapper_inode);
-	// Use ksu_file_sid to bypass SELinux check.
-	// When we call `su` from terminal app, this is useful.
+	    ksu_selinux_inode(wrapper_inode);
+	if (IS_ERR(wrapper_sec)) {
+		ret = PTR_ERR(wrapper_sec);
+		goto out_put_wrapper_file;
+	}
+	// Label the unpublished inode for access from the root shell.
 	if (wrapper_sec) {
 		wrapper_sec->sid = ksu_file_sid;
 	}
