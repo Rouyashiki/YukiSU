@@ -15,7 +15,7 @@ class FileOutputStreamInterface(private val io: KsuIO) {
                 Log.w(TAG, "FileOutputStream open rejected: too many open streams")
                 return ""
             }
-            val file = com.topjohnwu.superuser.io.SuFile(path)
+            val file = io.file(path)
             val fos = SuFileOutputStream.open(file, append)
             val bos = BufferedOutputStream(fos, 64 * 1024)
             val id = UUID.randomUUID().toString()

@@ -20,7 +20,7 @@ class RandomAccessFileInterface(private val io: KsuIO) {
                 Log.w(TAG, "RandomAccessFile open rejected: too many open files")
                 return ""
             }
-            val raf = SuRandomAccessFile.open(path, mode)
+            val raf = SuRandomAccessFile.open(io.file(path), mode)
             val id = java.util.UUID.randomUUID().toString()
             openFiles[id] = raf
             id

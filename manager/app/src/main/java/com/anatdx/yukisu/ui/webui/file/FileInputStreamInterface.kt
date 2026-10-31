@@ -15,7 +15,7 @@ class FileInputStreamInterface(private val io: KsuIO) {
                 Log.w(TAG, "FileInputStream open rejected: too many open streams")
                 return ""
             }
-            val stream = ManagedInputStream(SuFileInputStream.open(path))
+            val stream = ManagedInputStream(SuFileInputStream.open(io.file(path)))
             val id = java.util.UUID.randomUUID().toString()
             io.openInputStreams[id] = stream
             id

@@ -5,7 +5,7 @@ import com.topjohnwu.superuser.io.SuFile
 import org.json.JSONArray
 
 class FileInterface(private val io: KsuIO, private val path: String) {
-    private val suFile: SuFile = SuFile(path)
+    private val suFile: SuFile get() = io.file(path)
 
     @JavascriptInterface
     fun exists(): Boolean = runCatching { suFile.exists() }.getOrDefault(false)
@@ -42,7 +42,7 @@ class FileInterface(private val io: KsuIO, private val path: String) {
 
     @JavascriptInterface
     fun renameTo(destPath: String): Boolean = runCatching {
-        suFile.renameTo(SuFile(destPath))
+        suFile.renameTo(io.file(destPath))
     }.getOrDefault(false)
 
     @JavascriptInterface
