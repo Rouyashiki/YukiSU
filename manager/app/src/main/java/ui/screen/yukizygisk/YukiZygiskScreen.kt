@@ -36,7 +36,6 @@ import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,14 +43,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -87,9 +82,6 @@ import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.execKsud
 import com.anatdx.yukisu.ui.util.getYukiZygiskStatusJson
 import com.anatdx.yukisu.ui.util.ksudReadString
-import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.topjohnwu.superuser.io.SuFile
 import com.topjohnwu.superuser.io.SuFileInputStream
 import kotlinx.coroutines.Dispatchers
@@ -874,7 +866,7 @@ private fun YukiZygiskTopBar(
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.settings_yukizygisk),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+            fontWeight = FontWeight.Normal,
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -893,23 +885,13 @@ private fun YukiZygiskTopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 @Composable
@@ -921,11 +903,7 @@ private fun ZygoteMonitorRow(zygote: ZygoteMonitorEntry, onStatusClick: () -> Un
             YukiIcon(
                 imageVector = Icons.Filled.Adb,
                 contentDescription = null,
-                tint = if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(4.dp)
                     .size(28.dp),
@@ -968,11 +946,7 @@ private fun ZygiskModuleRow(module: ModuleDisplayEntry, onStatusClick: () -> Uni
             YukiIcon(
                 imageVector = Icons.Filled.Extension,
                 contentDescription = null,
-                tint = if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(4.dp)
                     .size(28.dp),
@@ -1034,11 +1008,7 @@ private fun NativeModuleMonitorRow(module: NativeModuleMonitorEntry, onStatusCli
             YukiIcon(
                 imageVector = Icons.Filled.Extension,
                 contentDescription = null,
-                tint = if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(4.dp)
                     .size(28.dp),
@@ -1088,11 +1058,7 @@ private fun NativeProcessMonitorRow(process: NativeProcessEntry, onStatusClick: 
             YukiIcon(
                 imageVector = Icons.Filled.Terminal,
                 contentDescription = null,
-                tint = if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(4.dp)
                     .size(28.dp),
@@ -1181,57 +1147,28 @@ private fun MonitorCard(
     trailing: @Composable (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 20.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 20.dp),
+                .height(48.dp)
+                .padding(horizontal = 8.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(horizontal = 8.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f),
-                )
-                trailing?.invoke()
-            }
-            content()
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            trailing?.invoke()
         }
-    } else {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHigh),
-            elevation = getCardElevation(),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .padding(start = 16.dp, end = 8.dp),
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    trailing?.invoke()
-                }
-                content()
-            }
-        }
+        content()
     }
 }
 
@@ -1364,21 +1301,17 @@ private fun nativeModuleDialog(module: NativeModuleMonitorEntry): MonitorDialogS
 }
 
 @Composable
-private fun Modifier.monitorGroup(): Modifier = if (isExpressiveUi) {
-    this
-        .fillMaxWidth()
-        .padding(
-            horizontal = 6.dp,
-            vertical = ListItemDefaults.SegmentedGap / 2,
-        )
-        .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-        .clip(ListItemDefaults.shapes().shape)
-        .background(
-            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
-        )
-} else {
-    fillMaxWidth()
-}
+private fun Modifier.monitorGroup(): Modifier = this
+    .fillMaxWidth()
+    .padding(
+        horizontal = 6.dp,
+        vertical = ListItemDefaults.SegmentedGap / 2,
+    )
+    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+    .clip(ListItemDefaults.shapes().shape)
+    .background(
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
+    )
 
 @Composable
 private fun EmptyMonitorGroup(text: String) {
@@ -1386,22 +1319,18 @@ private fun EmptyMonitorGroup(text: String) {
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = if (isExpressiveUi) {
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 6.dp,
-                    vertical = ListItemDefaults.SegmentedGap / 2,
-                )
-                .defaultMinSize(minHeight = 56.dp)
-                .clip(MaterialTheme.shapes.large)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        } else {
-            Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 6.dp,
+                vertical = ListItemDefaults.SegmentedGap / 2,
+            )
+            .defaultMinSize(minHeight = 56.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     )
 }
 
@@ -1417,38 +1346,24 @@ private fun DenylistModeSelector(
         stringResource(R.string.yukizygisk_denylist_force),
         stringResource(R.string.yukizygisk_denylist_restore),
     )
-    if (isExpressiveUi) {
-        Row(
-            modifier = modifier.selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-        ) {
-            options.forEachIndexed { index, label ->
-                ToggleButton(
-                    checked = mode == index,
-                    onCheckedChange = { onSelect(index) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics { role = Role.RadioButton },
-                    shapes = when (index) {
-                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    },
-                ) {
-                    Text(label)
-                }
-            }
-        }
-    } else {
-        SingleChoiceSegmentedButtonRow(modifier = modifier) {
-            options.forEachIndexed { index, label ->
-                SegmentedButton(
-                    selected = mode == index,
-                    onClick = { onSelect(index) },
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                ) {
-                    Text(label)
-                }
+    Row(
+        modifier = modifier.selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+    ) {
+        options.forEachIndexed { index, label ->
+            ToggleButton(
+                checked = mode == index,
+                onCheckedChange = { onSelect(index) },
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { role = Role.RadioButton },
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+            ) {
+                Text(label)
             }
         }
     }

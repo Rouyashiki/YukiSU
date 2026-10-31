@@ -78,16 +78,12 @@ import com.anatdx.yukisu.ui.component.rememberCustomDialog
 import com.anatdx.yukisu.ui.component.rememberLoadingDialog
 import com.anatdx.yukisu.ui.component.performClickHapticFeedback
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
-import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
 import com.anatdx.yukisu.ui.theme.CardConfig.cardElevation
 import com.anatdx.yukisu.ui.theme.ThemeConfig
 import com.anatdx.yukisu.ui.theme.ThemeColors
 import com.anatdx.yukisu.ui.theme.ThemeManager
-import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -175,7 +171,7 @@ fun InstallScreen(
     var partitionSelectionIndex by remember { mutableIntStateOf(0) }
     var partitionsState by remember { mutableStateOf<List<String>>(emptyList()) }
     var hasCustomSelected by remember { mutableStateOf(false) }
-    
+
     // SuperKey for APatch-style authentication.
     // If we've already saved one (previous patch), prefill with a `********`
     // placeholder so the user can re-patch with the same key by just hitting
@@ -507,7 +503,7 @@ fun InstallScreen(
     ) { innerPadding ->
         MaterialTheme(
             colorScheme = MaterialTheme.colorScheme.copy(
-                surface = if (isExpressiveUi) Color.Transparent else MaterialTheme.colorScheme.surface
+                surface = Color.Transparent
             )
         ) {
             Column(
@@ -542,8 +538,6 @@ fun InstallScreen(
                         .padding(16.dp)
                 ) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.surfaceVariant),
-                        elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
@@ -610,8 +604,6 @@ fun InstallScreen(
                         .padding(16.dp)
                 ) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.surfaceVariant),
-                        elevation = getCardElevation(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         val method = installMethod as? InstallMethod.DownloadFile
@@ -649,8 +641,6 @@ fun InstallScreen(
                 // Select a local LKM file.
                 if (!utsBootRepatch && !configOnly) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.surfaceVariant),
-                        elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
@@ -690,8 +680,6 @@ fun InstallScreen(
                               installMethod is InstallMethod.DownloadFile),
                 ) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.tertiaryContainer),
-                        elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
@@ -744,7 +732,7 @@ fun InstallScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
-                            
+
                             // Signature bypass switch
                             Row(
                                 modifier = Modifier
@@ -779,8 +767,6 @@ fun InstallScreen(
                     visible = directKernelMethod && embedLkmInBoot,
                 ) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.errorContainer),
-                        elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
@@ -817,8 +803,6 @@ fun InstallScreen(
                     large = true,
                 ) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.secondaryContainer),
-                        elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
@@ -1069,20 +1053,14 @@ fun InstallScreen(
                         Spacer(Modifier.height(16.dp))
                         Text(
                             text = stringResource(R.string.install_advanced_tools),
-                            style = if (isExpressiveUi) {
-                                MaterialTheme.typography.labelLarge
-                            } else {
-                                MaterialTheme.typography.titleMedium
-                            },
-                            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
                         InstallSurface(
                             onClick = { navigator.navigate(PartitionManagerScreenDestination) },
-                            colors = getCardColors(MaterialTheme.colorScheme.surfaceVariant),
-                            elevation = getCardElevation(),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             ListItem(
@@ -1115,8 +1093,6 @@ fun InstallScreen(
                     visible = !utsBootRepatch && !isManager,
                 ) {
                     InstallSurface(
-                        colors = getCardColors(MaterialTheme.colorScheme.tertiaryContainer),
-                        elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp)
@@ -1177,14 +1153,10 @@ fun InstallScreen(
                 Button(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = if (isExpressiveUi) 56.dp else 0.dp),
+                        .defaultMinSize(minHeight = 56.dp),
                     enabled = installMethod != null && !isResolvingKmi && normalizedBlockModules != null,
                     onClick = onClickNext,
-                    shape = if (isExpressiveUi) {
-                        MaterialTheme.shapes.extraLarge
-                    } else {
-                        MaterialTheme.shapes.medium
-                    },
+                    shape = MaterialTheme.shapes.extraLarge,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -1207,58 +1179,28 @@ fun InstallScreen(
 @Composable
 private fun InstallMethodSectionSurface(
     modifier: Modifier = Modifier,
-    colors: CardColors = CardDefaults.elevatedCardColors(),
-    elevation: CardElevation = CardDefaults.elevatedCardElevation(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Column(modifier = modifier, content = content)
-    } else {
-        ElevatedCard(
-            modifier = modifier,
-            colors = colors,
-            elevation = elevation,
-            content = content,
-        )
-    }
+    Column(modifier = modifier, content = content)
 }
 
 @Composable
 private fun InstallSurface(
     modifier: Modifier = Modifier,
-    colors: CardColors = CardDefaults.elevatedCardColors(),
-    elevation: CardElevation = CardDefaults.elevatedCardElevation(),
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Column(
-            modifier = modifier
-                .clip(MaterialTheme.shapes.large)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                )
-                .then(
-                    if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-                ),
-            content = content,
-        )
-    } else if (onClick != null) {
-        ElevatedCard(
-            onClick = onClick,
-            modifier = modifier,
-            colors = colors,
-            elevation = elevation,
-            content = content,
-        )
-    } else {
-        ElevatedCard(
-            modifier = modifier,
-            colors = colors,
-            elevation = elevation,
-            content = content,
-        )
-    }
+    Column(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
+            )
+            .then(
+                if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+            ),
+        content = content,
+    )
 }
 
 @Composable
@@ -1426,19 +1368,13 @@ private fun SelectInstallMethod(
     ) {
         // LKM installation and patching methods.
             InstallMethodSectionSurface(
-                colors = getCardColors(MaterialTheme.colorScheme.surfaceVariant),
-                elevation = getCardElevation(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
                 MaterialTheme(
                     colorScheme = MaterialTheme.colorScheme.copy(
-                        surface = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-                            Color.Transparent
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
+                        surface = Color.Transparent
                     )
                 ) {
                     ListItem(
@@ -1452,65 +1388,38 @@ private fun SelectInstallMethod(
                         content = {
                             Text(
                                 stringResource(R.string.Lkm_install_methods),
-                                style = if (isExpressiveUi) {
-                                    MaterialTheme.typography.labelLarge
-                                } else {
-                                    MaterialTheme.typography.titleMedium
-                                },
-                                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
-                                color = if (isExpressiveUi) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     )
                 }
 
                 Column(
-                    modifier = if (isExpressiveUi) {
-                        Modifier
-                    } else {
-                        Modifier.padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = 16.dp
-                        )
-                    }
+                    modifier = Modifier
                 ) {
                     radioOptions.forEachIndexed { index, option ->
                             val interactionSource = remember { MutableInteractionSource() }
-                            val optionShape = if (isExpressiveUi) {
-                                if (radioOptions.size == 1) {
-                                    MaterialTheme.shapes.large
-                                } else {
-                                    ListItemDefaults.segmentedShapes(index, radioOptions.size).shape
-                                }
+                            val optionShape = if (radioOptions.size == 1) {
+                                MaterialTheme.shapes.large
                             } else {
-                                MaterialTheme.shapes.medium
+                                ListItemDefaults.segmentedShapes(index, radioOptions.size).shape
                             }
                             Surface(
                                 color = if (option.javaClass == selectedOption?.javaClass)
                                     MaterialTheme.colorScheme.secondaryContainer.copy(alpha = cardAlpha)
-                                else if (isExpressiveUi)
-                                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                                else
-                                    MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = cardAlpha),
+                                else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha),
                                 shape = optionShape,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .then(
-                                        if (isExpressiveUi) {
-                                            Modifier
-                                                .padding(
-                                                    horizontal = 6.dp,
-                                                    vertical = ListItemDefaults.SegmentedGap / 2,
-                                                )
-                                                .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                                        } else {
-                                            Modifier.padding(vertical = 4.dp)
-                                        }
+                                        Modifier
+                                            .padding(
+                                                horizontal = 6.dp,
+                                                vertical = ListItemDefaults.SegmentedGap / 2,
+                                            )
+                                            .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
                                     )
                                     .clip(optionShape)
                             ) {
@@ -1609,15 +1518,11 @@ private fun TopBar(
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val cardColor = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-        colorScheme.surfaceContainerLow
-    } else {
-        colorScheme.background
-    }
+    val cardColor = colorScheme.surfaceContainerLow
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.install),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+            fontWeight = FontWeight.Normal,
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -1636,23 +1541,13 @@ private fun TopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            colors = colors,
-            navigationIcon = navigationIcon,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            colors = colors,
-            navigationIcon = navigationIcon,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        colors = colors,
+        navigationIcon = navigationIcon,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 private fun isKoFile(context: Context, uri: Uri): Boolean {

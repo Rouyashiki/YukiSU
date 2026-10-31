@@ -23,8 +23,6 @@ import com.anatdx.yukisu.ui.theme.*
 import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.component.YukiIcon
 
-private val SETTINGS_GROUP_SPACING = 16.dp
-
 enum class MoreSettingsItemPosition(val index: Int, val count: Int) {
     First(0, 3),
     Middle(1, 3),
@@ -38,67 +36,34 @@ fun SettingsCard(
     icon: ImageVector? = null,
     content: @Composable () -> Unit
 ) {
-    if (isExpressiveUi) {
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = ManagerUi.GroupSpacing)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = ManagerUi.GroupSpacing)
+                .padding(horizontal = ManagerUi.SectionTitlePadding, vertical = ManagerUi.SectionTitlePadding)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = ManagerUi.SectionTitlePadding, vertical = ManagerUi.SectionTitlePadding)
-            ) {
-                if (icon != null) {
-                    YukiIcon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                }
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.primary
+            if (icon != null) {
+                YukiIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
                 )
+                Spacer(modifier = Modifier.width(12.dp))
             }
-            Column(content = { content() })
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
-    } else {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = SETTINGS_GROUP_SPACING),
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHigh),
-            elevation = getCardElevation(),
-            shape = MaterialTheme.shapes.medium
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .padding(horizontal = 16.dp)
-                ) {
-                    if (icon != null) {
-                        YukiIcon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                    }
-                    Text(text = title, style = MaterialTheme.typography.titleMedium)
-                }
-                content()
-            }
-        }
+        Column(content = { content() })
     }
 }
 
@@ -127,26 +92,22 @@ fun SettingItem(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (isExpressiveUi) {
-                    Modifier
-                        .padding(
-                            horizontal = 6.dp,
-                            vertical = ListItemDefaults.SegmentedGap / 2
+                Modifier
+                    .padding(
+                        horizontal = 6.dp,
+                        vertical = ListItemDefaults.SegmentedGap / 2
+                    )
+                    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+                    .clip(expressiveShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(
+                            alpha = CardConfig.cardAlpha
                         )
-                        .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                        .clip(expressiveShape)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(
-                                alpha = CardConfig.cardAlpha
-                            )
-                        )
-                        .clickable(onClick = onClick)
-                } else {
-                    Modifier.clickable(onClick = onClick)
-                }
+                    )
+                    .clickable(onClick = onClick)
             )
-            .padding(horizontal = ManagerUi.CardPadding, vertical = if (isExpressiveUi) 12.dp else 5.dp),
-        verticalAlignment = if (isExpressiveUi) Alignment.CenterVertically else Alignment.Top
+            .padding(horizontal = ManagerUi.CardPadding, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         MoreSettingsLeadingIcon(icon = icon, tint = iconTint)
 
@@ -157,7 +118,7 @@ fun SettingItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
                 maxLines = Int.MAX_VALUE,
                 overflow = TextOverflow.Visible
             )
@@ -197,26 +158,22 @@ fun SwitchSettingItem(
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.6f)
             .then(
-                if (isExpressiveUi) {
-                    Modifier
-                        .padding(
-                            horizontal = 6.dp,
-                            vertical = ListItemDefaults.SegmentedGap / 2
+                Modifier
+                    .padding(
+                        horizontal = 6.dp,
+                        vertical = ListItemDefaults.SegmentedGap / 2
+                    )
+                    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+                    .clip(expressiveShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(
+                            alpha = CardConfig.cardAlpha
                         )
-                        .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                        .clip(expressiveShape)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(
-                                alpha = CardConfig.cardAlpha
-                            )
-                        )
-                        .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-                } else {
-                    Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-                }
+                    )
+                    .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
             )
-            .padding(horizontal = ManagerUi.CardPadding, vertical = if (isExpressiveUi) 12.dp else 10.dp),
-        verticalAlignment = if (isExpressiveUi) Alignment.CenterVertically else Alignment.Top
+            .padding(horizontal = ManagerUi.CardPadding, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         MoreSettingsLeadingIcon(
             icon = icon,
@@ -234,7 +191,7 @@ fun SwitchSettingItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
             )
             if (summary != null) {
                 Spacer(modifier = Modifier.height(2.dp))
@@ -265,46 +222,31 @@ fun SettingsControlGroup(
         ListItemDefaults.segmentedShapes(groupPosition.index, groupPosition.count).shape
     }
     Column(
-        modifier = if (isExpressiveUi) {
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 6.dp,
-                    vertical = ListItemDefaults.SegmentedGap / 2
-                )
-                .clip(expressiveShape)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        } else {
-            Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 6.dp,
+                vertical = ListItemDefaults.SegmentedGap / 2
+            )
+            .clip(expressiveShape)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         content = content
     )
 }
 
 @Composable
 private fun MoreSettingsLeadingIcon(icon: ImageVector, tint: Color) {
-    if (isExpressiveUi) {
-        YukiIcon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(end = 16.dp)
-                .size(24.dp)
-        )
-    } else {
-        YukiIcon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier
-                .padding(end = 16.dp)
-                .size(24.dp)
-        )
-    }
+    YukiIcon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .padding(end = 16.dp)
+            .size(24.dp)
+    )
 }
 
 @Composable

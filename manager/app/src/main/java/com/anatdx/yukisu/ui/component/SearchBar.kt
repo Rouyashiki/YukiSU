@@ -33,7 +33,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.anatdx.yukisu.ui.theme.CardConfig
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +53,7 @@ fun SearchAppBar(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var onSearch by remember { mutableStateOf(false) }
-    val expressiveUi = isExpressiveUi && !LocalCompactWindow.current
+    val useFlexibleHeader = !LocalCompactWindow.current
     var compactHeader by remember { mutableStateOf(false) }
     var searchFieldVisible by remember { mutableStateOf(false) }
     val headerTransition = updateTransition(
@@ -72,8 +71,8 @@ fun SearchAppBar(
     } else {
         colorScheme.background
     }
-    LaunchedEffect(onSearch, expressiveUi) {
-        if (expressiveUi) {
+    LaunchedEffect(onSearch, useFlexibleHeader) {
+        if (useFlexibleHeader) {
             if (onSearch) {
                 compactHeader = true
                 snapshotFlow {
@@ -98,13 +97,13 @@ fun SearchAppBar(
         }
     }
 
-    val expressiveSearchEnter = expandHorizontally(
+    val searchEnter = expandHorizontally(
         animationSpec = motion.spatial<IntSize>(),
         expandFrom = Alignment.End,
         clip = true,
         initialWidth = { fullWidth -> fullWidth / 10 },
     )
-    val expressiveSearchExit = shrinkHorizontally(
+    val searchExit = shrinkHorizontally(
         animationSpec = motion.effects<IntSize>(),
         shrinkTowards = Alignment.End,
         clip = true,
@@ -120,18 +119,14 @@ fun SearchAppBar(
                 focusManager.clearFocus()
             }
         }
-        val horizontalOffset = if (expressiveUi) 8.dp else 0.dp
+        val horizontalOffset = if (useFlexibleHeader) 8.dp else 0.dp
         val endPadding = when {
             onBackClick != null -> 0.dp
-            expressiveUi -> 6.dp
+            useFlexibleHeader -> 6.dp
             else -> 14.dp
         }
         OutlinedTextField(
-            shape = if (isExpressiveUi) {
-                CircleShape
-            } else {
-                OutlinedTextFieldDefaults.shape
-            },
+            shape = CircleShape,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
@@ -176,7 +171,7 @@ fun SearchAppBar(
     }
 
     val compactTopBar: @Composable (Boolean) -> Unit = { searching ->
-        val showCompactTitle = if (expressiveUi) {
+        val showCompactTitle = if (useFlexibleHeader) {
             !searchTransition.currentState && !searchTransition.targetState
         } else {
             !searching
@@ -192,11 +187,11 @@ fun SearchAppBar(
                         content = { title() }
                     )
 
-                    if (expressiveUi) {
+                    if (useFlexibleHeader) {
                         searchTransition.AnimatedVisibility(
                             visible = { it },
-                            enter = expressiveSearchEnter,
-                            exit = expressiveSearchExit,
+                            enter = searchEnter,
+                            exit = searchExit,
                             content = { searchField() },
                         )
                     } else {
@@ -236,7 +231,7 @@ fun SearchAppBar(
             ),
             // Search replaces the flexible header with a compact field. Do not carry the
             // collapsed header offset into that field, otherwise it can start off-screen.
-            scrollBehavior = if (searching || expressiveUi || LocalCompactWindow.current) null else scrollBehavior,
+            scrollBehavior = null,
             colors = getTopAppBarColors(
                 containerColor = cardColor,
                 scrolledContainerColor = cardColor
@@ -244,7 +239,7 @@ fun SearchAppBar(
         )
     }
 
-    if (expressiveUi) {
+    if (useFlexibleHeader) {
         val headerEffectsSpec = motion.effects<Float>()
 
         headerTransition.AnimatedContent(

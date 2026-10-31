@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Prea multe jurnale, se afișează doar cele mai recente %1$d intrări</string>
     <string name="log_viewer_load_more">Încarcă mai multe jurnale</string>
     <string name="log_viewer_all_logs_loaded">Toate jurnalele afișate</string>
-    <string name="incompatible_kernel_msg">Administratorul curent este incompatibil cu acest kernel! Vă rugăm să faceți upgrade kernelului la versiunea %2$d sau mai nouă (curent %1$d)</string>
     <string name="umount_path_manager">Gestionarea căilor umount</string>
     <string name="umount_path_manager_summary">Gestionează căile de demontare ale kernelului</string>
     <string name="umount_path_restart_notice">Este necesară o repornire pentru ca modificările să aibă efect. Sistemul va aplica noua configurație la următoarea pornire</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Confirmați că imaginea boot selectată este o imagine din fabrică nemodificată.</string>
     <string name="hide_seccomp_status">Ascunde starea Seccomp</string>
     <string name="hide_seccomp_status_summary">Ascunde informațiile de stare Seccomp de pe pagina principală</string>
-    <string name="ui_style">Stilul interfeței</string>
-    <string name="ui_style_classic">Material 3 clasic</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Gest de revenire predictiv</string>
     <string name="predictive_back_gesture_summary">Previzualizează pagina anterioară în timpul gestului de revenire. Dezactivat implicit.</string>
     <string name="feature_control">Controlul funcțiilor</string>

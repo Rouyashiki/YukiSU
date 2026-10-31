@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Troppi registri, vengono mostrate solo le %1$d voci più recenti</string>
     <string name="log_viewer_load_more">Carica altri registri</string>
     <string name="log_viewer_all_logs_loaded">Tutti i registri visualizzati</string>
-    <string name="incompatible_kernel_msg">Il gestore attuale non è compatibile con questo kernel! Aggiorna il kernel alla versione %2$d o superiore (attualmente %1$d)</string>
     <string name="umount_path_manager">Gestione percorsi di umount</string>
     <string name="umount_path_manager_summary">Gestisci i percorsi di smontaggio del kernel</string>
     <string name="umount_path_restart_notice">È necessario un riavvio affinché le modifiche abbiano effetto. Il sistema applicherà la nuova configurazione al prossimo avvio</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Verifica che l’immagine boot selezionata sia un’immagine di fabbrica non modificata.</string>
     <string name="hide_seccomp_status">Nascondi stato di Seccomp</string>
     <string name="hide_seccomp_status_summary">Nascondi le informazioni sullo stato di Seccomp nella pagina iniziale</string>
-    <string name="ui_style">Stile dell’interfaccia</string>
-    <string name="ui_style_classic">Material 3 classico</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Gesto Indietro predittivo</string>
     <string name="predictive_back_gesture_summary">Mostra un’anteprima della pagina precedente durante il gesto Indietro. Disattivato per impostazione predefinita.</string>
     <string name="feature_control">Controllo delle funzioni</string>

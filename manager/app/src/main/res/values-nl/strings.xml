@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Te veel logboeken, alleen de nieuwste %1$d items worden weergegeven</string>
     <string name="log_viewer_load_more">Meer logboeken laden</string>
     <string name="log_viewer_all_logs_loaded">Alle logboeken weergegeven</string>
-    <string name="incompatible_kernel_msg">De huidige beheerder is niet compatibel met deze kernel! Werk de kernel bij naar versie %2$d of hoger (momenteel %1$d)</string>
     <string name="umount_path_manager">Beheer van umount-paden</string>
     <string name="umount_path_manager_summary">Beheer de ontkoppelpaden van de kernel</string>
     <string name="umount_path_restart_notice">Een herstart is vereist om de wijzigingen door te voeren. Het systeem past de nieuwe configuratie toe bij de volgende keer opstarten</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Controleer of het geselecteerde boot-image een ongewijzigd fabrieksimage is.</string>
     <string name="hide_seccomp_status">Seccomp-status verbergen</string>
     <string name="hide_seccomp_status_summary">Seccomp-status op de startpagina verbergen</string>
-    <string name="ui_style">Interfacestijl</string>
-    <string name="ui_style_classic">Material 3 klassiek</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Voorspellend teruggebaar</string>
     <string name="predictive_back_gesture_summary">Tijdens het teruggebaar een voorbeeld van de vorige pagina tonen. Standaard uitgeschakeld.</string>
     <string name="feature_control">Functiebeheer</string>

@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Preveč dnevnikov, prikazujem samo najnovejših %1$d vnosov</string>
     <string name="log_viewer_load_more">Naloži več dnevnikov</string>
     <string name="log_viewer_all_logs_loaded">Prikazani vsi dnevniki</string>
-    <string name="incompatible_kernel_msg">Trenutni upravitelj ni združljiv s tem jedrom! Nadgradite jedro na različico %2$d ali novejšo (trenutno %1$d)</string>
     <string name="umount_path_manager">Upravljanje poti umount</string>
     <string name="umount_path_manager_summary">Upravljanje poti odklopa jedra</string>
     <string name="umount_path_restart_notice">Za uveljavitev sprememb je potreben ponovni zagon. Sistem bo uporabil novo konfiguracijo ob naslednjem zagonu</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Prepričajte se, da je izbrana slika boot nespremenjena tovarniška slika.</string>
     <string name="hide_seccomp_status">Skrij stanje Seccomp</string>
     <string name="hide_seccomp_status_summary">Skrij stanje Seccomp na domači strani</string>
-    <string name="ui_style">Slog vmesnika</string>
-    <string name="ui_style_classic">Klasični Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Predvidena poteza nazaj</string>
     <string name="predictive_back_gesture_summary">Med potezo nazaj prikaži predogled prejšnje strani. Privzeto izklopljeno.</string>
     <string name="feature_control">Upravljanje funkcij</string>

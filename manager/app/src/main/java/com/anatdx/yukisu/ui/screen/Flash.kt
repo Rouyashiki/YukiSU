@@ -52,9 +52,7 @@ import com.anatdx.yukisu.ui.component.KeyEventBlocker
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
-import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.*
 import com.anatdx.yukisu.ui.util.module.ModuleUtils
 import com.anatdx.yukisu.ui.viewmodel.ModuleViewModel
@@ -702,35 +700,16 @@ private fun FlashStatusProgressIndicator(status: FlashingStatus) {
         FlashingStatus.FAILED -> MaterialTheme.colorScheme.error
     }
 
-    if (isExpressiveUi) {
-        if (status == FlashingStatus.FLASHING) {
-            LinearWavyProgressIndicator(
-                modifier = Modifier.fillMaxWidth(),
-                color = progressColor,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
-        } else {
-            LinearWavyProgressIndicator(
-                progress = { 1f },
-                modifier = Modifier.fillMaxWidth(),
-                color = progressColor,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
-        }
-    } else if (status == FlashingStatus.FLASHING) {
-        LinearProgressIndicator(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp),
+    if (status == FlashingStatus.FLASHING) {
+        LinearWavyProgressIndicator(
+            modifier = Modifier.fillMaxWidth(),
             color = progressColor,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
     } else {
-        LinearProgressIndicator(
+        LinearWavyProgressIndicator(
             progress = { 1f },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp),
+            modifier = Modifier.fillMaxWidth(),
             color = progressColor,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
@@ -739,38 +718,20 @@ private fun FlashStatusProgressIndicator(status: FlashingStatus) {
 
 @Composable
 private fun FlashProgressSurface(content: @Composable ColumnScope.() -> Unit) {
-    if (isExpressiveUi) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 16.dp,
-                    vertical = ListItemDefaults.SegmentedGap / 2,
-                )
-                .clip(MaterialTheme.shapes.large)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                )
-                .padding(16.dp),
-            content = content,
-        )
-    } else {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 16.dp,
+                vertical = ListItemDefaults.SegmentedGap / 2,
             )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                content = content,
+            .clip(MaterialTheme.shapes.large)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
             )
-        }
-    }
+            .padding(16.dp),
+        content = content,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -783,11 +744,7 @@ private fun TopBar(
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val cardColor = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-        colorScheme.surfaceContainerLow
-    } else {
-        colorScheme.background
-    }
+    val cardColor = colorScheme.surfaceContainerLow
     val statusColor = when(status) {
         FlashingStatus.FLASHING -> MaterialTheme.colorScheme.primary
         FlashingStatus.SUCCESS -> MaterialTheme.colorScheme.tertiary
@@ -804,7 +761,7 @@ private fun TopBar(
                         FlashingStatus.FAILED -> R.string.flash_failed
                     }
                 ),
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
                 color = statusColor
             )
 
@@ -846,25 +803,14 @@ private fun TopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 suspend fun getModuleNameFromUri(context: Context, uri: Uri): String {

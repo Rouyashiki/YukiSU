@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">لاگ‌های بسیار زیاد، فقط %1$d ورودی جدیدتر نمایش داده می‌شود</string>
     <string name="log_viewer_load_more">بارگذاری لاگ‌های بیشتر</string>
     <string name="log_viewer_all_logs_loaded">همه لاگ‌ها نمایش داده شدند</string>
-    <string name="incompatible_kernel_msg">مدیر فعلی با این کرنل ناسازگار است! لطفاً کرنل را به نسخه %2$d یا بالاتر ارتقا دهید (در حال حاضر %1$d)</string>
     <string name="umount_path_manager">مدیریت مسیر umount</string>
     <string name="umount_path_manager_summary">مسیرهای آنمانت کرنل را مدیریت کنید</string>
     <string name="umount_path_restart_notice">برای اعمال تغییرات، راه‌اندازی مجدد لازم است. سیستم پیکربندی جدید را در بوت بعدی اعمال می‌کند</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">مطمئن شوید تصویر boot انتخاب‌شده، تصویر کارخانه بدون تغییر است.</string>
     <string name="hide_seccomp_status">پنهان کردن وضعیت Seccomp</string>
     <string name="hide_seccomp_status_summary">پنهان کردن اطلاعات وضعیت Seccomp در صفحه اصلی</string>
-    <string name="ui_style">سبک رابط</string>
-    <string name="ui_style_classic">Material 3 کلاسیک</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">ژست بازگشت پیش‌بینانه</string>
     <string name="predictive_back_gesture_summary">هنگام بازگشت، پیش‌نمایش صفحه قبلی را همراه با ژست نشان می‌دهد. به‌طور پیش‌فرض خاموش است</string>
     <string name="feature_control">کنترل قابلیت‌ها</string>

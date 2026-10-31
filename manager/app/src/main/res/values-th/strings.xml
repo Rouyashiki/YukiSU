@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">บันทึกมากเกินไป แสดงเฉพาะ %1$d รายการล่าสุดเท่านั้น</string>
     <string name="log_viewer_load_more">โหลดบันทึกเพิ่มเติม</string>
     <string name="log_viewer_all_logs_loaded">แสดงบันทึกทั้งหมดแล้ว</string>
-    <string name="incompatible_kernel_msg">ตัวจัดการปัจจุบันไม่เข้ากันกับเคอร์เนลนี้! กรุณาอัปเกรดเคอร์เนลเป็นเวอร์ชัน %2$d หรือสูงกว่า (ปัจจุบัน %1$d)</string>
     <string name="umount_path_manager">การจัดการพาธ umount</string>
     <string name="umount_path_manager_summary">จัดการพาธยกเลิกการเมานต์ของเคอร์เนล</string>
     <string name="umount_path_restart_notice">ต้องรีบูตเพื่อให้การเปลี่ยนแปลงมีผล ระบบจะใช้การกำหนดค่าใหม่เมื่อบูตครั้งถัดไป</string>
@@ -515,7 +514,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">ยกเลิก</string>
@@ -695,8 +693,6 @@
     <string name="install_force_backup_summary">โปรดยืนยันว่าอิมเมจ boot ที่เลือกเป็นอิมเมจเดิมจากโรงงานที่ยังไม่ถูกแก้ไข</string>
     <string name="hide_seccomp_status">ซ่อนสถานะ Seccomp</string>
     <string name="hide_seccomp_status_summary">ซ่อนข้อมูลสถานะ Seccomp บนหน้าหลัก</string>
-    <string name="ui_style">รูปแบบอินเทอร์เฟซ</string>
-    <string name="ui_style_classic">Material 3 แบบคลาสสิก</string>
     <string name="predictive_back_gesture">ท่าทางย้อนกลับแบบคาดการณ์</string>
     <string name="predictive_back_gesture_summary">แสดงตัวอย่างหน้าก่อนหน้าตามท่าทางย้อนกลับ ปิดไว้โดยค่าเริ่มต้น</string>
     <string name="feature_control">การควบคุมฟีเจอร์</string>

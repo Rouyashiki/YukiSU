@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">অত্যধিক লগ, শুধুমাত্র সর্বশেষ %1$d টি এন্ট্রি দেখানো হচ্ছে</string>
     <string name="log_viewer_load_more">আরও লগ লোড করুন</string>
     <string name="log_viewer_all_logs_loaded">সব লগ প্রদর্শিত হয়েছে</string>
-    <string name="incompatible_kernel_msg">বর্তমান ম্যানেজার এই কার্নেলের সাথে বেমানান! অনুগ্রহ করে কার্নেল সংস্করণ %2$d বা উচ্চতরে আপগ্রেড করুন (বর্তমানে %1$d)</string>
     <string name="umount_path_manager">Umount পাথ ব্যবস্থাপনা</string>
     <string name="umount_path_manager_summary">কার্নেল আনমাউন্ট পাথ পরিচালনা করুন</string>
     <string name="umount_path_restart_notice">পরিবর্তন কার্যকর হওয়ার জন্য একটি রিবুট প্রয়োজন। সিস্টেম পরবর্তী বুটে নতুন কনফিগারেশন প্রয়োগ করবে</string>
@@ -509,7 +508,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">বাতিল করুন</string>
@@ -691,8 +689,6 @@
     <string name="settings_unshare_mnt_summary">আনমাউন্টের পর namespace পুনর্নির্মাণ করে দৃশ্যমান নম্বর সাজান। অ্যাপ পুনরায় চালুর পর কার্যকর হবে।</string>
     <string name="hide_seccomp_status">Seccomp-এর অবস্থা লুকান</string>
     <string name="hide_seccomp_status_summary">হোম পৃষ্ঠায় Seccomp-এর অবস্থার তথ্য লুকান</string>
-    <string name="ui_style">ইন্টারফেসের ধরন</string>
-    <string name="ui_style_classic">Material 3 ক্লাসিক</string>
     <string name="predictive_back_gesture">পূর্বানুমানভিত্তিক ফিরে যাওয়ার অঙ্গভঙ্গি</string>
     <string name="predictive_back_gesture_summary">ফিরে যাওয়ার অঙ্গভঙ্গির সঙ্গে আগের পৃষ্ঠার পূর্বরূপ দেখান। ডিফল্টভাবে বন্ধ</string>
     <string name="feature_control">বৈশিষ্ট্য নিয়ন্ত্রণ</string>

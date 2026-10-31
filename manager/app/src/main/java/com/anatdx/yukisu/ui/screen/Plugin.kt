@@ -48,7 +48,6 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -90,7 +89,6 @@ import com.anatdx.yukisu.ui.component.YukiPullToRefreshBox
 import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.component.rememberConfirmDialog
 import com.anatdx.yukisu.ui.component.rememberFabVisibilityState
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getElevatedCardColors
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getElevatedCardElevation
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
@@ -252,7 +250,7 @@ fun PluginScreen(navigator: DestinationsNavigator) {
                 title = {
                     Text(
                         text = stringResource(R.string.plugin),
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                        fontWeight = FontWeight.Normal,
                     )
                 },
                 searchText = searchQuery,
@@ -277,7 +275,7 @@ fun PluginScreen(navigator: DestinationsNavigator) {
         floatingActionButton = {
             AnimatedFab(visible = fabVisible && !isInstalling) {
                 FloatingActionButton(
-                    shape = if (isExpressiveUi) CircleShape else FloatingActionButtonDefaults.shape,
+                    shape = CircleShape,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     containerColor = MaterialTheme.colorScheme.primary,
                     onClick = { installLauncher.launch("application/zip") },
@@ -612,7 +610,7 @@ private fun PluginCard(
         modifier = Modifier.fillMaxWidth(),
         colors = getElevatedCardColors(),
         elevation = getElevatedCardElevation(),
-        shape = if (isExpressiveUi) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

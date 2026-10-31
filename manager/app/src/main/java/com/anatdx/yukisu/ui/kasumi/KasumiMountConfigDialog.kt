@@ -6,7 +6,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -29,7 +28,6 @@ import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.motion.YukiExpandArrow
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.kasumi.util.KasumiManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -124,27 +122,16 @@ internal fun KasumiMountConfigDialog(
                             enabled = !isSaving,
                             label = { Text(modeLabels[mode] ?: mode) },
                             leadingIcon = {
-                                if (isExpressiveUi) {
-                                    YukiIcon(
-                                        if (selectedMode == mode) Icons.Outlined.Check else when (mode) {
-                                            "kasumi" -> Icons.Outlined.Memory
-                                            "overlay" -> Icons.Outlined.Layers
-                                            "magic" -> Icons.Outlined.AutoFixHigh
-                                            "none" -> Icons.Outlined.Block
-                                            else -> Icons.Outlined.Settings
-                                        },
-                                        null, Modifier.size(FilterChipDefaults.IconSize),
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .background(
-                                                KASUMI_MODE_COLORS[mode] ?: MaterialTheme.colorScheme.primary,
-                                                RoundedCornerShape(4.dp)
-                                            )
-                                    )
-                                }
+                                YukiIcon(
+                                    if (selectedMode == mode) Icons.Outlined.Check else when (mode) {
+                                        "kasumi" -> Icons.Outlined.Memory
+                                        "overlay" -> Icons.Outlined.Layers
+                                        "magic" -> Icons.Outlined.AutoFixHigh
+                                        "none" -> Icons.Outlined.Block
+                                        else -> Icons.Outlined.Settings
+                                    },
+                                    null, Modifier.size(FilterChipDefaults.IconSize),
+                                )
                             }
                         )
                     }
@@ -153,26 +140,26 @@ internal fun KasumiMountConfigDialog(
                 KasumiBypassSwitch(moduleBypass, { moduleBypass = it }, !isSaving && (bypassSupported || moduleBypass))
                 Text(stringResource(R.string.kasumi_rule_bypass_summary), style = MaterialTheme.typography.bodySmall)
                 if (!bypassSupported) Text(stringResource(R.string.kasumi_rule_bypass_unavailable), style = MaterialTheme.typography.bodySmall)
-                if (!isExpressiveUi) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (isExpressiveUi) Modifier.clip(MaterialTheme.shapes.large)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier)
+                        .then(Modifier.clip(MaterialTheme.shapes.large)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh))
                         .heightIn(min = 48.dp)
                         .semantics { stateDescription = expansionState }
                         .clickable(role = Role.Button, onClickLabel = expansionAction) {
                             rulesExpanded = !rulesExpanded
                             if (!rulesExpanded) modeExpanded = false
                         }
-                        .padding(horizontal = if (isExpressiveUi) 16.dp else 0.dp, vertical = if (isExpressiveUi) 16.dp else 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = stringResource(R.string.kasumi_module_rules_title),
-                        style = if (isExpressiveUi) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleMedium
                     )
                     YukiExpandArrow(rulesExpanded)
                 }
@@ -184,10 +171,9 @@ internal fun KasumiMountConfigDialog(
                         rules.forEach { rule: KasumiManager.ModuleRule ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().then(
-                                    if (isExpressiveUi) Modifier.clip(MaterialTheme.shapes.medium)
+                                    Modifier.clip(MaterialTheme.shapes.medium)
                                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                        .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
-                                    else Modifier),
+                                        .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -232,7 +218,7 @@ internal fun KasumiMountConfigDialog(
                                 FilledTonalButton(
                                     enabled = !isSaving,
                                     onClick = { modeExpanded = true },
-                                    shape = if (isExpressiveUi) ButtonDefaults.shape else RoundedCornerShape(20.dp)
+                                    shape = ButtonDefaults.shape
                                 ) {
                                     Text(modeLabels[newMode] ?: newMode)
                                     YukiExpandArrow(modeExpanded && rulesExpanded)
@@ -262,7 +248,7 @@ internal fun KasumiMountConfigDialog(
                                         editingPath = null
                                     }
                                 },
-                                shape = if (isExpressiveUi) ButtonDefaults.shape else RoundedCornerShape(20.dp)
+                                shape = ButtonDefaults.shape
                             ) {
                                 Text(stringResource(if (editingPath == null) R.string.kasumi_module_rules_add else R.string.kasumi_rule_save))
                             }

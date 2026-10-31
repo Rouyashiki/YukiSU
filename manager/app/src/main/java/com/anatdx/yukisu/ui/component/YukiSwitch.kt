@@ -9,7 +9,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 
 @Composable
 fun YukiSwitch(
@@ -25,16 +24,12 @@ fun YukiSwitch(
         modifier = modifier,
         enabled = enabled,
         interactionSource = interactionSource,
-        thumbContent = if (isExpressiveUi) {
-            {
-                YukiIcon(
-                    imageVector = if (checked) Icons.Filled.Check else Icons.Filled.Close,
-                    contentDescription = null,
-                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                )
-            }
-        } else {
-            null
+        thumbContent = {
+            YukiIcon(
+                imageVector = if (checked) Icons.Filled.Check else Icons.Filled.Close,
+                contentDescription = null,
+                modifier = Modifier.size(SwitchDefaults.IconSize)
+            )
         }
     )
 }

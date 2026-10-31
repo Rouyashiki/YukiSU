@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">ತುಂಬಾ ಹೆಚ್ಚು ಲಾಗ್‌ಗಳು, ಕೇವಲ ಇತ್ತೀಚಿನ %1$d ನಮೂದುಗಳನ್ನು ತೋರಿಸಲಾಗುತ್ತಿದೆ</string>
     <string name="log_viewer_load_more">ಹೆಚ್ಚಿನ ಲಾಗ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಿ</string>
     <string name="log_viewer_all_logs_loaded">ಎಲ್ಲಾ ಲಾಗ್‌ಗಳನ್ನು ಪ್ರದರ್ಶಿಸಲಾಗಿದೆ</string>
-    <string name="incompatible_kernel_msg">ಪ್ರಸ್ತುತ ನಿರ್ವಾಹಕ ಈ ಕರ್ನಲ್‌ನೊಂದಿಗೆ ಹೊಂದಿಕೆಯಾಗುವುದಿಲ್ಲ! ದಯವಿಟ್ಟು ಕರ್ನಲ್ ಅನ್ನು ಆವೃತ್ತಿ %2$d ಅಥವಾ ಹೆಚ್ಚಿನದಕ್ಕೆ ಅಪ್‌ಗ್ರೇಡ್ ಮಾಡಿ (ಪ್ರಸ್ತುತ %1$d)</string>
     <string name="umount_path_manager">Umount ಪಥ ನಿರ್ವಹಣೆ</string>
     <string name="umount_path_manager_summary">ಕರ್ನಲ್ ಅನ್‌ಮೌಂಟ್ ಪಥಗಳನ್ನು ನಿರ್ವಹಿಸಿ</string>
     <string name="umount_path_restart_notice">ಬದಲಾವಣೆಗಳು ಜಾರಿಗೆ ಬರಲು ರೀಬೂಟ್ ಅಗತ್ಯವಿದೆ. ಸಿಸ್ಟಂ ಮುಂದಿನ ಬೂಟ್‌ನಲ್ಲಿ ಹೊಸ ಕಾನ್ಫಿಗರೇಶನ್ ಅನ್ನು ಅನ್ವಯಿಸುತ್ತದೆ</string>
@@ -513,7 +512,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">ರದ್ದುಮಾಡಿ</string>
@@ -693,8 +691,6 @@
     <string name="install_force_backup_summary">ಆಯ್ಕೆಮಾಡಿದ boot ಇಮೇಜ್ ಬದಲಾಯಿಸದ ಮೂಲ ಕಾರ್ಖಾನೆ ಇಮೇಜ್ ಎಂದು ಖಚಿತಪಡಿಸಿ.</string>
     <string name="hide_seccomp_status">Seccomp ಸ್ಥಿತಿ ಮರೆಮಾಡಿ</string>
     <string name="hide_seccomp_status_summary">ಮುಖಪುಟದಲ್ಲಿ Seccomp ಸ್ಥಿತಿ ಮಾಹಿತಿ ಮರೆಮಾಡಿ</string>
-    <string name="ui_style">ಇಂಟರ್ಫೇಸ್ ಶೈಲಿ</string>
-    <string name="ui_style_classic">Material 3 ಕ್ಲಾಸಿಕ್</string>
     <string name="predictive_back_gesture">ಮುನ್ಸೂಚಕ ಹಿಂದಿರುಗುವ ಗೆಸ್ಚರ್</string>
     <string name="predictive_back_gesture_summary">ಹಿಂದಿರುಗುವ ಗೆಸ್ಚರ್‌ನೊಂದಿಗೆ ಹಿಂದಿನ ಪುಟದ ಪೂರ್ವವೀಕ್ಷಣೆ ತೋರಿಸಿ. ಪೂರ್ವನಿಯೋಜಿತವಾಗಿ ಆಫ್</string>
     <string name="feature_control">ವೈಶಿಷ್ಟ್ಯ ನಿಯಂತ್ರಣ</string>

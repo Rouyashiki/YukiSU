@@ -111,7 +111,6 @@ class MainActivity : ComponentActivity() {
                 RamdiskExternalFiles(File(cacheDir, "ramdisk_external")).cleanExpired()
             }
             resetTaskDescriptionToAppName()
-            ThemeManager.loadUiStyle(this)
             ThemeManager.loadMotionPreset(this)
             ThemeManager.loadPageTransitionStyle(this)
 

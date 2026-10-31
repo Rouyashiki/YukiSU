@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Trop de journaux, affichage des %1$d entrées les plus récentes uniquement</string>
     <string name="log_viewer_load_more">Charger plus de journaux</string>
     <string name="log_viewer_all_logs_loaded">Tous les journaux affichés</string>
-    <string name="incompatible_kernel_msg">Le gestionnaire actuel est incompatible avec ce noyau ! Veuillez mettre à niveau le noyau vers la version %2$d ou supérieure (actuellement %1$d)</string>
     <string name="umount_path_manager">Gestion des chemins de démontage</string>
     <string name="umount_path_manager_summary">Gérer les chemins de démontage du noyau</string>
     <string name="umount_path_restart_notice">Un redémarrage est nécessaire pour que les modifications prennent effet. Le système appliquera la nouvelle configuration au prochain démarrage</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Vérifiez que l’image boot sélectionnée est une image d’usine non modifiée.</string>
     <string name="hide_seccomp_status">Masquer l’état de Seccomp</string>
     <string name="hide_seccomp_status_summary">Masquer l’état de Seccomp sur la page d’accueil</string>
-    <string name="ui_style">Style de l’interface</string>
-    <string name="ui_style_classic">Material 3 classique</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Geste de retour prédictif</string>
     <string name="predictive_back_gesture_summary">Prévisualiser la page précédente pendant le geste de retour. Désactivé par défaut.</string>
     <string name="feature_control">Contrôle des fonctions</string>

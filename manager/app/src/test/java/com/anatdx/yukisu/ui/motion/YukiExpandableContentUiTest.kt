@@ -22,9 +22,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import com.anatdx.yukisu.ui.theme.ExpressiveShapes
+import com.anatdx.yukisu.ui.theme.ExpressiveTypography
 import com.anatdx.yukisu.ui.screen.SwitchItem
-import com.anatdx.yukisu.ui.theme.LocalUiStyle
-import com.anatdx.yukisu.ui.theme.UiStyle
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,13 +65,8 @@ class YukiExpandableContentUiTest {
     }
 
     @Test
-    fun classicUpdateSwitchAnimatesItsCiRowOnEveryToggle() {
-        checkUpdateSwitch(UiStyle.Classic)
-    }
-
-    @Test
-    fun expressiveUpdateSwitchAnimatesItsCiRowOnEveryToggle() {
-        checkUpdateSwitch(UiStyle.Expressive)
+    fun updateSwitchAnimatesItsCiRowOnEveryToggle() {
+        checkUpdateSwitch()
     }
 
     @Test
@@ -140,11 +135,11 @@ class YukiExpandableContentUiTest {
         assertEquals(initialHeight, height("sized"))
     }
 
-    private fun checkUpdateSwitch(style: UiStyle) {
+    private fun checkUpdateSwitch() {
         val checkUpdate = mutableStateOf(true)
         compose.mainClock.autoAdvance = false
         compose.setContent {
-            MotionTheme(style) {
+            MotionTheme {
                 LookaheadScope {
                     Card {
                         Column {
@@ -172,13 +167,13 @@ class YukiExpandableContentUiTest {
         repeat(3) { attempt ->
             compose.onNodeWithText("Check updates").performClick()
             val closing = sampleHeights("ci-row")
-            assertTrue(closing.any { it in 1 until expandedHeight }, "$style close $attempt jumped or stalled: $closing")
+            assertTrue(closing.any { it in 1 until expandedHeight }, "close $attempt jumped or stalled: $closing")
             settle()
             compose.onNodeWithTag("ci-row").assertDoesNotExist()
 
             compose.onNodeWithText("Check updates").performClick()
             val opening = sampleHeights("ci-row")
-            assertTrue(opening.any { it in 1 until expandedHeight }, "$style open $attempt jumped or stalled: $opening")
+            assertTrue(opening.any { it in 1 until expandedHeight }, "open $attempt jumped or stalled: $opening")
             settle()
             assertEquals(expandedHeight, height("ci-row"))
         }
@@ -207,10 +202,10 @@ class YukiExpandableContentUiTest {
     }
 
     @Composable
-    private fun MotionTheme(style: UiStyle = UiStyle.Classic, content: @Composable () -> Unit) {
+    private fun MotionTheme(content: @Composable () -> Unit) {
         val motion = YukiMotion(MotionPreset.QBouncy)
-        CompositionLocalProvider(LocalYukiMotion provides motion, LocalUiStyle provides style) {
-            MaterialTheme(motionScheme = motion, content = content)
+        CompositionLocalProvider(LocalYukiMotion provides motion) {
+            MaterialTheme(typography = ExpressiveTypography, shapes = ExpressiveShapes, motionScheme = motion, content = content)
         }
     }
 }

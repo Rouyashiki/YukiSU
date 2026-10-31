@@ -38,7 +38,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -110,10 +109,8 @@ import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.screen.FlashIt
-import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
 import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.LocalSnackbarHost
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -404,7 +401,7 @@ fun PartitionManagerScreen(navigator: DestinationsNavigator) {
                     bottom = 32.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(
-                    if (isExpressiveUi) 0.dp else 12.dp
+                    0.dp
                 ),
             ) {
                 if (isRefreshing) {
@@ -568,16 +565,8 @@ fun PartitionManagerScreen(navigator: DestinationsNavigator) {
                                     R.string.partition_common
                                 }
                             ),
-                            style = if (isExpressiveUi) {
-                                MaterialTheme.typography.headlineSmall
-                            } else {
-                                MaterialTheme.typography.titleMedium
-                            },
-                            fontWeight = if (isExpressiveUi) {
-                                FontWeight.Normal
-                            } else {
-                                FontWeight.Bold
-                            },
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Normal,
                             modifier = Modifier.weight(1f),
                         )
                         Text(
@@ -824,7 +813,7 @@ private fun LazyListScope.partitionSection(
                     placementSpec = motion.spatial(),
                     fadeOutSpec = motion.effects(),
                 )
-                .padding(bottom = if (isExpressiveUi) 8.dp else 0.dp),
+                .padding(bottom = 8.dp),
         ) {
             content()
         }
@@ -847,7 +836,7 @@ private fun PartitionManagerTopBar(
         title = {
             Text(
                 text = stringResource(R.string.partition_manager),
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
             )
         },
         searchText = searchText,
@@ -981,7 +970,7 @@ private fun BackupLocationDialog(
                     onClick = onChooseDirectory,
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = if (isExpressiveUi) CircleShape else ButtonDefaults.outlinedShape,
+                    shape = CircleShape,
                 ) {
                     YukiIcon(Icons.Filled.Folder, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -1022,12 +1011,8 @@ private fun PartitionOverviewCard(
             Text(
                 text = stringResource(R.string.partition_overview),
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Normal,
             )
             InfoRow(
                 stringResource(R.string.partition_count),
@@ -1164,12 +1149,9 @@ private fun PartitionFilterChip(
         } else {
             null
         },
-        shape = if (isExpressiveUi) CircleShape else FilterChipDefaultsShape,
+        shape = CircleShape,
     )
 }
-
-private val FilterChipDefaultsShape: RoundedCornerShape
-    get() = RoundedCornerShape(8.dp)
 
 @Composable
 private fun PartitionSelectionCard(
@@ -1301,12 +1283,8 @@ private fun SlotInfoCard(
             Text(
                 text = stringResource(R.string.partition_slot_info),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.Bold,
-                color = if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.primary,
             )
             InfoRow(
                 label = stringResource(R.string.partition_device_type),
@@ -1367,20 +1345,12 @@ private fun PartitionCard(
     onLongClick: () -> Unit,
 ) {
     val motion = LocalYukiMotion.current
-    val shape = if (isExpressiveUi) {
-        ListItemDefaults.segmentedShapes(index, count).shape
-    } else {
-        RoundedCornerShape(12.dp)
-    }
+    val shape = ListItemDefaults.segmentedShapes(index, count).shape
     Card(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (isExpressiveUi) {
-                    Modifier.padding(vertical = ListItemDefaults.SegmentedGap / 2)
-                } else {
-                    Modifier
-                }
+                Modifier.padding(vertical = ListItemDefaults.SegmentedGap / 2)
             )
             .clip(shape)
             .combinedClickable(
@@ -1389,7 +1359,7 @@ private fun PartitionCard(
                 onLongClick = onLongClick,
             )
             .defaultMinSize(
-                minHeight = if (isExpressiveUi) ExpressiveListGroupMinHeight else 0.dp
+                minHeight = ExpressiveListGroupMinHeight
             ),
         colors = if (isSelected) {
             CardDefaults.cardColors(
@@ -1397,15 +1367,11 @@ private fun PartitionCard(
             )
         } else {
             getCardColors(
-                if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.surfaceContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerLow
-                }
+                MaterialTheme.colorScheme.surfaceContainer
             )
         },
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isExpressiveUi) 0.dp else CardConfig.cardElevation
+            defaultElevation = 0.dp
         ),
         border = if (partition.isDangerous) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.error)
@@ -1445,11 +1411,7 @@ private fun PartitionCard(
                     Text(
                         text = partition.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isExpressiveUi) {
-                            FontWeight.Normal
-                        } else {
-                            FontWeight.Bold
-                        },
+                        fontWeight = FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -1912,66 +1874,34 @@ private fun Ak3MkbootfsOption(
     val title = stringResource(R.string.partition_ak3_use_mkbootfs)
     val summary = stringResource(R.string.partition_ak3_use_mkbootfs_summary)
 
-    if (isExpressiveUi) {
-        Card(
-            onClick = { onCheckedChange(!checked) },
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainer),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Normal,
-                    )
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                YukiSwitch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    enabled = enabled,
-                )
-            }
-        }
-    } else {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+    Card(
+        onClick = { onCheckedChange(!checked) },
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = getCardColors(MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Normal,
                 )
                 Text(
                     text = summary,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -1992,7 +1922,7 @@ private fun PartitionSurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isExpressiveUi) 0.dp else CardConfig.cardElevation
+            defaultElevation = 0.dp
         ),
         shape = partitionCardShape(),
     ) {
@@ -2001,11 +1931,7 @@ private fun PartitionSurfaceCard(
 }
 
 @Composable
-private fun partitionCardShape() = if (isExpressiveUi) {
-    MaterialTheme.shapes.extraLarge
-} else {
-    RoundedCornerShape(12.dp)
-}
+private fun partitionCardShape() = MaterialTheme.shapes.extraLarge
 
 private fun Set<String>.toggle(value: String): Set<String> {
     return if (value in this) this - value else this + value

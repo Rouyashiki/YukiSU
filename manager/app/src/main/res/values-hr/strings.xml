@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Previše zapisnika, prikazujem samo najnovijih %1$d unosa</string>
     <string name="log_viewer_load_more">Učitaj više zapisnika</string>
     <string name="log_viewer_all_logs_loaded">Prikazani svi zapisnici</string>
-    <string name="incompatible_kernel_msg">Trenutni upravitelj nije kompatibilan s ovom jezgrom! Nadogradite jezgru na verziju %2$d ili noviju (trenutno %1$d)</string>
     <string name="umount_path_manager">Upravljanje umount putanjama</string>
     <string name="umount_path_manager_summary">Upravljaj putanjama odmontiranja jezgre</string>
     <string name="umount_path_restart_notice">Za primjenu promjena potrebno je ponovno pokretanje. Sustav će primijeniti novu konfiguraciju pri sljedećem pokretanju</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Provjerite je li odabrana boot slika neizmijenjena tvornička slika.</string>
     <string name="hide_seccomp_status">Sakrij stanje Seccompa</string>
     <string name="hide_seccomp_status_summary">Skriva podatke o stanju Seccompa na početnoj stranici</string>
-    <string name="ui_style">Stil sučelja</string>
-    <string name="ui_style_classic">Klasični Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Prediktivna gesta za povratak</string>
     <string name="predictive_back_gesture_summary">Prikazuje prethodnu stranicu prateći gestu povratka. Zadano je isključeno</string>
     <string name="feature_control">Upravljanje funkcijama</string>

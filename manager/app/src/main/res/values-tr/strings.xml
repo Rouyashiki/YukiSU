@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Çok fazla günlük var, yalnızca son %1$d giriş gösteriliyor</string>
     <string name="log_viewer_load_more">Daha Fazla Günlük Yükle</string>
     <string name="log_viewer_all_logs_loaded">Tüm günlükler görüntülendi</string>
-    <string name="incompatible_kernel_msg">Mevcut yönetici bu çekirdekle uyumsuz! Lütfen çekirdeği %2$d veya daha yüksek bir sürüme yükseltin (mevcut sürüm %1$d)</string>
     <string name="umount_path_manager">Bağlantı Kaldırma Yolu Yönetimi</string>
     <string name="umount_path_manager_summary">Çekirdek bağlantı kaldırma yollarını yönetin</string>
     <string name="umount_path_restart_notice">Değişikliklerin etkili olması için yeniden başlatma gereklidir. Sistem yeni yapılandırmayı bir sonraki önyüklemede uygulayacaktır</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Seçilen boot görüntüsünün değiştirilmemiş fabrika görüntüsü olduğundan emin olun.</string>
     <string name="hide_seccomp_status">Seccomp durumunu gizle</string>
     <string name="hide_seccomp_status_summary">Ana sayfadaki Seccomp durum bilgisini gizler</string>
-    <string name="ui_style">Arayüz stili</string>
-    <string name="ui_style_classic">Klasik Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Öngörülü geri hareketi</string>
     <string name="predictive_back_gesture_summary">Geri hareketini izleyerek önceki sayfanın önizlemesini gösterir. Varsayılan olarak kapalıdır</string>
     <string name="feature_control">Özellik denetimi</string>

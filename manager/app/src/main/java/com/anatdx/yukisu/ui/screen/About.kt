@@ -47,7 +47,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -75,8 +73,6 @@ import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
 import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.OpenSourceLicenseScreenDestination
@@ -158,17 +154,7 @@ private fun AboutListGroup(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Column(modifier.fillMaxWidth(), content = content)
-    } else {
-        Card(
-            modifier = modifier.fillMaxWidth(),
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow),
-            elevation = getCardElevation(),
-        ) {
-            Column(Modifier.padding(vertical = 8.dp), content = content)
-        }
-    }
+    Column(modifier.fillMaxWidth(), content = content)
 }
 
 @Composable
@@ -181,7 +167,6 @@ private fun AboutListItem(
     external: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val expressive = isExpressiveUi
     ListItem(
         content = { Text(title, style = MaterialTheme.typography.titleMedium) },
         supportingContent = { Text(summary, color = MaterialTheme.colorScheme.onSurfaceVariant) },
@@ -194,22 +179,14 @@ private fun AboutListItem(
             )
         },
         colors = ListItemDefaults.colors(
-            containerColor = if (expressive) {
-                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
-            } else {
-                Color.Transparent
-            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha),
         ),
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (expressive) {
-                    Modifier
-                        .padding(horizontal = 6.dp, vertical = ListItemDefaults.SegmentedGap / 2)
-                        .clip(ListItemDefaults.segmentedShapes(index, count).shape)
-                } else {
-                    Modifier
-                }
+                Modifier
+                    .padding(horizontal = 6.dp, vertical = ListItemDefaults.SegmentedGap / 2)
+                    .clip(ListItemDefaults.segmentedShapes(index, count).shape)
             )
             .clickable(onClick = onClick)
             .defaultMinSize(minHeight = ExpressiveListGroupMinHeight),
@@ -290,7 +267,7 @@ fun OpenSourceLicensesScreen(navigator: DestinationsNavigator) {
                 value = query, onValueChange = { query = it }, singleLine = true,
                 label = { Text(stringResource(R.string.open_source_search)) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
-                shape = if (isExpressiveUi) MaterialTheme.shapes.extraLarge else MaterialTheme.shapes.small,
+                shape = MaterialTheme.shapes.extraLarge,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             LicenseAsset(
@@ -365,8 +342,7 @@ fun OpenSourceLicenseScreen(componentId: String, navigator: DestinationsNavigato
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = MaterialTheme.shapes.large,
                                 colors = getCardColors(
-                                    if (isExpressiveUi) MaterialTheme.colorScheme.surfaceContainer
-                                    else MaterialTheme.colorScheme.surfaceContainerLow
+                                    MaterialTheme.colorScheme.surfaceContainer
                                 ),
                             ) {
                                 Column(
@@ -420,8 +396,7 @@ fun OpenSourceLicenseScreen(componentId: String, navigator: DestinationsNavigato
                                     Modifier.fillMaxWidth()
                                         .clip(shape)
                                         .background(
-                                            (if (isExpressiveUi) MaterialTheme.colorScheme.surfaceContainer
-                                            else MaterialTheme.colorScheme.surfaceContainerLow)
+                                            (MaterialTheme.colorScheme.surfaceContainer)
                                                 .copy(alpha = CardConfig.cardAlpha)
                                         )
                                         .padding(
@@ -474,21 +449,12 @@ private fun AboutScaffold(
                 containerColor = background,
                 scrolledContainerColor = background,
             )
-            if (isExpressiveUi) {
-                YukiLargeTopAppBar(
-                    title = { Text(title) },
-                    navigationIcon = navigationIcon,
-                    colors = colors,
-                    scrollBehavior = scrollBehavior,
-                )
-            } else {
-                TopAppBar(
-                    title = { Text(title) },
-                    navigationIcon = navigationIcon,
-                    colors = colors,
-                    scrollBehavior = scrollBehavior,
-                )
-            }
+            YukiLargeTopAppBar(
+                title = { Text(title) },
+                navigationIcon = navigationIcon,
+                colors = colors,
+                scrollBehavior = scrollBehavior,
+            )
         },
         content = content,
     )

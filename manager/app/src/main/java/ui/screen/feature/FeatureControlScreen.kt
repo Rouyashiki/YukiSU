@@ -26,7 +26,6 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.KsuIsValid
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.getFeatureStatus
 import com.anatdx.yukisu.ui.util.getFeatureValue
@@ -536,7 +535,7 @@ private fun FeatureControlTopBar(
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.feature_control),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null
+            fontWeight = FontWeight.Normal
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -555,21 +554,11 @@ private fun FeatureControlTopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior
+    )
 }

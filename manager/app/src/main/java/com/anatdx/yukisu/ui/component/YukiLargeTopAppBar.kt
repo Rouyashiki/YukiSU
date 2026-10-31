@@ -8,7 +8,6 @@ import androidx.compose.animation.rememberSplineBasedDecay
 import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.LocalCompactWindow
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -16,7 +15,7 @@ fun rememberYukiTopAppBarScrollBehavior(
     state: TopAppBarState = rememberTopAppBarState(),
 ): TopAppBarScrollBehavior {
     val motion = LocalYukiMotion.current
-    return if (isExpressiveUi && !LocalCompactWindow.current) {
+    return if (!LocalCompactWindow.current) {
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
             state = state,
             snapAnimationSpec = motion.spatial(),

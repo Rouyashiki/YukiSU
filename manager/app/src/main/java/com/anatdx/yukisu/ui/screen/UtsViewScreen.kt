@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -38,14 +37,12 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -78,9 +75,6 @@ import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
-import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.UTS_FIELD_DOMAINNAME
 import com.anatdx.yukisu.ui.util.UTS_FIELD_MACHINE
@@ -670,7 +664,7 @@ private fun UtsViewTopBar(
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.uts_view_title),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+            fontWeight = FontWeight.Normal,
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -699,30 +693,18 @@ private fun UtsViewTopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 @Composable
 private fun StatusGroup(status: UtsViewStatus) {
-    val warningCount = listOf(status.lateCapture, status.lateGaps).count { it }
     val source = when (status.source) {
         "boot" -> stringResource(R.string.uts_view_source_boot)
         "runtime" -> stringResource(R.string.uts_view_source_runtime)
@@ -737,115 +719,76 @@ private fun StatusGroup(status: UtsViewStatus) {
     }
     val yes = stringResource(R.string.uts_view_value_yes)
     val no = stringResource(R.string.uts_view_value_no)
-    val entries = listOf(
-        stringResource(R.string.uts_view_status_source) to source,
-        stringResource(R.string.uts_view_status_mode) to mode,
-        stringResource(R.string.uts_view_status_boot_locked) to if (status.bootLocked) yes else no,
-        stringResource(R.string.uts_view_status_original_valid) to if (status.originalValid) yes else no,
-    )
 
     UtsListGroup(title = stringResource(R.string.uts_view_current_status)) {
-        if (isExpressiveUi) {
-            UtsGroupItem(index = 0, count = 1) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+        UtsGroupItem(index = 0, count = 1) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = mode,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Normal,
-                            )
-                            Text(
-                                text = stringResource(R.string.uts_view_status_mode),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = source,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Normal,
-                            )
-                            Text(
-                                text = stringResource(R.string.uts_view_status_source),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Text(
+                            text = mode,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Normal,
+                        )
+                        Text(
+                            text = stringResource(R.string.uts_view_status_mode),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        UtsStatusMetric(
-                            label = stringResource(R.string.uts_view_status_boot_locked),
-                            value = if (status.bootLocked) yes else no,
-                            modifier = Modifier.weight(1f),
+                        Text(
+                            text = source,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Normal,
                         )
-                        UtsStatusMetric(
-                            label = stringResource(R.string.uts_view_status_original_valid),
-                            value = if (status.originalValid) yes else no,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (status.lateCapture) {
-                        UtsStatusWarning(
-                            text = stringResource(R.string.uts_view_late_capture_warning)
-                        )
-                    }
-                    if (status.lateGaps) {
-                        UtsStatusWarning(
-                            text = stringResource(R.string.uts_view_late_gaps_warning)
+                        Text(
+                            text = stringResource(R.string.uts_view_status_source),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-            }
-        } else {
-            val itemCount = entries.size + warningCount
-            entries.forEachIndexed { index, (label, value) ->
-                UtsGroupItem(index = index, count = itemCount) {
-                    ListItem(
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        content = { Text(label) },
-                        trailingContent = {
-                            Text(
-                                text = value,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    UtsStatusMetric(
+                        label = stringResource(R.string.uts_view_status_boot_locked),
+                        value = if (status.bootLocked) yes else no,
+                        modifier = Modifier.weight(1f),
+                    )
+                    UtsStatusMetric(
+                        label = stringResource(R.string.uts_view_status_original_valid),
+                        value = if (status.originalValid) yes else no,
+                        modifier = Modifier.weight(1f),
                     )
                 }
-            }
-            var warningIndex = entries.size
-            if (status.lateCapture) {
-                UtsWarningItem(
-                    text = stringResource(R.string.uts_view_late_capture_warning),
-                    index = warningIndex++,
-                    count = itemCount,
-                )
-            }
-            if (status.lateGaps) {
-                UtsWarningItem(
-                    text = stringResource(R.string.uts_view_late_gaps_warning),
-                    index = warningIndex,
-                    count = itemCount,
-                )
+                if (status.lateCapture) {
+                    UtsStatusWarning(
+                        text = stringResource(R.string.uts_view_late_capture_warning)
+                    )
+                }
+                if (status.lateGaps) {
+                    UtsStatusWarning(
+                        text = stringResource(R.string.uts_view_late_gaps_warning)
+                    )
+                }
             }
         }
     }
@@ -1047,7 +990,7 @@ private fun UtsTemplateTargetSelector(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                horizontal = if (isExpressiveUi) 6.dp else 12.dp,
+                horizontal = 6.dp,
                 vertical = 4.dp,
             ),
     ) {
@@ -1145,7 +1088,7 @@ private fun UtsFieldEditorItem(
                 Text(
                     text = stringResource(field.label),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                    fontWeight = FontWeight.Normal,
                     modifier = Modifier.weight(1f).padding(end = 12.dp),
                 )
                 YukiSwitch(
@@ -1185,11 +1128,7 @@ private fun UtsFieldEditorItem(
                         },
                         enabled = enabled,
                         singleLine = true,
-                        shape = if (isExpressiveUi) {
-                            CircleShape
-                        } else {
-                            OutlinedTextFieldDefaults.shape
-                        },
+                        shape = CircleShape,
                         supportingText = {
                             Text(
                                 stringResource(
@@ -1233,39 +1172,19 @@ private fun UtsListGroup(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = utsHorizontalPadding, vertical = 12.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Normal,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            )
-            Column(content = content)
-        }
-    } else {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = utsHorizontalPadding, vertical = 8.dp),
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow),
-            elevation = getCardElevation(),
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                content()
-            }
-        }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = utsHorizontalPadding, vertical = 12.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+        )
+        Column(content = content)
     }
 }
 
@@ -1276,61 +1195,22 @@ private fun UtsGroupItem(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     content: @Composable () -> Unit,
 ) {
-    if (isExpressiveUi) {
-        val shape = if (count == 1) {
-            MaterialTheme.shapes.large
-        } else {
-            ListItemDefaults.segmentedShapes(index, count).shape
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 6.dp,
-                    vertical = ListItemDefaults.SegmentedGap / 2,
-                )
-                .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                .clip(shape)
-                .background(containerColor.copy(alpha = cardAlpha)),
-        ) {
-            content()
-        }
+    val shape = if (count == 1) {
+        MaterialTheme.shapes.large
     } else {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (index > 0) {
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            }
-            content()
-        }
+        ListItemDefaults.segmentedShapes(index, count).shape
     }
-}
-
-@Composable
-private fun UtsWarningItem(
-    text: String,
-    index: Int,
-    count: Int,
-) {
-    UtsGroupItem(
-        index = index,
-        count = count,
-        containerColor = MaterialTheme.colorScheme.errorContainer,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 6.dp,
+                vertical = ListItemDefaults.SegmentedGap / 2,
+            )
+            .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+            .clip(shape)
+            .background(containerColor.copy(alpha = cardAlpha)),
     ) {
-        ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = {
-                Icon(
-                    imageVector = Icons.Filled.WarningAmber,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            },
-            content = {
-                Text(
-                    text = text,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            },
-        )
+        content()
     }
 }

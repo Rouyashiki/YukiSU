@@ -45,10 +45,9 @@ object ThemeConfig {
     var forceDarkMode by mutableStateOf<Boolean?>(null)
     var currentTheme by mutableStateOf<ThemeColors>(ThemeColors.Default)
     var useDynamicColor by mutableStateOf(false)
-    var uiStyle by mutableStateOf(UiStyle.Classic)
     var motionPreset by mutableStateOf(MotionPreset.QBouncy)
     var pageTransitionStyle by mutableStateOf(PageTransitionStyle.Reveal)
-    
+
     // 背景状态
     var isTransPrideUnlocked by mutableStateOf(false)
     var backgroundImageLoaded by mutableStateOf(false)
@@ -86,7 +85,6 @@ object ThemeConfig {
         forceDarkMode = null
         currentTheme = ThemeColors.Default
         useDynamicColor = false
-        uiStyle = UiStyle.Classic
         motionPreset = MotionPreset.QBouncy
         pageTransitionStyle = PageTransitionStyle.Reveal
         backgroundImageLoaded = false
@@ -148,13 +146,6 @@ object ThemeManager {
         ThemeConfig.useDynamicColor = enabled
     }
 
-    fun saveUiStyle(context: Context, uiStyle: UiStyle) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
-            putString("ui_style", uiStyle.persistedValue)
-        }
-        ThemeConfig.uiStyle = uiStyle
-    }
-
     fun saveMotionPreset(context: Context, preset: MotionPreset) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
             putString("motion_preset", preset.persistedValue)
@@ -181,33 +172,13 @@ object ThemeManager {
         ThemeConfig.pageTransitionStyle = PageTransitionStyle.fromPersistedValue(savedValue)
     }
 
-    fun loadUiStyle(context: Context) {
-        val themePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedValue = themePrefs.getString("ui_style", null)
-
-        if (savedValue != null) {
-            ThemeConfig.uiStyle = UiStyle.fromPersistedValue(savedValue)
-            return
-        }
-
-        // A genuinely fresh installation starts with MD3E. Existing installations
-        // that predate the UI-style preference keep the classic UI they were using.
-        val isFirstRun = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-            .getBoolean("is_first_run", true)
-        val defaultStyle = if (isFirstRun) UiStyle.Expressive else UiStyle.Classic
-        themePrefs.edit {
-            putString("ui_style", defaultStyle.persistedValue)
-        }
-        ThemeConfig.uiStyle = defaultStyle
-    }
-    
     fun unlockTransPride(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
             putBoolean("trans_pride_unlocked", true)
         }
         ThemeConfig.isTransPrideUnlocked = true
     }
-    
+
     fun loadTransPrideState(context: Context) {
         val unlocked = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean("trans_pride_unlocked", false)
@@ -339,14 +310,12 @@ fun KernelSUTheme(
 
     val motion = rememberYukiMotion(ThemeConfig.motionPreset)
     CompositionLocalProvider(
-        LocalUiStyle provides ThemeConfig.uiStyle,
         LocalYukiMotion provides motion,
     ) {
-        val expressive = ThemeConfig.uiStyle == UiStyle.Expressive
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = if (expressive) ExpressiveTypography else Typography,
-            shapes = if (expressive) ExpressiveShapes else Shapes(),
+            typography = ExpressiveTypography,
+            shapes = ExpressiveShapes,
             motionScheme = motion,
             content = themedContent
         )
@@ -381,7 +350,6 @@ private fun ThemeInitializer(context: Context, systemIsDark: Boolean) {
             ThemeManager.loadThemeMode(context)
             ThemeManager.loadThemeColors(context)
             ThemeManager.loadDynamicColorState(context)
-            ThemeManager.loadUiStyle(context)
             ThemeManager.loadMotionPreset(context)
             ThemeManager.loadPageTransitionStyle(context)
             ThemeManager.loadTransPrideState(context)
@@ -672,10 +640,6 @@ fun Context.saveThemeColors(themeName: String) {
 
 fun Context.saveDynamicColorState(enabled: Boolean) {
     ThemeManager.saveDynamicColorState(this, enabled)
-}
-
-fun Context.saveUiStyle(uiStyle: UiStyle) {
-    ThemeManager.saveUiStyle(this, uiStyle)
 }
 
 fun Context.saveMotionPreset(preset: MotionPreset) {

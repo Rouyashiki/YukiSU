@@ -392,8 +392,6 @@
     <string name="log_viewer_too_many_logs">日誌過多，只顯示最新的 %1$d 條</string>
     <string name="log_viewer_load_more">讀取更多日誌</string>
     <string name="log_viewer_all_logs_loaded">已顯示所有日誌</string>
-    <string name="incompatible_kernel_msg">    目前管理器與此核心不相容！請升級核心到 %2$d 或是更高版本(：%1$d)
-    </string>
     <string name="umount_path_manager">卸載路徑管理</string>
     <string name="umount_path_manager_summary">管理核心卸載路徑</string>
     <string name="umount_path_restart_notice">需要重新啟動系統才能套用。系統將會在下次啟動時套用新的配置</string>
@@ -691,9 +689,6 @@
     <string name="install_force_backup_summary">請確認所選 boot 映像檔是未經修改的原廠映像檔。</string>
     <string name="hide_seccomp_status">隱藏 Seccomp 狀態</string>
     <string name="hide_seccomp_status_summary">隱藏主頁的 Seccomp 狀態資訊</string>
-    <string name="ui_style">介面風格</string>
-    <string name="ui_style_classic">Material 3 經典</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="feature_control">功能控制</string>
     <string name="feature_control_summary">管理目前核心支援的功能。</string>
     <string name="kernelsu_features">KernelSU 功能</string>

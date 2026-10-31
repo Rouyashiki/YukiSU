@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Terlalu banyak log, hanya menampilkan %1$d entri terbaru</string>
     <string name="log_viewer_load_more">Muat lebih banyak log</string>
     <string name="log_viewer_all_logs_loaded">Semua log ditampilkan</string>
-    <string name="incompatible_kernel_msg">Pengelola saat ini tidak kompatibel dengan kernel ini! Silakan tingkatkan kernel ke versi %2$d atau lebih tinggi (saat ini %1$d)</string>
     <string name="umount_path_manager">Pengelolaan jalur umount</string>
     <string name="umount_path_manager_summary">Kelola jalur lepas pasang kernel</string>
     <string name="umount_path_restart_notice">Diperlukan mulai ulang agar perubahan berlaku. Sistem akan menerapkan konfigurasi baru saat boot berikutnya</string>
@@ -517,7 +516,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">Batal</string>
@@ -697,8 +695,6 @@
     <string name="install_force_backup_summary">Pastikan citra boot yang dipilih adalah citra bawaan pabrik yang belum dimodifikasi.</string>
     <string name="hide_seccomp_status">Sembunyikan status Seccomp</string>
     <string name="hide_seccomp_status_summary">Sembunyikan informasi status Seccomp di beranda</string>
-    <string name="ui_style">Gaya antarmuka</string>
-    <string name="ui_style_classic">Material 3 Klasik</string>
     <string name="predictive_back_gesture">Gestur kembali prediktif</string>
     <string name="predictive_back_gesture_summary">Pratinjau halaman sebelumnya mengikuti gestur kembali. Nonaktif secara bawaan</string>
     <string name="feature_control">Kontrol fitur</string>

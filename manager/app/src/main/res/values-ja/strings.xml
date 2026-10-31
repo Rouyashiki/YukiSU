@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">ログが多すぎます。最新の %1$d 件のみ表示しています</string>
     <string name="log_viewer_load_more">さらにログを読み込む</string>
     <string name="log_viewer_all_logs_loaded">すべてのログを表示しました</string>
-    <string name="incompatible_kernel_msg">現在のマネージャーはこのカーネルと互換性がありません。カーネルをバージョン %2$d 以上にアップグレードしてください（現在 %1$d）</string>
     <string name="umount_path_manager">アンマウントパスの管理</string>
     <string name="umount_path_manager_summary">カーネルアンマウントパスの管理</string>
     <string name="umount_path_restart_notice">変更を有効にするには再起動が必要です。システムは次回起動時に新しい設定を適用します</string>
@@ -515,7 +514,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">キャンセル</string>
@@ -695,8 +693,6 @@
     <string name="install_force_backup_summary">選択した boot イメージが未変更の純正イメージであることを確認してください。</string>
     <string name="hide_seccomp_status">Seccomp の状態を隠す</string>
     <string name="hide_seccomp_status_summary">ホーム画面の Seccomp の状態情報を隠す</string>
-    <string name="ui_style">UI スタイル</string>
-    <string name="ui_style_classic">Material 3 クラシック</string>
     <string name="predictive_back_gesture">予測型「戻る」ジェスチャー</string>
     <string name="predictive_back_gesture_summary">戻るジェスチャーに合わせて前の画面をプレビューします。デフォルトではオフです</string>
     <string name="feature_control">機能の制御</string>

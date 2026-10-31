@@ -81,7 +81,6 @@ import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardElevation
 import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.LocalSnackbarHost
 import com.anatdx.yukisu.ui.util.checkNewVersion
 import com.anatdx.yukisu.ui.util.isSoftRebootBlockedByKasumi
@@ -206,7 +205,7 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                         }
                     }
                 }
-                
+
                 // 检查内核是否配置了 SuperKey / 签名（异步，避免阻塞主线程）
                 val isSuperKeyConfigured by produceState(initialValue = false) {
                     value = withContext(Dispatchers.IO) { Natives.isSuperKeyConfigured() }
@@ -260,7 +259,7 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                         }
                     }
                 )
-                
+
                 // 自动尝试用保存的 SuperKey 认证
                 LaunchedEffect(viewModel.isCoreDataLoaded) {
                     if (viewModel.isCoreDataLoaded && !viewModel.systemStatus.isManager) {
@@ -296,7 +295,7 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                 if (viewModel.isCoreDataLoaded) {
                     val isNotManager = !viewModel.systemStatus.isManager
                     val needsSuperKeyAuth = isNotManager && !superKeyAuthSuccess && viewModel.systemStatus.ksuVersion == null
-                    
+
                     StatusCard(
                         systemStatus = viewModel.systemStatus,
                         // SuperKey 模式用于表示「主要依赖 SuperKey」，
@@ -463,39 +462,29 @@ private fun RebootDropdownItem(
     onSelected: () -> Unit,
     onReboot: (String) -> Unit,
 ) {
-    if (isExpressiveUi) {
-        val shape = MenuDefaults.itemShape(index, count).shape
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = ListItemDefaults.SegmentedGap / 2)
-                .defaultMinSize(minHeight = 48.dp)
-                .clip(shape)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer.copy(
-                        alpha = CardConfig.cardAlpha
-                    )
+    val shape = MenuDefaults.itemShape(index, count).shape
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ListItemDefaults.SegmentedGap / 2)
+            .defaultMinSize(minHeight = 48.dp)
+            .clip(shape)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(
+                    alpha = CardConfig.cardAlpha
                 )
-                .clickable {
-                    onSelected()
-                    onReboot(option.reason)
-                }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(option.label),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Normal,
             )
-        }
-    } else {
-        DropdownMenuItem(
-            text = { Text(stringResource(option.label)) },
-            onClick = {
+            .clickable {
                 onSelected()
                 onReboot(option.reason)
-            },
+            }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(option.label),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Normal,
         )
     }
 }
@@ -821,7 +810,7 @@ private fun StatusCard(
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
-                    
+
                     // 超级密钥认证按钮
                     IconButton(
                         onClick = onSuperKeyAuth,
@@ -953,39 +942,11 @@ fun ContributionCard() {
     val content = stringResource(R.string.home_click_to_ContributionCard_kernelsu)
     val onClick = { uriHandler.openUri(link) }
 
-    if (isExpressiveUi) {
-        ExpressiveHomeTextGroup(
-            title = title,
-            content = content,
-            onClick = onClick,
-        )
-    } else {
-        ElevatedCard(
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainer),
-            elevation = getCardElevation(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onClick)
-                    .padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = content,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-    }
+    ExpressiveHomeTextGroup(
+        title = title,
+        content = content,
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -995,39 +956,11 @@ fun DonateCard() {
     val content = stringResource(R.string.home_support_content)
     val onClick = { uriHandler.openUri("https://patreon.com/weishu") }
 
-    if (isExpressiveUi) {
-        ExpressiveHomeTextGroup(
-            title = title,
-            content = content,
-            onClick = onClick,
-        )
-    } else {
-        ElevatedCard(
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainer),
-            elevation = getCardElevation(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onClick)
-                    .padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = content,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-    }
+    ExpressiveHomeTextGroup(
+        title = title,
+        content = content,
+        onClick = onClick,
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1043,7 +976,6 @@ private fun HomeInfoItem(
     index: Int = 0,
     count: Int = 1,
 ) {
-    val expressive = isExpressiveUi
     val cardShape = CardDefaults.elevatedShape
     val compactShape = ListItemDefaults.shapes().shape
     val marqueeModifier = Modifier.basicMarquee(
@@ -1077,42 +1009,28 @@ private fun HomeInfoItem(
         else -> compactShape
     }
     Row(
-        verticalAlignment = if (expressive) Alignment.CenterVertically else Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (expressive) {
-                    Modifier
-                        .padding(vertical = ListItemDefaults.SegmentedGap / 2)
-                        .defaultMinSize(minHeight = 56.dp)
-                        .clip(expressiveShape)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(
-                                alpha = CardConfig.cardAlpha
-                            )
+                Modifier
+                    .padding(vertical = ListItemDefaults.SegmentedGap / 2)
+                    .defaultMinSize(minHeight = 56.dp)
+                    .clip(expressiveShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(
+                            alpha = CardConfig.cardAlpha
                         )
-                } else {
-                    Modifier.padding(vertical = 8.dp)
-                }
+                    )
             )
             .then(
-                if (expressive) {
-                    Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                } else {
-                    Modifier
-                }
+                Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
     ) {
         if (icon != null || iconRes != null) {
-            val iconModifier = if (expressive) {
-                Modifier
-                    .size(32.dp)
-                    .padding(4.dp)
-            } else {
-                Modifier
-                    .size(28.dp)
-                    .padding(vertical = 4.dp)
-            }
+            val iconModifier = Modifier
+                .size(32.dp)
+                .padding(4.dp)
             if (iconRes != null) {
                 Icon(
                     painter = painterResource(iconRes),
@@ -1127,13 +1045,13 @@ private fun HomeInfoItem(
                 )
             }
         }
-        Spacer(modifier = Modifier.width(if (expressive) 12.dp else 16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
                 modifier = marqueeModifier,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (expressive) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Clip,
@@ -1264,23 +1182,13 @@ private fun InfoCard(
                                 R.string.home_kernel_show_original
                             }
                         ),
-                        modifier = if (isExpressiveUi) {
-                            Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    showOriginalKernelRelease = !showOriginalKernelRelease
-                                }
-                                .padding(4.dp)
-                        } else {
-                            Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    showOriginalKernelRelease = !showOriginalKernelRelease
-                                }
-                                .padding(vertical = 4.dp)
-                        },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                showOriginalKernelRelease = !showOriginalKernelRelease
+                            }
+                            .padding(4.dp),
                     )
                 }
             },
@@ -1311,17 +1219,10 @@ private fun InfoCard(
                 YukiIcon(
                     imageVector = Icons.Filled.Refresh,
                     contentDescription = stringResource(R.string.home_ksud_daemon_sync),
-                    modifier = if (isExpressiveUi) {
-                        Modifier
-                            .size(36.dp)
-                            .clickable { showKsudDialog = true }
-                            .padding(4.dp)
-                    } else {
-                        Modifier
-                            .size(28.dp)
-                            .clickable { showKsudDialog = true }
-                            .padding(vertical = 4.dp)
-                    },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clickable { showKsudDialog = true }
+                        .padding(4.dp),
                 )
             },
         ))
@@ -1355,17 +1256,10 @@ private fun InfoCard(
                         YukiIcon(
                             imageVector = Icons.Filled.Build,
                             contentDescription = stringResource(R.string.settings_yukizygisk),
-                            modifier = if (isExpressiveUi) {
-                                Modifier
-                                    .size(36.dp)
-                                    .clickable(onClick = onYukiZygiskClick)
-                                    .padding(4.dp)
-                            } else {
-                                Modifier
-                                    .size(28.dp)
-                                    .clickable(onClick = onYukiZygiskClick)
-                                    .padding(vertical = 4.dp)
-                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clickable(onClick = onYukiZygiskClick)
+                                .padding(4.dp),
                         )
                     }
                 } else null,
@@ -1380,44 +1274,19 @@ private fun InfoCard(
         }
     }
 
-    if (isExpressiveUi) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            entries.forEachIndexed { index, entry ->
-                HomeInfoItem(
-                    label = entry.label,
-                    content = entry.content,
-                    icon = entry.icon,
-                    iconRes = entry.iconRes,
-                    contentColor = entry.contentColor,
-                    trailing = entry.trailing,
-                    contentScrollable = entry.contentScrollable,
-                    index = index,
-                    count = entries.size,
-                )
-            }
-        }
-    } else {
-        ElevatedCard(
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainer),
-            elevation = getCardElevation(),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 16.dp),
-            ) {
-                entries.forEach { entry ->
-                    HomeInfoItem(
-                        label = entry.label,
-                        content = entry.content,
-                        icon = entry.icon,
-                        iconRes = entry.iconRes,
-                        contentColor = entry.contentColor,
-                        trailing = entry.trailing,
-                        contentScrollable = entry.contentScrollable,
-                    )
-                }
-            }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        entries.forEachIndexed { index, entry ->
+            HomeInfoItem(
+                label = entry.label,
+                content = entry.content,
+                icon = entry.icon,
+                iconRes = entry.iconRes,
+                contentColor = entry.contentColor,
+                trailing = entry.trailing,
+                contentScrollable = entry.contentScrollable,
+                index = index,
+                count = entries.size,
+            )
         }
     }
 
@@ -1568,23 +1437,6 @@ private fun StatusCardPreview() {
             )
         )
     }
-}
-
-@Composable
-private fun IncompatibleKernelCard() {
-    val currentKver = remember { Natives.version }
-    val threshold   = Natives.MINIMAL_NEW_IOCTL_KERNEL
-
-    val msg = stringResource(
-        id = R.string.incompatible_kernel_msg,
-        currentKver,
-        threshold
-    )
-
-    WarningCard(
-        message = msg,
-        color = MaterialTheme.colorScheme.error
-    )
 }
 
 @Preview

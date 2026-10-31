@@ -413,9 +413,6 @@
     <string name="hide_tag_card">Hide module label rows</string>
     <string name="hide_tag_card_summary">Hide folder name,size,metamodule notice labels in module cards</string>
     <string name="theme_mode">Theme</string>
-    <string name="ui_style" tools:ignore="MissingTranslation">Interface style</string>
-    <string name="ui_style_classic" tools:ignore="MissingTranslation">Material 3</string>
-    <string name="ui_style_expressive" tools:ignore="MissingTranslation">Material 3 Expressive</string>
     <string name="theme_follow_system">Follow system</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
@@ -586,9 +583,6 @@
     <string name="log_viewer_too_many_logs" tools:ignore="PluralsCandidate">Too many logs, showing only the latest %1$d entries</string>
     <string name="log_viewer_load_more">Load More Logs</string>
     <string name="log_viewer_all_logs_loaded">All logs displayed</string>
-    <string name="incompatible_kernel_msg">
-    The current manager is incompatible with this kernel! Please upgrade the kernel to version %2$d or higher (currently %1$d)
-    </string>
     <string name="umount_path_manager">Umount Path Management</string>
     <string name="umount_path_manager_summary">Manage kernel unmount paths</string>
     <string name="umount_path_restart_notice">A reboot is required for changes to take effect. The system will apply the new configuration on the next boot</string>

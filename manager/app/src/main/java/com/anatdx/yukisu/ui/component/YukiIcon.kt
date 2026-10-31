@@ -9,12 +9,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import com.anatdx.yukisu.R
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 
-/**
- * Keeps the classic UI on Compose Material Icons and renders the expressive UI
- * with Google's current Material Symbols Rounded Android vectors.
- */
+/** Uses bundled Material Symbols when available, with ImageVector fallback. */
 @Composable
 fun YukiIcon(
     imageVector: ImageVector,
@@ -22,11 +18,7 @@ fun YukiIcon(
     modifier: Modifier = Modifier,
     tint: Color = LocalContentColor.current
 ) {
-    val expressiveDrawable = if (isExpressiveUi) {
-        imageVector.toExpressiveDrawable()
-    } else {
-        null
-    }
+    val expressiveDrawable = imageVector.toExpressiveDrawable()
 
     if (expressiveDrawable != null) {
         Icon(
@@ -49,7 +41,6 @@ fun YukiIcon(
 private fun ImageVector.toExpressiveDrawable(): Int? = when (name.substringAfterLast('.')) {
     "Adb" -> R.drawable.ms_adb
     "Add" -> R.drawable.ms_add
-    "AddCircle" -> R.drawable.ms_add_circle
     "AdminPanelSettings" -> R.drawable.ms_admin_panel_settings
     "Android" -> R.drawable.ms_android
     "Archive" -> R.drawable.ms_archive

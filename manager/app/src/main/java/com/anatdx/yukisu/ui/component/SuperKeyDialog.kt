@@ -32,7 +32,6 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.theme.ThemeConfig
 import com.anatdx.yukisu.ui.theme.ThemeColors
 import com.anatdx.yukisu.ui.theme.ThemeManager
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -57,9 +56,9 @@ interface SuperKeyDialogHandle {
 class SuperKeyDialogState : SuperKeyDialogHandle {
     internal var isVisible by mutableStateOf(false)
         private set
-    
+
     internal var onResult: ((SuperKeyAuthResult) -> Unit)? = null
-    
+
     override val isShown: Boolean
         get() = isVisible
 
@@ -108,12 +107,12 @@ fun SuperKeyDialog(
     onResult: (SuperKeyAuthResult) -> Unit = {}
 ) {
     if (state !is SuperKeyDialogState) return
-    
+
     val context = LocalContext.current
-    
+
     val authFailedMessage = stringResource(id = R.string.superkey_auth_failed)
     val emptyKeyMessage = stringResource(id = R.string.superkey_input_hint)
-    
+
     fun checkEasterEgg(input: String): Boolean {
         if (input.equals("transright", ignoreCase = true) && !ThemeConfig.isTransPrideUnlocked) {
             ThemeManager.unlockTransPride(context)
@@ -124,7 +123,7 @@ fun SuperKeyDialog(
         }
         return false
     }
-    
+
     if (state.isVisible) {
         // SuperKey is user input that must survive process death / config change.
         var superKeyInput by rememberSaveable { mutableStateOf("") }
@@ -158,16 +157,12 @@ fun SuperKeyDialog(
                     .fillMaxWidth()
                     .clickHapticFeedback()
                     .padding(horizontal = 24.dp),
-                shape = if (isExpressiveUi) MaterialTheme.shapes.extraLarge else RoundedCornerShape(28.dp),
+                shape = MaterialTheme.shapes.extraLarge,
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isExpressiveUi) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    }
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ),
                 elevation = CardDefaults.cardElevation(
-                    defaultElevation = if (isExpressiveUi) 0.dp else 6.dp
+                    defaultElevation = 0.dp
                 )
             ) {
                 Column(
@@ -189,11 +184,7 @@ fun SuperKeyDialog(
                     // Title
                     Text(
                         text = title,
-                        style = if (isExpressiveUi) {
-                            MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal)
-                        } else {
-                            MaterialTheme.typography.headlineSmall
-                        },
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -284,7 +275,7 @@ fun SuperKeyDialog(
                                     errorMessage = emptyKeyMessage
                                     return@Button
                                 }
-                                
+
                                 isLoading = true
                                 CoroutineScope(Dispatchers.Main).launch {
                                     try {

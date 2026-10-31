@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -15,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.DownloadProgress
 
 @Composable
@@ -62,15 +60,9 @@ fun DownloadProgressDialog(
 @Composable
 fun YukiDownloadProgressIndicator(progress: (() -> Float)? = null) {
     val modifier = Modifier.fillMaxWidth().widthIn(min = 240.dp)
-    if (isExpressiveUi) {
-        if (progress == null) {
-            LinearWavyProgressIndicator(modifier = modifier)
-        } else {
-            LinearWavyProgressIndicator(progress = progress, modifier = modifier)
-        }
-    } else if (progress == null) {
-        LinearProgressIndicator(modifier = modifier)
+    if (progress == null) {
+        LinearWavyProgressIndicator(modifier = modifier)
     } else {
-        LinearProgressIndicator(progress = progress, modifier = modifier)
+        LinearWavyProgressIndicator(progress = progress, modifier = modifier)
     }
 }

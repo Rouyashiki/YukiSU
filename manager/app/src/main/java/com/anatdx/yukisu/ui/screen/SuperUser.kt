@@ -12,7 +12,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -83,7 +82,6 @@ import com.anatdx.yukisu.ui.component.VerticalExpandableFab
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiPullToRefreshBox
 import com.anatdx.yukisu.ui.component.clickHapticFeedback
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.module.ModuleModify
@@ -272,7 +270,7 @@ private fun TopBarTitle(
     ) {
         Text(
             text = stringResource(R.string.superuser),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null
+            fontWeight = FontWeight.Normal
         )
 
         if (selectedCategory != AppCategory.ALL) {
@@ -377,16 +375,8 @@ private fun SuperUserContent(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = if (isExpressiveUi) {
-                PaddingValues(horizontal = 16.dp, vertical = 12.dp)
-            } else {
-                PaddingValues(0.dp)
-            },
-            verticalArrangement = if (isExpressiveUi) {
-                Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
-            } else {
-                Arrangement.Top
-            }
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
         ) {
             filteredAndSortedAppGroups.forEach { appGroup ->
                 item(key = "${appGroup.uid}-${appGroup.mainApp.displayIdentifier}") {
@@ -826,11 +816,7 @@ private fun SwipeActionContainer(
     val rootContentColor = Color(0xFF246B35)
     val umountBackgroundColor = Color(0xFFFFE1E1)
     val umountContentColor = Color(0xFF9B1C1C)
-    val containerShape = if (isExpressiveUi) {
-        ListItemDefaults.shapes().shape
-    } else {
-        RoundedCornerShape(0.dp)
-    }
+    val containerShape = ListItemDefaults.shapes().shape
     val scope = rememberCoroutineScope()
     var targetOffsetX by remember { mutableFloatStateOf(0f) }
     var gestureAction by remember { mutableStateOf<AppSwipeAction?>(null) }
@@ -1066,12 +1052,7 @@ private fun AppGroupItem(
     viewModel: SuperUserViewModel,
 ) {
     val mainApp = appGroup.mainApp
-    val managerContainerColor = when {
-        appGroup.isDynamicManager -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-        appGroup.isPresetManager -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.32f)
-        else -> Color.Transparent
-    }
-    val expressiveContainerColor = when {
+    val containerColor = when {
         appGroup.isDynamicManager -> MaterialTheme.colorScheme.primaryContainer
         appGroup.isPresetManager -> MaterialTheme.colorScheme.tertiaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainer
@@ -1096,8 +1077,7 @@ private fun AppGroupItem(
         AppGroupListItemLayout(
             onClick = onClick,
             onLongClick = onLongClick,
-            classicContainerColor = managerContainerColor,
-            expressiveContainerColor = expressiveContainerColor,
+            containerColor = containerColor,
             headlineContent = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1239,41 +1219,24 @@ private fun AppGroupItem(
 private fun AppGroupListItemLayout(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    classicContainerColor: Color,
-    expressiveContainerColor: Color,
+    containerColor: Color,
     headlineContent: @Composable () -> Unit,
     supportingContent: @Composable (() -> Unit)?,
     leadingContent: @Composable (() -> Unit)?,
     trailingContent: @Composable (() -> Unit)?
 ) {
-    if (isExpressiveUi) {
-        SegmentedListItem(
-            onClick = onClick,
-            onLongClick = onLongClick,
-            // App rows form one continuous list, not a bounded settings group. Keep the
-            // first and last rows on the same compact shape as every row in between.
-            shapes = ListItemDefaults.shapes(),
-            colors = ListItemDefaults.segmentedColors(
-                containerColor = expressiveContainerColor.copy(alpha = CardConfig.cardAlpha)
-            ),
-            supportingContent = supportingContent,
-            leadingContent = leadingContent,
-            trailingContent = trailingContent,
-            content = headlineContent
-        )
-    } else {
-        ListItem(
-            modifier = Modifier.pointerInput(Unit) {
-                detectTapGestures(
-                    onLongPress = { onLongClick() },
-                    onTap = { onClick() }
-                )
-            },
-            colors = ListItemDefaults.colors(containerColor = classicContainerColor),
-            content = headlineContent,
-            supportingContent = supportingContent,
-            leadingContent = leadingContent,
-            trailingContent = trailingContent
-        )
-    }
+    SegmentedListItem(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        // App rows form one continuous list, not a bounded settings group. Keep the
+        // first and last rows on the same compact shape as every row in between.
+        shapes = ListItemDefaults.shapes(),
+        colors = ListItemDefaults.segmentedColors(
+            containerColor = containerColor.copy(alpha = CardConfig.cardAlpha)
+        ),
+        supportingContent = supportingContent,
+        leadingContent = leadingContent,
+        trailingContent = trailingContent,
+        content = headlineContent
+    )
 }

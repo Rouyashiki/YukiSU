@@ -13,7 +13,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,7 +25,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.KsuCli
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -44,12 +42,8 @@ fun DynamicManagerCompatDialog(
     val versionValue = parseVersion(version)
     val uapiValue = parseVersion(uapi)
     val validName = fullVersion.toByteArray(Charsets.UTF_8).size < 255 && '\u0000' !in fullVersion
-    val fieldShape = if (isExpressiveUi) MaterialTheme.shapes.medium else OutlinedTextFieldDefaults.shape
-    val buttonShapes = if (isExpressiveUi) {
-        ButtonDefaults.shapes()
-    } else {
-        ButtonDefaults.shapes(shape = ButtonDefaults.shape, pressedShape = ButtonDefaults.shape)
-    }
+    val fieldShape = MaterialTheme.shapes.medium
+    val buttonShapes = ButtonDefaults.shapes()
 
     YukiAlertDialog(
         onDismissRequest = onDismiss,

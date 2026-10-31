@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Quá nhiều nhật ký, chỉ hiển thị %1$d nhật ký mới nhất</string>
     <string name="log_viewer_load_more">Đang load thêm nhật ký</string>
     <string name="log_viewer_all_logs_loaded">Tất cả nhật ký đã được hiển thị</string>
-    <string name="incompatible_kernel_msg">Trình quản lý hiện tại không tương thích với Kernel này! Vui lòng nâng cấp Kernel lên phiên bản %2$d hoặc cao hơn (hiện tại là %1$d)</string>
     <string name="umount_path_manager">Quản lý Đường dẫn Umount</string>
     <string name="umount_path_manager_summary">Quản lý Đường dẫn Kernel Umount</string>
     <string name="umount_path_restart_notice">Cần khởi động lại để các thay đổi có hiệu lực. Hệ thống sẽ áp dụng cấu hình mới vào lần khởi động tiếp theo</string>
@@ -513,7 +512,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">Thoát</string>
@@ -693,8 +691,6 @@
     <string name="install_force_backup_summary">Hãy xác nhận ảnh boot đã chọn là ảnh gốc của nhà sản xuất chưa bị sửa đổi.</string>
     <string name="hide_seccomp_status">Ẩn trạng thái Seccomp</string>
     <string name="hide_seccomp_status_summary">Ẩn thông tin trạng thái Seccomp trên trang chủ</string>
-    <string name="ui_style">Kiểu giao diện</string>
-    <string name="ui_style_classic">Material 3 cổ điển</string>
     <string name="predictive_back_gesture">Cử chỉ quay lại dự đoán</string>
     <string name="predictive_back_gesture_summary">Xem trước trang trước theo cử chỉ quay lại. Mặc định tắt</string>
     <string name="feature_control">Điều khiển tính năng</string>

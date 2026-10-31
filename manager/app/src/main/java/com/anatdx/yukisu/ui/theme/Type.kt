@@ -5,8 +5,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val Typography = Typography(
-    // 大标题
+val ExpressiveTypography = Typography(
     displayLarge = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 57.sp,
@@ -20,35 +19,33 @@ val Typography = Typography(
         letterSpacing = 0.sp
     ),
     displaySmall = TextStyle(
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Bold,
         fontSize = 36.sp,
         lineHeight = 44.sp,
         letterSpacing = 0.sp
     ),
 
-    // 标题
     headlineLarge = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
         letterSpacing = 0.sp
     ),
     headlineMedium = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
         letterSpacing = 0.sp
     ),
     headlineSmall = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
         letterSpacing = 0.sp
     ),
 
-    // 标题栏
     titleLarge = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp
@@ -66,7 +63,6 @@ val Typography = Typography(
         letterSpacing = 0.1.sp
     ),
 
-    // 主体文字
     bodyLarge = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
@@ -86,7 +82,6 @@ val Typography = Typography(
         letterSpacing = 0.4.sp
     ),
 
-    // 标签
     labelLarge = TextStyle(
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
@@ -105,13 +100,4 @@ val Typography = Typography(
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     )
-)
-
-val ExpressiveTypography = Typography.copy(
-    displaySmall = Typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-    headlineLarge = Typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold),
-    headlineMedium = Typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-    headlineSmall = Typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-    titleLarge = Typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-    titleMedium = Typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
 )

@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Çox sayda jurnal var, yalnız son %1$d qeyd göstərilir</string>
     <string name="log_viewer_load_more">Daha Çox Jurnal Yüklə</string>
     <string name="log_viewer_all_logs_loaded">Bütün jurnallar göstərildi</string>
-    <string name="incompatible_kernel_msg">Cari menecer bu nüvə ilə uyğun deyil! Zəhmət olmasa nüvəni %2$d və ya daha yüksək versiyaya yeniləyin (hazırda %1$d)</string>
     <string name="umount_path_manager">Ayırma Yolu İdarəetməsi</string>
     <string name="umount_path_manager_summary">Nüvə ayırma yollarını idarə edin</string>
     <string name="umount_path_restart_notice">Dəyişikliklərin qüvvəyə minməsi üçün yenidən başlatma lazımdır. Sistem yeni konfiqurasiyanı növbəti yüklənmədə tətbiq edəcək</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Seçilmiş boot obrazının dəyişdirilməmiş zavod obrazı olduğuna əmin olun.</string>
     <string name="hide_seccomp_status">Seccomp vəziyyətini gizlət</string>
     <string name="hide_seccomp_status_summary">Ana səhifədəki Seccomp vəziyyət məlumatını gizlədir</string>
-    <string name="ui_style">İnterfeys üslubu</string>
-    <string name="ui_style_classic">Klassik Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Proqnozlaşdırılan geri jesti</string>
     <string name="predictive_back_gesture_summary">Geri jestinə uyğun olaraq əvvəlki səhifənin önbaxışını göstərir. Standart olaraq söndürülüb</string>
     <string name="feature_control">Funksiyaların idarə edilməsi</string>

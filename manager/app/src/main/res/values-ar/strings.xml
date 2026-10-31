@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">سجلات كثيرة جداً، يتم عرض أحدث %1$d إدخالات فقط</string>
     <string name="log_viewer_load_more">تحميل المزيد من السجلات</string>
     <string name="log_viewer_all_logs_loaded">تم عرض جميع السجلات</string>
-    <string name="incompatible_kernel_msg">المدير الحالي غير متوافق مع هذه النواة! يرجى ترقية النواة إلى الإصدار %2$d أو أعلى (الحالي %1$d)</string>
     <string name="umount_path_manager">إدارة مسارات umount</string>
     <string name="umount_path_manager_summary">إدارة مسارات إلغاء تركيب النواة</string>
     <string name="umount_path_restart_notice">يلزم إعادة التشغيل لتصبح التغييرات سارية. سيطبّق النظام الإعداد الجديد عند الإقلاع التالي</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">تأكد من أن صورة boot المختارة هي صورة المصنع غير المعدّلة.</string>
     <string name="hide_seccomp_status">إخفاء حالة Seccomp</string>
     <string name="hide_seccomp_status_summary">إخفاء معلومات حالة Seccomp في الصفحة الرئيسية</string>
-    <string name="ui_style">نمط الواجهة</string>
-    <string name="ui_style_classic">Material 3 الكلاسيكي</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">إيماءة الرجوع التنبؤية</string>
     <string name="predictive_back_gesture_summary">معاينة الصفحة السابقة مع حركة إيماءة الرجوع. معطّل افتراضيًا</string>
     <string name="feature_control">التحكم في الميزات</string>

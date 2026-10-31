@@ -369,7 +369,6 @@ A</string>
     <string name="log_viewer_too_many_logs">Túl sok napló, csak a legújabb %1$d bejegyzés jelenik meg</string>
     <string name="log_viewer_load_more">További naplók betöltése</string>
     <string name="log_viewer_all_logs_loaded">Minden napló megjelenítve</string>
-    <string name="incompatible_kernel_msg">A jelenlegi kezelő nem kompatibilis ezzel a kernellel! Kérjük, frissítse a kernelt a(z) %2$d vagy újabb verzióra (jelenleg %1$d)</string>
     <string name="umount_path_manager">Umount útvonalak kezelése</string>
     <string name="umount_path_manager_summary">A kernel leválasztási útvonalainak kezelése</string>
     <string name="umount_path_restart_notice">Az újraindítás szükséges a módosítások érvénybe lépéséhez. A rendszer a következő indításkor alkalmazza az új konfigurációt</string>
@@ -675,9 +674,6 @@ A</string>
     <string name="install_force_backup_summary">Győződjön meg róla, hogy a kiválasztott boot lemezkép módosítatlan gyári lemezkép.</string>
     <string name="hide_seccomp_status">Seccomp állapotának elrejtése</string>
     <string name="hide_seccomp_status_summary">A Seccomp állapotadatainak elrejtése a kezdőlapon</string>
-    <string name="ui_style">Felület stílusa</string>
-    <string name="ui_style_classic">Klasszikus Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Prediktív visszalépési gesztus</string>
     <string name="predictive_back_gesture_summary">A visszalépési gesztust követve megjeleníti az előző oldal előnézetét. Alapértelmezés szerint kikapcsolva</string>
     <string name="feature_control">Funkciók vezérlése</string>

@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.data.script.ScriptParam
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.ShellHighlightColors
 import com.anatdx.yukisu.ui.util.rememberShellHighlight
 
@@ -43,11 +42,7 @@ internal fun ScriptRunContent(state: ScriptRunUiState, actions: ScriptRunActions
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                 }
             }
-            if (isExpressiveUi) {
-                YukiLargeTopAppBar(title = title, navigationIcon = back, scrollBehavior = scrollBehavior)
-            } else {
-                TopAppBar(title = title, navigationIcon = back, scrollBehavior = scrollBehavior)
-            }
+            YukiLargeTopAppBar(title = title, navigationIcon = back, scrollBehavior = scrollBehavior)
         },
         contentWindowInsets = WindowInsets.safeDrawing,
     ) { padding ->

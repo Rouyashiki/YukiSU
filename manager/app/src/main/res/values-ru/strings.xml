@@ -370,8 +370,6 @@
     <string name="log_viewer_too_many_logs">Слишком много журналов, отображаются только последние записи %1$d</string>
     <string name="log_viewer_load_more">Загрузить больше логов</string>
     <string name="log_viewer_all_logs_loaded">Все логи отображаются</string>
-    <string name="incompatible_kernel_msg">    Текущий менеджер несовместим с этим ядром! Пожалуйста, обновите ядро до версии %2$d или выше (сейчас %1$d)
-    </string>
     <string name="umount_path_manager">Управление путями размонтирования</string>
     <string name="umount_path_manager_summary">Управления путями размонтирования ядра</string>
     <string name="umount_path_restart_notice">Для применения изменений необходима перезагрузка. Система применит новый конфиг при следующем запуске.</string>
@@ -677,9 +675,6 @@
     <string name="install_force_backup_summary">Убедитесь, что выбранный образ boot является неизменённым заводским образом.</string>
     <string name="hide_seccomp_status">Скрыть состояние Seccomp</string>
     <string name="hide_seccomp_status_summary">Скрыть сведения о состоянии Seccomp на главной странице</string>
-    <string name="ui_style">Стиль интерфейса</string>
-    <string name="ui_style_classic">Классический Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Предиктивный жест «Назад»</string>
     <string name="predictive_back_gesture_summary">Показывать предыдущую страницу в соответствии с жестом возврата. По умолчанию выключено</string>
     <string name="feature_control">Управление функциями</string>

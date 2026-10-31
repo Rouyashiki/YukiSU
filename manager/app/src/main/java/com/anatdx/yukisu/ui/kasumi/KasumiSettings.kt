@@ -30,7 +30,6 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.motion.YukiExpandArrow
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.kasumi.util.KasumiUiAdapter as Controller
 import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.getCardElevation
@@ -72,26 +71,19 @@ internal fun SettingsTab(
             SettingSwitch(stringResource(R.string.kasumi_debug), stringResource(R.string.kasumi_debug_desc),
                 config.debug, { onConfigChanged(config.copy(debug = it)) }, enabled,
                 Icons.Filled.BugReport, MoreSettingsItemPosition.First)
-            SettingsDivider()
             SettingSwitch(stringResource(R.string.kasumi_verbose), stringResource(R.string.kasumi_verbose_desc),
                 config.verbose, { onConfigChanged(config.copy(verbose = it)) }, enabled, Icons.AutoMirrored.Filled.Subject)
-            SettingsDivider()
             FileSystemChoice(config.fsType, mountEnabled) {
                 onConfigChanged(config.copy(fsType = it))
             }
-            SettingsDivider()
             SettingSwitch("OverlayFS", stringResource(R.string.kasumi_backend_enable_desc), config.overlayfsEnabled,
                 { onConfigChanged(config.copy(overlayfsEnabled = it)) }, mountEnabled, Icons.Filled.Layers)
-            SettingsDivider()
             SettingSwitch("Magic Mount", stringResource(R.string.kasumi_backend_enable_desc), config.magicMountEnabled,
                 { onConfigChanged(config.copy(magicMountEnabled = it)) }, mountEnabled, Icons.Filled.AutoFixHigh)
-            SettingsDivider()
             MountSourceInput(config.mountsource, mountEnabled) { onConfigChanged(config.copy(mountsource = it)) }
-            SettingsDivider()
             EditableConfigPath(R.string.kasumi_tempdir, R.string.kasumi_tempdir_desc, config.tempdir, mountEnabled, true) {
                 onConfigChanged(config.copy(tempdir = it))
             }
-            SettingsDivider()
             EditableConfigPath(R.string.kasumi_mirror_path, R.string.kasumi_mirror_path_desc, config.mirrorPath, mountEnabled, true,
                 MoreSettingsItemPosition.Last) {
                 onConfigChanged(config.copy(mirrorPath = it))
@@ -101,10 +93,8 @@ internal fun SettingsTab(
             SettingSwitch(stringResource(R.string.kasumi_enable_title), stringResource(R.string.kasumi_enable_desc), config.kasumiEnabled,
                 { onConfigChanged(config.copy(kasumiEnabled = it)) }, kernelEnabled,
                 Icons.Filled.Memory, MoreSettingsItemPosition.First)
-            SettingsDivider()
             SettingSwitch(stringResource(R.string.kasumi_kernel_debug), stringResource(R.string.kasumi_kernel_debug_desc), config.enableKernelDebug,
                 { onConfigChanged(config.copy(enableKernelDebug = it)) }, kernelEnabled, Icons.Filled.BugReport)
-            SettingsDivider()
             SettingSwitch(stringResource(R.string.kasumi_stealth), stringResource(R.string.kasumi_stealth_desc), config.enableStealth,
                 { onConfigChanged(config.copy(enableStealth = it)) }, kernelEnabled, Icons.Filled.VisibilityOff)
             val toggles = listOf(
@@ -114,7 +104,6 @@ internal fun SettingsTab(
                 FeatureToggle("statfs_spoof", R.string.kasumi_statfs_spoof, R.string.kasumi_statfs_spoof_desc, config.enableStatfsSpoof) { config.copy(enableStatfsSpoof = it) },
             )
             toggles.forEach { toggle ->
-                SettingsDivider()
                 val supported = features?.names?.contains(toggle.capability) == true
                 SettingSwitch(stringResource(toggle.title),
                     stringResource(when {
@@ -132,7 +121,6 @@ internal fun SettingsTab(
                     position = if (toggle == toggles.last() && !runtimeApplyPending) MoreSettingsItemPosition.Last else MoreSettingsItemPosition.Middle)
             }
             if (runtimeApplyPending) {
-                SettingsDivider()
                 KasumiControlGroup(MoreSettingsItemPosition.Last) {
                     Text(stringResource(R.string.kasumi_apply_failed), color = MaterialTheme.colorScheme.error)
                     OutlinedButton(onClick = onRetryApply, enabled = kernelEnabled, modifier = Modifier.fillMaxWidth()) {
@@ -161,36 +149,20 @@ private fun FileSystemChoice(value: String, enabled: Boolean, onSelect: (String)
     KasumiControlGroup(MoreSettingsItemPosition.Middle) {
         Text(
             stringResource(R.string.kasumi_fs_type_title),
-            style = if (isExpressiveUi) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(4.dp))
-        if (isExpressiveUi) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                options.forEach { (option, title) ->
-                    FilterChip(
-                        selected = value == option,
-                        onClick = { onSelect(option) },
-                        enabled = enabled,
-                        label = { Text(stringResource(title)) },
-                        leadingIcon = if (value == option) {
-                            { YukiIcon(Icons.Filled.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }
-                        } else null,
-                    )
-                }
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                options.forEach { (option, title) ->
-                    FilledTonalButton(
-                        onClick = { onSelect(option) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = enabled,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = if (value == option) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = if (value == option) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    ) { Text(stringResource(title)) }
-                }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (option, title) ->
+                FilterChip(
+                    selected = value == option,
+                    onClick = { onSelect(option) },
+                    enabled = enabled,
+                    label = { Text(stringResource(title)) },
+                    leadingIcon = if (value == option) {
+                        { YukiIcon(Icons.Filled.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null,
+                )
             }
         }
     }
@@ -201,28 +173,13 @@ private data class FeatureToggle(val capability: String, val title: Int, val sub
 
 @Composable
 internal fun ConfigSection(title: String, segmented: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    if (isExpressiveUi) {
-        Column(Modifier.fillMaxWidth()) {
-            if (title.isNotEmpty()) {
-                Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 12.dp))
-            }
-            if (segmented) content() else SettingsControlGroup(MoreSettingsItemPosition.Only, content)
+    Column(Modifier.fillMaxWidth()) {
+        if (title.isNotEmpty()) {
+            Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 12.dp))
         }
-        return
+        if (segmented) content() else SettingsControlGroup(MoreSettingsItemPosition.Only, content)
     }
-    Card(Modifier.fillMaxWidth(), shape = kasumiCardShape(),
-        colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow), elevation = getCardElevation()) {
-        Column(Modifier.padding(16.dp)) {
-            if (title.isNotEmpty()) Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
-            content()
-        }
-    }
-}
-
-@Composable
-private fun SettingsDivider() {
-    if (!isExpressiveUi) HorizontalDivider(Modifier.padding(vertical = 8.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -235,7 +192,7 @@ internal fun ConfigChoice(title: String, value: String, values: List<String>, en
         "magisk" to "Magisk",
         "all" to stringResource(R.string.kasumi_filter_all), "kasumi-active" to stringResource(R.string.kasumi_filter_active))
     KasumiControlGroup(position) {
-        Text(title, style = if (isExpressiveUi) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge)
+        Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
         ExposedDropdownMenuBox(expanded = expanded && enabled, onExpandedChange = { if (enabled) expanded = it }) {
             OutlinedTextField(value = labels[value] ?: value, onValueChange = {}, readOnly = true, enabled = enabled,
@@ -262,7 +219,7 @@ internal fun MountSourceInput(value: String, enabled: Boolean, onSave: (String) 
     KasumiControlGroup(MoreSettingsItemPosition.Middle) {
         Text(
             stringResource(R.string.kasumi_mountsource),
-            style = if (isExpressiveUi) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(4.dp))
         OutlinedTextField(
@@ -487,7 +444,7 @@ internal fun KernelHooksCard(hooks: String) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.kasumi_kernel_hooks), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.Bold)
+                    fontWeight = FontWeight.Normal)
                 YukiExpandArrow(expanded)
             }
             YukiExpandableContent(visible = expanded, large = true) {

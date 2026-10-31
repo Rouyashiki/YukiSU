@@ -13,7 +13,6 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.activity.util.PREDICTIVE_BACK_PREFERENCE
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.ThemeConfig
-import com.anatdx.yukisu.ui.theme.UiStyle
 import com.anatdx.yukisu.ui.util.DynamicManagerSettings
 
 @Stable
@@ -31,15 +30,11 @@ class MoreSettingsState(
     )
 
     var useDynamicColor by mutableStateOf(ThemeConfig.useDynamicColor)
-    var uiStyleIndex by mutableIntStateOf(
-        if (ThemeConfig.uiStyle == UiStyle.Expressive) 1 else 0
-    )
 
     var showLanguageDialog by mutableStateOf(false)
     var currentAppLocale by mutableStateOf(LocaleHelper.getCurrentAppLocale(context))
 
     var showThemeModeDialog by mutableStateOf(false)
-    var showUiStyleDialog by mutableStateOf(false)
     var showMotionPresetDialog by mutableStateOf(false)
     var showPageTransitionStyleDialog by mutableStateOf(false)
     var showThemeColorDialog by mutableStateOf(false)
@@ -81,11 +76,6 @@ class MoreSettingsState(
         context.getString(R.string.theme_follow_system),
         context.getString(R.string.theme_light),
         context.getString(R.string.theme_dark)
-    )
-
-    val uiStyleOptions = listOf(
-        context.getString(R.string.ui_style_classic),
-        context.getString(R.string.ui_style_expressive)
     )
 
     val motionPresetOptions = listOf(

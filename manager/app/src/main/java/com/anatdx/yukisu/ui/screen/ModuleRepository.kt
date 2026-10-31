@@ -34,14 +34,11 @@ import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,7 +53,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -99,7 +95,6 @@ import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getCardColors
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.download
 import com.anatdx.yukisu.ui.util.DownloadHandle
 import com.anatdx.yukisu.ui.util.DownloadProgress
@@ -123,12 +118,7 @@ private fun RepositoryCard(
     shape: Shape? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val expressive = isExpressiveUi
-    val resolvedContainerColor = containerColor ?: if (expressive) {
-        MaterialTheme.colorScheme.surfaceContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    }
+    val resolvedContainerColor = containerColor ?: MaterialTheme.colorScheme.surfaceContainer
     val colors = if (containerColor == null) {
         getCardColors(resolvedContainerColor)
     } else {
@@ -137,11 +127,7 @@ private fun RepositoryCard(
             contentColor = contentColor ?: MaterialTheme.colorScheme.onSurface,
         )
     }
-    val resolvedShape = shape ?: if (expressive) {
-        MaterialTheme.shapes.large
-    } else {
-        CardDefaults.elevatedShape
-    }
+    val resolvedShape = shape ?: MaterialTheme.shapes.large
 
     if (onClick == null) {
         ElevatedCard(
@@ -171,17 +157,13 @@ private fun RepositoryButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Button(
-            onClick = onClick,
-            shapes = ButtonDefaults.shapes(),
-            modifier = modifier,
-            enabled = enabled,
-            content = content,
-        )
-    } else {
-        Button(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
-    }
+    Button(
+        onClick = onClick,
+        shapes = ButtonDefaults.shapes(),
+        modifier = modifier,
+        enabled = enabled,
+        content = content,
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -192,17 +174,13 @@ private fun RepositoryOutlinedButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        OutlinedButton(
-            onClick = onClick,
-            shapes = ButtonDefaults.shapes(),
-            modifier = modifier,
-            enabled = enabled,
-            content = content,
-        )
-    } else {
-        OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
-    }
+    OutlinedButton(
+        onClick = onClick,
+        shapes = ButtonDefaults.shapes(),
+        modifier = modifier,
+        enabled = enabled,
+        content = content,
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -213,17 +191,13 @@ private fun RepositoryTextButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        TextButton(
-            onClick = onClick,
-            shapes = ButtonDefaults.shapes(),
-            modifier = modifier,
-            enabled = enabled,
-            content = content,
-        )
-    } else {
-        TextButton(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
-    }
+    TextButton(
+        onClick = onClick,
+        shapes = ButtonDefaults.shapes(),
+        modifier = modifier,
+        enabled = enabled,
+        content = content,
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -234,17 +208,13 @@ private fun RepositoryIconButton(
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    if (isExpressiveUi) {
-        IconButton(
-            onClick = onClick,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = modifier,
-            enabled = enabled,
-            content = content,
-        )
-    } else {
-        IconButton(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
-    }
+    IconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(),
+        modifier = modifier,
+        enabled = enabled,
+        content = content,
+    )
 }
 
 @Composable
@@ -258,7 +228,7 @@ private fun RepositoryFilterChip(
         selected = selected,
         onClick = onClick,
         enabled = enabled,
-        shape = if (isExpressiveUi) CircleShape else FilterChipDefaults.shape,
+        shape = CircleShape,
         label = label,
     )
 }
@@ -266,21 +236,13 @@ private fun RepositoryFilterChip(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RepositoryLinearProgress(modifier: Modifier = Modifier) {
-    if (isExpressiveUi) {
-        LinearWavyProgressIndicator(modifier = modifier)
-    } else {
-        LinearProgressIndicator(modifier = modifier)
-    }
+    LinearWavyProgressIndicator(modifier = modifier)
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RepositoryLoadingIndicator(modifier: Modifier = Modifier) {
-    if (isExpressiveUi) {
-        LoadingIndicator(modifier = modifier)
-    } else {
-        CircularProgressIndicator(modifier = modifier)
-    }
+    LoadingIndicator(modifier = modifier)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -307,29 +269,16 @@ private fun RepositoryTopAppBar(
         }
     }
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            scrollBehavior = scrollBehavior,
-            colors = colors,
-            windowInsets = WindowInsets.safeDrawing.only(
-                WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-            ),
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            scrollBehavior = scrollBehavior,
-            colors = colors,
-            windowInsets = WindowInsets.safeDrawing.only(
-                WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-            ),
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        scrollBehavior = scrollBehavior,
+        colors = colors,
+        windowInsets = WindowInsets.safeDrawing.only(
+            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+        ),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -356,7 +305,7 @@ fun ModuleRepositoryScreen(navigator: DestinationsNavigator) {
                 title = {
                     Text(
                         stringResource(R.string.module_repositories),
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                        fontWeight = FontWeight.Normal,
                     )
                 },
                 searchText = viewModel.search,
@@ -482,7 +431,7 @@ private fun RepositoryModuleCard(
                 Text(
                     module.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                    fontWeight = FontWeight.Normal,
                 )
                 Text(
                     module.moduleId,
@@ -565,7 +514,7 @@ private fun RepositoryTag(text: String) {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = if (isExpressiveUi) MaterialTheme.shapes.extraSmall else MaterialTheme.shapes.small,
+        shape = MaterialTheme.shapes.extraSmall,
     ) {
         Text(
             text,
@@ -623,7 +572,7 @@ fun RepositorySourcesScreen(navigator: DestinationsNavigator) {
                 title = {
                     Text(
                         stringResource(R.string.repository_sources),
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                        fontWeight = FontWeight.Normal,
                     )
                 },
                 onBack = navigator::popBackStack,
@@ -645,7 +594,7 @@ fun RepositorySourcesScreen(navigator: DestinationsNavigator) {
             if (section == RepositorySourcesSection.SOURCES) {
                 FloatingActionButton(
                     onClick = { showAddDialog = true },
-                    shape = if (isExpressiveUi) CircleShape else FloatingActionButtonDefaults.shape,
+                    shape = CircleShape,
                 ) {
                     YukiIcon(Icons.Outlined.Add, stringResource(R.string.repository_add_source))
                 }
@@ -905,7 +854,7 @@ private fun MmrlDirectoryRepositoryCard(
                     Text(
                         entry.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                        fontWeight = FontWeight.Normal,
                     )
                     entry.modulesCount?.let { count ->
                         Text(
@@ -999,7 +948,7 @@ private fun RepositorySourceCard(
                     Text(
                         source.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                        fontWeight = FontWeight.Normal,
                     )
                     Text(
                         "${source.format.displayName()} · $moduleCount ${stringResource(R.string.module)}",
@@ -1167,7 +1116,7 @@ fun ModuleRepositoryDetailScreen(
                         module?.name ?: moduleId,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                        fontWeight = FontWeight.Normal,
                     )
                 },
                 onBack = navigator::popBackStack,
@@ -1220,7 +1169,7 @@ fun ModuleRepositoryDetailScreen(
                         Text(
                             module.name,
                             style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                            fontWeight = FontWeight.Normal,
                         )
                         Text("ID: ${module.moduleId}", style = MaterialTheme.typography.bodySmall)
                         if (module.author.isNotBlank()) Text(module.author)
@@ -1521,7 +1470,7 @@ private fun RepositoryNotice(title: String, message: String, error: Boolean) {
             Column {
                 Text(
                     title,
-                    fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                    fontWeight = FontWeight.Normal,
                 )
                 Text(message, style = MaterialTheme.typography.bodyMedium)
             }
@@ -1559,7 +1508,7 @@ private fun VersionCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         version.version.ifBlank { version.versionCode.toString() },
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                        fontWeight = FontWeight.Normal,
                     )
                     if (isDeclared) RepositoryTag(stringResource(R.string.repository_current_release))
                     if (isInstalled) RepositoryTag(stringResource(R.string.repository_installed))

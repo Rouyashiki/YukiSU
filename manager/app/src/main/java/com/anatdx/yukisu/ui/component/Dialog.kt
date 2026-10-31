@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import io.noties.markwon.Markwon
 import io.noties.markwon.utils.NoCopySpannableFactory
 import kotlinx.coroutines.*
@@ -391,7 +389,7 @@ private fun LoadingDialog() {
     ) {
         Surface(
             modifier = Modifier.size(100.dp),
-            shape = if (isExpressiveUi) MaterialTheme.shapes.extraLarge else RoundedCornerShape(8.dp)
+            shape = MaterialTheme.shapes.extraLarge
         ) {
             Box(
                 contentAlignment = Alignment.Center,

@@ -11,14 +11,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.window.DialogProperties
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 
-/**
- * App-wide alert dialog entry point.
- *
- * Expressive UI uses the larger MD3E container and a regular-weight title while
- * the classic UI keeps Material 3's original AlertDialog defaults.
- */
 @Composable
 fun YukiAlertDialog(
     onDismissRequest: () -> Unit,
@@ -36,8 +29,7 @@ fun YukiAlertDialog(
     tonalElevation: Dp? = null,
     properties: DialogProperties = DialogProperties(),
 ) {
-    val expressive = isExpressiveUi
-    val resolvedTitle = if (expressive && title != null) {
+    val resolvedTitle = if (title != null) {
         @Composable {
             ProvideTextStyle(
                 MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal)
@@ -57,11 +49,7 @@ fun YukiAlertDialog(
         icon = icon,
         title = resolvedTitle,
         text = text,
-        shape = shape ?: if (expressive) {
-            MaterialTheme.shapes.extraLarge
-        } else {
-            AlertDialogDefaults.shape
-        },
+        shape = shape ?: MaterialTheme.shapes.extraLarge,
         containerColor = containerColor ?: AlertDialogDefaults.containerColor,
         iconContentColor = iconContentColor ?: AlertDialogDefaults.iconContentColor,
         titleContentColor = titleContentColor ?: AlertDialogDefaults.titleContentColor,
@@ -74,18 +62,14 @@ fun YukiAlertDialog(
 /** Applies the MD3E dialog title typography to third-party dialog content. */
 @Composable
 fun YukiDialogTheme(content: @Composable () -> Unit) {
-    if (isExpressiveUi) {
-        val typography = MaterialTheme.typography
-        MaterialTheme(
-            colorScheme = MaterialTheme.colorScheme,
-            shapes = MaterialTheme.shapes.copy(large = MaterialTheme.shapes.extraLarge),
-            typography = typography.copy(
-                headlineSmall = typography.titleLarge.copy(fontWeight = FontWeight.Normal),
-                titleLarge = typography.titleLarge.copy(fontWeight = FontWeight.Normal),
-            ),
-            content = content,
-        )
-    } else {
-        content()
-    }
+    val typography = MaterialTheme.typography
+    MaterialTheme(
+        colorScheme = MaterialTheme.colorScheme,
+        shapes = MaterialTheme.shapes.copy(large = MaterialTheme.shapes.extraLarge),
+        typography = typography.copy(
+            headlineSmall = typography.titleLarge.copy(fontWeight = FontWeight.Normal),
+            titleLarge = typography.titleLarge.copy(fontWeight = FontWeight.Normal),
+        ),
+        content = content,
+    )
 }

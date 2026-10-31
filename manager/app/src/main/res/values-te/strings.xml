@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">చాలా ఎక్కువ లాగ్‌లు, కేవలం తాజా %1$d ఎంట్రీలు మాత్రమే చూపించబడుతున్నాయి</string>
     <string name="log_viewer_load_more">మరిన్ని లాగ్‌లను లోడ్ చేయండి</string>
     <string name="log_viewer_all_logs_loaded">అన్ని లాగ్‌లు ప్రదర్శించబడ్డాయి</string>
-    <string name="incompatible_kernel_msg">ప్రస్తుత మేనేజర్ ఈ కెర్నల్‌తో అనుకూలంగా లేదు! దయచేసి కెర్నల్‌ను వెర్షన్ %2$d లేదా అంతకంటే ఎక్కువకు అప్‌గ్రేడ్ చేయండి (ప్రస్తుతం %1$d)</string>
     <string name="umount_path_manager">Umount పాత్ నిర్వహణ</string>
     <string name="umount_path_manager_summary">కెర్నల్ అన్‌మౌంట్ పాత్‌లను నిర్వహించండి</string>
     <string name="umount_path_restart_notice">మార్పులు అమలులోకి రావడానికి రీబూట్ అవసరం. సిస్టమ్ తదుపరి బూట్‌లో కొత్త కాన్ఫిగరేషన్‌ను వర్తింపజేస్తుంది</string>
@@ -513,7 +512,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">రద్దు చేయండి</string>
@@ -693,8 +691,6 @@
     <string name="install_force_backup_summary">ఎంచుకున్న boot ఇమేజ్ మార్పులు చేయని అసలు ఫ్యాక్టరీ ఇమేజ్ అని నిర్ధారించండి.</string>
     <string name="hide_seccomp_status">Seccomp స్థితిని దాచండి</string>
     <string name="hide_seccomp_status_summary">హోమ్ పేజీలో Seccomp స్థితి సమాచారాన్ని దాచండి</string>
-    <string name="ui_style">ఇంటర్‌ఫేస్ శైలి</string>
-    <string name="ui_style_classic">Material 3 క్లాసిక్</string>
     <string name="predictive_back_gesture">ఊహాత్మక వెనుకకు వెళ్లే సంజ్ఞ</string>
     <string name="predictive_back_gesture_summary">వెనుకకు వెళ్లే సంజ్ఞతో మునుపటి పేజీ ప్రివ్యూ చూపండి. డిఫాల్ట్‌గా ఆఫ్</string>
     <string name="feature_control">ఫీచర్ నియంత్రణ</string>

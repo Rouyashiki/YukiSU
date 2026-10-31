@@ -193,7 +193,7 @@ private fun MoreSettingsTopBar(
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.more_settings),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null
+            fontWeight = FontWeight.Normal
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -212,23 +212,13 @@ private fun MoreSettingsTopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior
+    )
 }
 
 @Composable
@@ -241,13 +231,6 @@ private fun AppearanceSettings(
     SettingsCard(title = stringResource(R.string.appearance_settings)) {
 
         LanguageSetting(state = state)
-
-        SettingItem(
-            icon = Icons.Default.AutoAwesome,
-            title = stringResource(R.string.ui_style),
-            subtitle = state.uiStyleOptions[state.uiStyleIndex],
-            onClick = { state.showUiStyleDialog = true }
-        )
 
         SettingItem(
             icon = Icons.Default.Animation,

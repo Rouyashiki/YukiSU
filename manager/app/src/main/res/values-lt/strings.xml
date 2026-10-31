@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Per daug žurnalų, rodomi tik naujausi %1$d įrašai</string>
     <string name="log_viewer_load_more">Įkelti daugiau žurnalų</string>
     <string name="log_viewer_all_logs_loaded">Rodomi visi žurnalai</string>
-    <string name="incompatible_kernel_msg">Dabartinė tvarkyklė nesuderinama su šiuo branduoliu! Atnaujinkite branduolį į versiją %2$d arba naujesnę (dabar %1$d)</string>
     <string name="umount_path_manager">Umount kelių tvarkymas</string>
     <string name="umount_path_manager_summary">Tvarkyti branduolio atjungimo kelius</string>
     <string name="umount_path_restart_notice">Kad pakeitimai įsigaliotų, reikia paleisti iš naujo. Sistema pritaikys naują konfigūraciją kitą kartą paleidžiant</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Įsitikinkite, kad pasirinktas boot atvaizdas yra nepakeistas gamyklinis atvaizdas.</string>
     <string name="hide_seccomp_status">Slėpti Seccomp būseną</string>
     <string name="hide_seccomp_status_summary">Slėpti Seccomp būseną pradžios puslapyje</string>
-    <string name="ui_style">Sąsajos stilius</string>
-    <string name="ui_style_classic">Klasikinis Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Nuspėjamasis grįžimo gestas</string>
     <string name="predictive_back_gesture_summary">Grįžtant pagal gestą peržiūrėti ankstesnį puslapį. Pagal numatymą išjungta.</string>
     <string name="feature_control">Funkcijų valdymas</string>

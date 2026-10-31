@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Забагато журналів, показано лише %1$d найновіших записів</string>
     <string name="log_viewer_load_more">Завантажити більше журналів</string>
     <string name="log_viewer_all_logs_loaded">Показано всі журнали</string>
-    <string name="incompatible_kernel_msg">Поточний менеджер несумісний з цим ядром! Оновіть ядро до версії %2$d або вищої (наразі %1$d)</string>
     <string name="umount_path_manager">Керування шляхами umount</string>
     <string name="umount_path_manager_summary">Керувати шляхами розмонтування ядра</string>
     <string name="umount_path_restart_notice">Для застосування змін потрібне перезавантаження. Система застосує нову конфігурацію під час наступного завантаження</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Переконайтеся, що вибраний образ boot є незміненим заводським образом.</string>
     <string name="hide_seccomp_status">Приховати стан Seccomp</string>
     <string name="hide_seccomp_status_summary">Приховати відомості про стан Seccomp на головній сторінці</string>
-    <string name="ui_style">Стиль інтерфейсу</string>
-    <string name="ui_style_classic">Класичний Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Передбачувальний жест «Назад»</string>
     <string name="predictive_back_gesture_summary">Показувати попередню сторінку відповідно до жесту повернення. Типово вимкнено</string>
     <string name="feature_control">Керування функціями</string>

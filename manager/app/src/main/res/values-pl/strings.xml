@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Zbyt wiele dzienników, wyświetlanie tylko %1$d najnowszych wpisów</string>
     <string name="log_viewer_load_more">Załaduj więcej dzienników</string>
     <string name="log_viewer_all_logs_loaded">Wyświetlono wszystkie dzienniki</string>
-    <string name="incompatible_kernel_msg">Bieżący menedżer jest niezgodny z tym jądrem! Zaktualizuj jądro do wersji %2$d lub wyższej (obecnie %1$d)</string>
     <string name="umount_path_manager">Zarządzanie ścieżkami umount</string>
     <string name="umount_path_manager_summary">Zarządzaj ścieżkami odmontowywania jądra</string>
     <string name="umount_path_restart_notice">Wymagany jest restart, aby zmiany zaczęły obowiązywać. System zastosuje nową konfigurację przy następnym rozruchu</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Upewnij się, że wybrany obraz boot jest niezmodyfikowanym obrazem fabrycznym.</string>
     <string name="hide_seccomp_status">Ukryj stan Seccomp</string>
     <string name="hide_seccomp_status_summary">Ukryj stan Seccomp na stronie głównej</string>
-    <string name="ui_style">Styl interfejsu</string>
-    <string name="ui_style_classic">Klasyczny Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Predykcyjny gest wstecz</string>
     <string name="predictive_back_gesture_summary">Pokazuj podgląd poprzedniej strony podczas wykonywania gestu wstecz. Domyślnie wyłączone.</string>
     <string name="feature_control">Sterowanie funkcjami</string>

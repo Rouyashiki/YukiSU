@@ -62,10 +62,7 @@ import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
-import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.getCardElevation
 import com.anatdx.yukisu.ui.theme.ManagerUi
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.motion.YukiExpandableContent
 import com.anatdx.yukisu.ui.util.*
 import kotlinx.coroutines.CancellationException
@@ -519,42 +516,19 @@ private fun SettingsGroupCard(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    if (isExpressiveUi) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = SPACING_LARGE, vertical = 12.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Normal,
-                modifier = Modifier.padding(horizontal = ManagerUi.SectionTitlePadding, vertical = ManagerUi.SectionTitlePadding),
-                color = MaterialTheme.colorScheme.primary
-            )
-            Column(content = content)
-        }
-    } else {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = SPACING_LARGE, vertical = SPACING_MEDIUM),
-            colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerLow),
-            elevation = getCardElevation()
-        ) {
-            Column(modifier = Modifier.padding(vertical = SPACING_MEDIUM)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(
-                        horizontal = SPACING_LARGE,
-                        vertical = SPACING_MEDIUM
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                content()
-            }
-        }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = SPACING_LARGE, vertical = 12.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = ManagerUi.SectionTitlePadding, vertical = ManagerUi.SectionTitlePadding),
+            color = MaterialTheme.colorScheme.primary
+        )
+        Column(content = content)
     }
 }
 
@@ -701,24 +675,20 @@ fun SettingItem(
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.5f)
             .then(
-                if (isExpressiveUi) {
-                    Modifier
-                        .padding(
-                            horizontal = 6.dp,
-                            vertical = ListItemDefaults.SegmentedGap / 2
-                        )
-                        .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                        .clip(expressiveShape)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                        )
-                        .clickable(enabled = enabled, onClick = onClick)
-                } else {
-                    Modifier.clickable(enabled = enabled, onClick = onClick)
-                }
+                Modifier
+                    .padding(
+                        horizontal = 6.dp,
+                        vertical = ListItemDefaults.SegmentedGap / 2
+                    )
+                    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+                    .clip(expressiveShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
+                    )
+                    .clickable(enabled = enabled, onClick = onClick)
             )
             .padding(horizontal = SPACING_LARGE, vertical = 12.dp),
-        verticalAlignment = if (isExpressiveUi) Alignment.CenterVertically else Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
         SettingsLeadingIcon(icon = icon, tint = MaterialTheme.colorScheme.primary)
 
@@ -726,18 +696,14 @@ fun SettingItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null
+                fontWeight = FontWeight.Normal
             )
             if (summary != null) {
                 Spacer(modifier = Modifier.height(SPACING_SMALL))
                 Text(
                     text = summary,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isExpressiveUi) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        Color.Unspecified
-                    }
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -797,24 +763,20 @@ fun SwitchItem(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (isExpressiveUi) {
-                    Modifier
-                        .padding(
-                            horizontal = 6.dp,
-                            vertical = ListItemDefaults.SegmentedGap / 2
-                        )
-                        .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                        .clip(expressiveShape)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                        )
-                } else {
-                    Modifier
-                }
+                Modifier
+                    .padding(
+                        horizontal = 6.dp,
+                        vertical = ListItemDefaults.SegmentedGap / 2
+                    )
+                    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+                    .clip(expressiveShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
+                    )
             )
             .then(toggleModifier)
             .padding(horizontal = SPACING_LARGE, vertical = 12.dp),
-        verticalAlignment = if (isExpressiveUi) Alignment.CenterVertically else Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
         SettingsLeadingIcon(icon = icon, tint = iconTint)
 
@@ -822,7 +784,7 @@ fun SwitchItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
                 color = titleColor
             )
             if (summary != null) {
@@ -857,25 +819,14 @@ fun SwitchItem(
 
 @Composable
 private fun SettingsLeadingIcon(icon: ImageVector, tint: Color) {
-    if (isExpressiveUi) {
-        YukiIcon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(end = SPACING_LARGE)
-                .size(24.dp)
-        )
-    } else {
-        YukiIcon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier
-                .padding(end = SPACING_LARGE)
-                .size(24.dp)
-        )
-    }
+    YukiIcon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .padding(end = SPACING_LARGE)
+            .size(24.dp)
+    )
 }
 
 @Composable
@@ -1087,27 +1038,16 @@ private fun TopBar(
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.settings),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null
+            fontWeight = FontWeight.Normal
         )
     }
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            colors = colors,
-            windowInsets = WindowInsets.safeDrawing.only(
-                WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-            ),
-            scrollBehavior = scrollBehavior
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            colors = colors,
-            windowInsets = WindowInsets.safeDrawing.only(
-                WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-            ),
-            scrollBehavior = scrollBehavior
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        colors = colors,
+        windowInsets = WindowInsets.safeDrawing.only(
+            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+        ),
+        scrollBehavior = scrollBehavior
+    )
 }

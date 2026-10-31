@@ -11,8 +11,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.Velocity
 import com.anatdx.yukisu.ui.theme.LocalCompactWindow
-import com.anatdx.yukisu.ui.theme.LocalUiStyle
-import com.anatdx.yukisu.ui.theme.UiStyle
 import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
@@ -65,7 +63,6 @@ class YukiTopAppBarScrollBehaviorTest {
         try {
             composition.setContent {
                 CompositionLocalProvider(
-                    LocalUiStyle provides UiStyle.Expressive,
                     LocalCompactWindow provides true,
                 ) {
                     behavior = if (state == null) {

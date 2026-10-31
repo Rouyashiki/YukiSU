@@ -38,16 +38,6 @@ fun MoreSettingsDialogs(
     state: MoreSettingsState,
     handlers: MoreSettingsHandlers
 ) {
-    if (state.showUiStyleDialog) {
-        SingleChoiceDialog(
-            title = stringResource(R.string.ui_style),
-            options = state.uiStyleOptions,
-            selectedIndex = state.uiStyleIndex,
-            onOptionSelected = handlers::handleUiStyleChange,
-            onDismiss = { state.showUiStyleDialog = false }
-        )
-    }
-
     if (state.showMotionPresetDialog) {
         SingleChoiceDialog(
             title = stringResource(R.string.motion_preset_title),
@@ -334,7 +324,7 @@ fun ThemeColorDialog(
         stringResource(R.string.color_gray) to ThemeColors.Gray,
         stringResource(R.string.color_yellow) to ThemeColors.Yellow
     )
-    
+
     val themeColorOptions = if (ThemeConfig.isTransPrideUnlocked) {
         baseThemeColorOptions + (stringResource(R.string.color_trans_pride) to ThemeColors.TransPride)
     } else {

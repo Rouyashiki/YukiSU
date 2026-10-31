@@ -5,14 +5,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -21,12 +20,9 @@ import com.ramcosta.composedestinations.spec.RouteOrDirection
 import com.ramcosta.composedestinations.utils.isRouteOnBackStackAsState
 import com.ramcosta.composedestinations.utils.rememberDestinationsNavigator
 import com.anatdx.yukisu.ui.MainActivity
-import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.activity.util.*
 import com.anatdx.yukisu.ui.screen.BottomBarDestination
-import com.anatdx.yukisu.ui.theme.CardConfig.cardElevation
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getBarColor
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.*
 
 @SuppressLint("ContextCastToActivity")
@@ -82,12 +78,12 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
                 NavigationRailItem(
                     selected = selected,
                     onClick = { navigate(destination, selected) },
-                    icon = { DestinationIcon(destination, selected, badgeCountOf(destination), !isHideOtherInfo) },
+                    icon = { DestinationIcon(destination, badgeCountOf(destination), !isHideOtherInfo) },
                     label = { Text(stringResource(destination.label), style = MaterialTheme.typography.labelMedium) },
                 )
             }
         }
-    } else if (isExpressiveUi) {
+    } else {
         ShortNavigationBar(
             containerColor = containerColor,
             windowInsets = WindowInsets.navigationBars.only(
@@ -102,7 +98,7 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
                     selected = selected,
                     onClick = { navigate(destination, selected) },
                     icon = {
-                        DestinationIcon(destination, selected, badgeCount, !isHideOtherInfo)
+                        DestinationIcon(destination, badgeCount, !isHideOtherInfo)
                     },
                     label = {
                         Text(
@@ -113,53 +109,18 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
                 )
             }
         }
-    } else {
-        NavigationBar(
-            modifier = Modifier.windowInsetsPadding(
-                WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
-            ),
-            containerColor = containerColor,
-            tonalElevation = cardElevation
-        ) {
-            destinations.forEach { destination ->
-                val selected by navController.isRouteOnBackStackAsState(destination.direction)
-                val badgeCount = badgeCountOf(destination)
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = { navigate(destination, selected) },
-                    icon = {
-                        DestinationIcon(destination, selected, badgeCount, !isHideOtherInfo)
-                    },
-                    label = {
-                        Text(
-                            stringResource(destination.label),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    },
-                    alwaysShowLabel = false
-                )
-            }
-        }
     }
 }
 
 @Composable
 private fun DestinationIcon(
     destination: BottomBarDestination,
-    selected: Boolean,
     badgeCount: Int,
     showBadge: Boolean
 ) {
     val icon: @Composable () -> Unit = {
-        val imageVector = if (isExpressiveUi && destination == BottomBarDestination.Settings) {
-            Icons.Filled.SettingsSuggest
-        } else if (selected) {
-            destination.iconSelected
-        } else {
-            destination.iconNotSelected
-        }
-        YukiIcon(
-            imageVector = imageVector,
+        Icon(
+            painter = painterResource(destination.icon),
             contentDescription = null
         )
     }

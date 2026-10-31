@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">יותר מדי יומנים, מציג רק את %1$d הרשומות העדכניות ביותר</string>
     <string name="log_viewer_load_more">טען יומנים נוספים</string>
     <string name="log_viewer_all_logs_loaded">כל היומנים מוצגים</string>
-    <string name="incompatible_kernel_msg">המנהל הנוכחי אינו תואם לליבה זו! אנא שדרג את הליבה לגרסה %2$d או גבוהה יותר (כעת %1$d)</string>
     <string name="umount_path_manager">ניהול נתיבי umount</string>
     <string name="umount_path_manager_summary">נהל את נתיבי ביטול העיגון של הליבה</string>
     <string name="umount_path_restart_notice">נדרשת הפעלה מחדש כדי שהשינויים ייכנסו לתוקף. המערכת תחיל את התצורה החדשה באתחול הבא</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">יש לוודא שתמונת boot שנבחרה היא תמונת יצרן שלא שונתה.</string>
     <string name="hide_seccomp_status">הסתרת מצב Seccomp</string>
     <string name="hide_seccomp_status_summary">הסתרת מידע על מצב Seccomp בדף הבית</string>
-    <string name="ui_style">סגנון הממשק</string>
-    <string name="ui_style_classic">Material 3 קלאסי</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">מחוות חזרה חזויה</string>
     <string name="predictive_back_gesture_summary">תצוגה מקדימה של הדף הקודם בהתאם למחוות החזרה. כבוי כברירת מחדל</string>
     <string name="feature_control">שליטה בתכונות</string>

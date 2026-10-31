@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Terlalu banyak log, hanya memaparkan %1$d entri terkini</string>
     <string name="log_viewer_load_more">Muatkan Lebih Banyak Log</string>
     <string name="log_viewer_all_logs_loaded">Semua log dipaparkan</string>
-    <string name="incompatible_kernel_msg">Pengurus semasa tidak serasi dengan kernel ini! Sila naik taraf kernel kepada versi %2$d atau lebih tinggi (kini %1$d)</string>
     <string name="umount_path_manager">Pengurusan Laluan Nyahlekap</string>
     <string name="umount_path_manager_summary">Urus laluan nyahlekap kernel</string>
     <string name="umount_path_restart_notice">But semula diperlukan untuk perubahan berkuat kuasa. Sistem akan menerapkan konfigurasi baharu pada but seterusnya</string>
@@ -513,7 +512,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">Batal</string>
@@ -693,8 +691,6 @@
     <string name="install_force_backup_summary">Pastikan imej boot yang dipilih ialah imej asal kilang yang belum diubah suai.</string>
     <string name="hide_seccomp_status">Sembunyikan status Seccomp</string>
     <string name="hide_seccomp_status_summary">Sembunyikan maklumat status Seccomp pada halaman utama</string>
-    <string name="ui_style">Gaya antara muka</string>
-    <string name="ui_style_classic">Material 3 Klasik</string>
     <string name="predictive_back_gesture">Gerak isyarat kembali ramalan</string>
     <string name="predictive_back_gesture_summary">Pratonton halaman sebelumnya mengikut gerak isyarat kembali. Dimatikan secara lalai</string>
     <string name="feature_control">Kawalan ciri</string>

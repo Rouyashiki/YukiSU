@@ -105,7 +105,6 @@ import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.BackgroundLayer
 import com.anatdx.yukisu.ui.theme.CardConfig
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.LocalNavigationLeaveGuard
 import com.anatdx.yukisu.ui.util.SnackbarController
 import com.anatdx.yukisu.ui.util.getKsud
@@ -155,7 +154,7 @@ fun RamdiskEditorScreen(
     )
     YukiFBProvider(
         sceneBackground = { BackgroundLayer() },
-        style = if (isExpressiveUi) YukiFBStyle.Expressive else YukiFBStyle.Classic,
+        style = YukiFBStyle.Expressive,
         colors = colors,
         motion = if (LocalYukiMotion.current.enabled) YukiFBMotion.Full else YukiFBMotion.None,
         icon = { vector, description, modifier, tint -> YukiIcon(vector, description, modifier, tint) },
@@ -1266,21 +1265,12 @@ private fun RamdiskFragmentSelector(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            if (isExpressiveUi) {
-                YukiLargeTopAppBar(
-                    colors = ramdiskTopBarColors(),
-                    title = title,
-                    navigationIcon = navigationIcon,
-                    actions = actions,
-                )
-            } else {
-                TopAppBar(
-                    colors = ramdiskTopBarColors(),
-                    title = title,
-                    navigationIcon = navigationIcon,
-                    actions = actions,
-                )
-            }
+            YukiLargeTopAppBar(
+                colors = ramdiskTopBarColors(),
+                title = title,
+                navigationIcon = navigationIcon,
+                actions = actions,
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHost.hostState) },
     ) { paddingValues ->
@@ -1289,10 +1279,10 @@ private fun RamdiskFragmentSelector(
                 .fillMaxSize()
                 .padding(paddingValues),
             contentPadding = PaddingValues(
-                horizontal = if (isExpressiveUi) 16.dp else 20.dp,
+                horizontal = 16.dp,
                 vertical = 16.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(if (isExpressiveUi) 8.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
                 Text(
@@ -1310,17 +1300,9 @@ private fun RamdiskFragmentSelector(
                 Card(
                     onClick = { onSelect(backend) },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = if (isExpressiveUi) {
-                        MaterialTheme.shapes.extraLarge
-                    } else {
-                        MaterialTheme.shapes.medium
-                    },
+                    shape = MaterialTheme.shapes.extraLarge,
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isExpressiveUi) {
-                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = CardConfig.cardAlpha)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
-                        },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = CardConfig.cardAlpha),
                     ),
                 ) {
                     ListItem(
@@ -1332,11 +1314,7 @@ private fun RamdiskFragmentSelector(
                                         fragment.index + 1,
                                     )
                                 },
-                                style = if (isExpressiveUi) {
-                                    MaterialTheme.typography.titleLarge
-                                } else {
-                                    MaterialTheme.typography.titleMedium
-                                },
+                                style = MaterialTheme.typography.titleLarge,
                             )
                         },
                         supportingContent = {
@@ -1372,11 +1350,7 @@ private fun RamdiskFragmentSelector(
                             YukiIcon(
                                 Icons.Filled.Memory,
                                 contentDescription = null,
-                                tint = if (isExpressiveUi) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         },
                         colors = ListItemDefaults.colors(
@@ -1608,8 +1582,7 @@ private fun ElfSummaryViewer(
                     ) { index, (label, value) ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = if (isExpressiveUi) ListItemDefaults.segmentedShapes(index, groupFields.size).shape
-                                else MaterialTheme.shapes.small,
+                            shape = ListItemDefaults.segmentedShapes(index, groupFields.size).shape,
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.cardAlpha)
                             ),
@@ -1962,8 +1935,7 @@ private fun RamdiskOperationOverlay(label: String) {
         Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (isExpressiveUi) LoadingIndicator(Modifier.size(32.dp))
-                else CircularProgressIndicator(Modifier.size(24.dp))
+                LoadingIndicator(Modifier.size(32.dp))
                 Text(label, style = MaterialTheme.typography.bodyMedium)
             }
         }

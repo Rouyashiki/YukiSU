@@ -49,7 +49,6 @@ import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getCardColors
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.DownloadHandle
 import com.anatdx.yukisu.ui.util.DownloadProgress
@@ -179,7 +178,7 @@ fun PluginRepositoryScreen(navigator: DestinationsNavigator) {
                 title = {
                     Text(
                         stringResource(R.string.plugin_repositories),
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                        fontWeight = FontWeight.Normal,
                     )
                 },
                 searchText = viewModel.search,
@@ -337,7 +336,7 @@ fun PluginRepositorySourcesScreen(navigator: DestinationsNavigator) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
-                shape = if (isExpressiveUi) CircleShape else FloatingActionButtonDefaults.shape,
+                shape = CircleShape,
             ) {
                 YukiIcon(Icons.Outlined.Add, stringResource(R.string.repository_add_source))
             }
@@ -439,14 +438,14 @@ private fun PluginRepositorySourceFilter(
         FilterChip(
             selected = selectedSourceId == null,
             onClick = { onSelect(null) },
-            shape = if (isExpressiveUi) CircleShape else FilterChipDefaults.shape,
+            shape = CircleShape,
             label = { Text(stringResource(R.string.repository_all_sources)) },
         )
         sources.forEach { source ->
             FilterChip(
                 selected = selectedSourceId == source.id,
                 onClick = { onSelect(source.id) },
-                shape = if (isExpressiveUi) CircleShape else FilterChipDefaults.shape,
+                shape = CircleShape,
                 label = { Text(source.name, maxLines = 1) },
             )
         }
@@ -470,7 +469,7 @@ private fun PluginRepositoryItem(
                 Text(
                     plugin.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.SemiBold,
+                    fontWeight = FontWeight.Normal,
                 )
                 plugin.pluginId?.let { id ->
                     Text(
@@ -686,14 +685,10 @@ private fun PluginRepositoryCard(content: @Composable ColumnScope.() -> Unit) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = getCardColors(
-            if (isExpressiveUi) {
-                MaterialTheme.colorScheme.surfaceContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            }
+            MaterialTheme.colorScheme.surfaceContainer
         ),
         elevation = getCardElevation(),
-        shape = if (isExpressiveUi) MaterialTheme.shapes.large else CardDefaults.elevatedShape,
+        shape = MaterialTheme.shapes.large,
         content = content,
     )
 }

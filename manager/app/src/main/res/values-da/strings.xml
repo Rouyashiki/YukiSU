@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">For mange logge, viser kun de seneste %1$d poster</string>
     <string name="log_viewer_load_more">Indlæs flere logge</string>
     <string name="log_viewer_all_logs_loaded">Alle logge vises</string>
-    <string name="incompatible_kernel_msg">Den nuværende manager er inkompatibel med denne kerne! Opgrader venligst kernen til version %2$d eller højere (i øjeblikket %1$d)</string>
     <string name="umount_path_manager">Administration af afmonteringsstier</string>
     <string name="umount_path_manager_summary">Administrer kernens afmonteringsstier</string>
     <string name="umount_path_restart_notice">En genstart er påkrævet, før ændringerne træder i kraft. Systemet anvender den nye konfiguration ved næste opstart</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Bekræft, at det valgte boot-image er et uændret fabriksimage.</string>
     <string name="hide_seccomp_status">Skjul Seccomp-status</string>
     <string name="hide_seccomp_status_summary">Skjul Seccomp-status på startsiden</string>
-    <string name="ui_style">Grænsefladestil</string>
-    <string name="ui_style_classic">Material 3 klassisk</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Forudsigende tilbagebevægelse</string>
     <string name="predictive_back_gesture_summary">Vis en forhåndsvisning af den forrige side under tilbagebevægelsen. Deaktiveret som standard.</string>
     <string name="feature_control">Funktionsstyring</string>

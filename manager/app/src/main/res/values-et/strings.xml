@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Liiga palju logisid, kuvatakse ainult uusimad %1$d kirjet</string>
     <string name="log_viewer_load_more">Laadi rohkem logisid</string>
     <string name="log_viewer_all_logs_loaded">Kõik logid kuvatud</string>
-    <string name="incompatible_kernel_msg">Praegune haldur ei ühildu selle kerneliga! Palun uuendage kernel versioonile %2$d või uuemale (praegu %1$d)</string>
     <string name="umount_path_manager">Umount-teede haldus</string>
     <string name="umount_path_manager_summary">Halda kerneli lahti haakimise teid</string>
     <string name="umount_path_restart_notice">Muudatuste jõustumiseks on vajalik taaskäivitus. Süsteem rakendab uue konfiguratsiooni järgmisel käivitamisel</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Veendu, et valitud boot-tõmmis on muutmata tehase tõmmis.</string>
     <string name="hide_seccomp_status">Peida Seccompi olek</string>
     <string name="hide_seccomp_status_summary">Peida Seccompi olek avalehel</string>
-    <string name="ui_style">Liidese stiil</string>
-    <string name="ui_style_classic">Klassikaline Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Ennustav tagasiliikumise žest</string>
     <string name="predictive_back_gesture_summary">Eelvaata tagasiliikumisel eelmist lehte vastavalt žestile. Vaikimisi väljas.</string>
     <string name="feature_control">Funktsioonide juhtimine</string>

@@ -24,10 +24,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -64,9 +62,6 @@ import com.anatdx.yukisu.ui.component.profile.TemplateConfig
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
-import com.anatdx.yukisu.ui.theme.getCardColors
-import com.anatdx.yukisu.ui.theme.getCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.*
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import com.anatdx.yukisu.ui.viewmodel.getTemplateInfoById
@@ -215,11 +210,7 @@ fun AppProfileScreen(
     }
 
     val colorScheme = MaterialTheme.colorScheme
-    val cardColor = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-        colorScheme.surfaceContainerLow
-    } else {
-        colorScheme.background
-    }
+    val cardColor = colorScheme.surfaceContainerLow
     Scaffold(
         topBar = {
             TopBar(
@@ -375,15 +366,10 @@ private fun AppProfileInner(
     onDynamicManagerCompat: () -> Unit = {},
 ) {
     val isRootGranted = !isSpecialApp && profile.allowSu
-    val cardColors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHigh)
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
-            surface = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-                Color.Transparent
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            }
+            surface = Color.Transparent
         )
     ) {
         Column(modifier = modifier) {
@@ -391,9 +377,6 @@ private fun AppProfileInner(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = cardColors,
-                elevation = getCardElevation(),
             ) {
                 if (uidApps.size > 1) {
                     ListItem(
@@ -444,9 +427,6 @@ private fun AppProfileInner(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = cardColors,
-                elevation = getCardElevation(),
             ) {
                 SwitchItem(
                     icon = Icons.Filled.Security,
@@ -461,9 +441,6 @@ private fun AppProfileInner(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = cardColors,
-                    elevation = getCardElevation(),
                 ) {
                     SwitchItem(
                         icon = Icons.Filled.AdminPanelSettings,
@@ -480,14 +457,7 @@ private fun AppProfileInner(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                            shapes = if (isExpressiveUi) {
-                                ButtonDefaults.shapes()
-                            } else {
-                                ButtonDefaults.shapes(
-                                    shape = ButtonDefaults.shape,
-                                    pressedShape = ButtonDefaults.shape,
-                                )
-                            },
+                            shapes = ButtonDefaults.shapes(),
                         ) {
                             Text(stringResource(R.string.dynamic_manager_compat))
                         }
@@ -519,9 +489,6 @@ private fun AppProfileInner(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            colors = cardColors,
-                            elevation = getCardElevation(),
                         ) {
                             ProfileBox(mode, true) {
                                 // template mode shouldn't change profile here!
@@ -545,9 +512,6 @@ private fun AppProfileInner(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                                shape = MaterialTheme.shapes.medium,
-                                colors = cardColors,
-                                elevation = getCardElevation(),
                             ) {
                                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                                     Crossfade(
@@ -586,9 +550,6 @@ private fun AppProfileInner(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            colors = cardColors,
-                            elevation = getCardElevation(),
                         ) {
                             ProfileBox(mode, false) {
                                 onProfileChange(profile.copy(nonRootUseDefault = (it == Mode.Default)))
@@ -602,9 +563,6 @@ private fun AppProfileInner(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                                shape = MaterialTheme.shapes.medium,
-                                colors = cardColors,
-                                elevation = getCardElevation(),
                             ) {
                                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
                                     AppProfileConfig(
@@ -621,7 +579,6 @@ private fun AppProfileInner(
                     if (uidApps.size > 1) {
                         SharedUidAppsCard(
                             apps = uidApps,
-                            cardColors = cardColors,
                         )
                     }
                 }
@@ -633,130 +590,70 @@ private fun AppProfileInner(
 @Composable
 private fun ProfileSurface(
     modifier: Modifier = Modifier,
-    shape: Shape = MaterialTheme.shapes.medium,
-    colors: CardColors = CardDefaults.elevatedCardColors(),
-    elevation: CardElevation = CardDefaults.elevatedCardElevation(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (isExpressiveUi) {
-        Column(
-            modifier = modifier
-                .clip(MaterialTheme.shapes.large)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                ),
-            content = content,
-        )
-    } else {
-        ElevatedCard(
-            modifier = modifier,
-            shape = shape,
-            colors = colors,
-            elevation = elevation,
-            content = content,
-        )
-    }
+    Column(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
+            ),
+        content = content,
+    )
 }
 
 @Composable
 private fun SharedUidAppsCard(
     apps: List<SuperUserViewModel.AppInfo>,
-    cardColors: CardColors,
 ) {
     val context = LocalContext.current
 
-    if (isExpressiveUi) {
-        Text(
-            text = stringResource(R.string.group_contains_apps, apps.size),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.primary,
+    Text(
+        text = stringResource(R.string.group_contains_apps, apps.size),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Normal,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+    )
+    apps.forEachIndexed { index, app ->
+        ListItem(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 24.dp, vertical = 14.dp),
-        )
-        apps.forEachIndexed { index, app ->
-            ListItem(
-                modifier = Modifier
-                    .padding(
-                        horizontal = 16.dp,
-                        vertical = ListItemDefaults.SegmentedGap / 2,
-                    )
-                    .clip(ListItemDefaults.segmentedShapes(index, apps.size).shape)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                    ),
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                content = {
-                    Text(
-                        text = app.label,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1,
-                    )
-                },
-                supportingContent = {
-                    Text(
-                        text = app.packageName,
-                        maxLines = 1,
-                    )
-                },
-                leadingContent = {
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(app.packageInfo)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = app.label,
-                        modifier = Modifier.size(40.dp),
-                    )
-                },
-            )
-        }
-    } else {
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = MaterialTheme.shapes.medium,
-            colors = cardColors,
-            elevation = getCardElevation(),
-        ) {
-            Text(
-                text = stringResource(R.string.group_contains_apps, apps.size),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-            apps.forEachIndexed { index, app ->
-                if (index > 0) {
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                }
-                ListItem(
-                    content = {
-                        Text(
-                            text = app.label,
-                            maxLines = 1,
-                        )
-                    },
-                    supportingContent = {
-                        Text(
-                            text = app.packageName,
-                            maxLines = 1,
-                        )
-                    },
-                    leadingContent = {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(app.packageInfo)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = app.label,
-                            modifier = Modifier.size(40.dp),
-                        )
-                    },
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = ListItemDefaults.SegmentedGap / 2,
                 )
-            }
-        }
+                .clip(ListItemDefaults.segmentedShapes(index, apps.size).shape)
+                .background(
+                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
+                ),
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            content = {
+                Text(
+                    text = app.label,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                )
+            },
+            supportingContent = {
+                Text(
+                    text = app.packageName,
+                    maxLines = 1,
+                )
+            },
+            leadingContent = {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(app.packageInfo)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = app.label,
+                    modifier = Modifier.size(40.dp),
+                )
+            },
+        )
     }
 }
 
@@ -778,7 +675,7 @@ private fun TopBar(
     val titleContent: @Composable () -> Unit = {
         Text(
             text = title,
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+            fontWeight = FontWeight.Normal,
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -793,30 +690,13 @@ private fun TopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = titleContent,
-            colors = colors,
-            navigationIcon = navigationIcon,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = titleContent,
-            colors = colors,
-            navigationIcon = navigationIcon,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-            modifier = Modifier.shadow(
-                elevation = if ((scrollBehavior?.state?.overlappedFraction ?: 0f) > 0.01f) {
-                    4.dp
-                } else {
-                    0.dp
-                },
-            ),
-        )
-    }
+    YukiLargeTopAppBar(
+        title = titleContent,
+        colors = colors,
+        navigationIcon = navigationIcon,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 @Composable

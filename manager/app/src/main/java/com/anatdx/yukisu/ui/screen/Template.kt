@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -25,11 +24,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.getSystemService
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,10 +42,8 @@ import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiPullToRefreshBox
 import com.anatdx.yukisu.ui.component.clickHapticFeedback
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
-import com.anatdx.yukisu.ui.theme.CardConfig
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
 import com.anatdx.yukisu.ui.theme.ExpressiveListGroupMinHeight
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.viewmodel.TemplateViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -194,31 +189,27 @@ private fun TemplateItem(
     ListItem(
         modifier = Modifier
             .then(
-                if (isExpressiveUi) {
-                    Modifier
-                        .padding(
-                            horizontal = 16.dp,
-                            vertical = ListItemDefaults.SegmentedGap / 2,
-                        )
-                        .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
-                        .clip(expressiveShape)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
-                        )
-                } else {
-                    Modifier
-                }
+                Modifier
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = ListItemDefaults.SegmentedGap / 2,
+                    )
+                    .defaultMinSize(minHeight = ExpressiveListGroupMinHeight)
+                    .clip(expressiveShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = cardAlpha)
+                    )
             )
             .clickable {
                 navigator.navigate(TemplateEditorScreenDestination(template, !template.local))
             },
         colors = ListItemDefaults.colors(
-            containerColor = if (isExpressiveUi) Color.Transparent else MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
         ),
         content = {
             Text(
                 text = template.name,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
             )
         },
         supportingContent = {
@@ -254,15 +245,11 @@ private fun TopBar(
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val cardColor = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-        colorScheme.surfaceContainerLow
-    } else {
-        colorScheme.background
-    }
+    val cardColor = colorScheme.surfaceContainerLow
     val title: @Composable () -> Unit = {
         Text(
             text = stringResource(R.string.settings_profile_template),
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+            fontWeight = FontWeight.Normal,
         )
     }
     val navigationIcon: @Composable () -> Unit = {
@@ -311,25 +298,14 @@ private fun TopBar(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 @Composable
@@ -338,19 +314,15 @@ fun LabelText(label: String) {
         modifier = Modifier
             .padding(top = 4.dp, end = 4.dp)
             .background(
-                if (isExpressiveUi) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    Color.Black
-                },
-                shape = if (isExpressiveUi) MaterialTheme.shapes.small else RoundedCornerShape(4.dp)
+                MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.small
             )
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(vertical = 2.dp, horizontal = 5.dp),
-            style = if (isExpressiveUi) MaterialTheme.typography.labelSmall else TextStyle(fontSize = 8.sp),
-            color = if (isExpressiveUi) MaterialTheme.colorScheme.onSecondaryContainer else Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

@@ -8,7 +8,6 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -26,19 +25,11 @@ fun YukiPullToRefreshBox(
         modifier = modifier,
         state = state,
         indicator = {
-            if (isExpressiveUi) {
-                PullToRefreshDefaults.LoadingIndicator(
-                    state = state,
-                    isRefreshing = isRefreshing,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            } else {
-                PullToRefreshDefaults.Indicator(
-                    state = state,
-                    isRefreshing = isRefreshing,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            }
+            PullToRefreshDefaults.LoadingIndicator(
+                state = state,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         },
         content = content
     )

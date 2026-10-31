@@ -53,11 +53,9 @@ import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.YukiAlertDialog
-import com.anatdx.yukisu.ui.component.YukiSwitch
 import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.motion.yukiAnimateContentSize
 import com.anatdx.yukisu.ui.motion.YukiExpandArrow
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.kasumi.util.KasumiUiAdapter as KasumiManager
 import com.anatdx.yukisu.ui.kasumi.util.KasumiUiAdapter.KasumiStatus
 import com.anatdx.yukisu.ui.theme.getCardColors
@@ -169,7 +167,7 @@ fun KasumiConfigScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isExpressiveUi) LoadingIndicator() else CircularProgressIndicator()
+                    LoadingIndicator()
                 }
             } else {
                 when (selectedTab) {
@@ -295,9 +293,9 @@ internal fun StatusTab(
             shape = kasumiCardShape(),
             colors = CardDefaults.cardColors(
                 containerColor = when (kasumiStatus) {
-                    KasumiStatus.AVAILABLE -> if (isExpressiveUi) MaterialTheme.colorScheme.primaryContainer else Color(0xFF1B5E20).copy(alpha = 0.2f)
+                    KasumiStatus.AVAILABLE -> MaterialTheme.colorScheme.primaryContainer
                     KasumiStatus.NOT_PRESENT -> MaterialTheme.colorScheme.surfaceVariant
-                    else -> if (isExpressiveUi) MaterialTheme.colorScheme.errorContainer else Color(0xFFE65100).copy(alpha = 0.2f)
+                    else -> MaterialTheme.colorScheme.errorContainer
                 }
             )
         ) {
@@ -314,17 +312,17 @@ internal fun StatusTab(
                         },
                         contentDescription = null,
                         tint = when (kasumiStatus) {
-                            KasumiStatus.AVAILABLE -> if (isExpressiveUi) MaterialTheme.colorScheme.onPrimaryContainer else Color(0xFF4CAF50)
+                            KasumiStatus.AVAILABLE -> MaterialTheme.colorScheme.onPrimaryContainer
                             KasumiStatus.NOT_PRESENT -> MaterialTheme.colorScheme.onSurfaceVariant
-                            else -> if (isExpressiveUi) MaterialTheme.colorScheme.onErrorContainer else Color(0xFFFF9800)
+                            else -> MaterialTheme.colorScheme.onErrorContainer
                         },
-                        modifier = Modifier.size(if (isExpressiveUi) 40.dp else 32.dp)
+                        modifier = Modifier.size(40.dp)
                     )
                     Column {
                         Text(
                             text = stringResource(R.string.kasumi_kernel_title),
-                            style = if (isExpressiveUi) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                            fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.Bold
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Normal
                         )
                         Text(
                             text = stringResource(
@@ -375,7 +373,7 @@ internal fun StatusTab(
                     )
                     if (storageInfo.type != "unknown") {
                         Surface(
-                            shape = if (isExpressiveUi) MaterialTheme.shapes.small else RoundedCornerShape(4.dp),
+                            shape = MaterialTheme.shapes.small,
                             color = if (storageInfo.type == "tmpfs" || storageInfo.type == "kasumi")
                                 MaterialTheme.colorScheme.primaryContainer
                             else
@@ -493,7 +491,7 @@ internal fun StatusTab(
                 modifier = Modifier.fillMaxWidth(),
                 shape = kasumiCardShape(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isExpressiveUi) MaterialTheme.colorScheme.errorContainer else Color(0xFFE65100).copy(alpha = 0.2f)
+                    containerColor = MaterialTheme.colorScheme.errorContainer
                 )
             ) {
                 Row(
@@ -504,7 +502,7 @@ internal fun StatusTab(
                     YukiIcon(
                         Icons.Filled.Warning,
                         contentDescription = null,
-                        tint = if (isExpressiveUi) MaterialTheme.colorScheme.onErrorContainer else Color(0xFFFF9800)
+                        tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
                         text = systemInfo.mismatchMessage ?: stringResource(R.string.kasumi_mismatch_default),
@@ -536,9 +534,9 @@ private fun StatCard(
         ) {
             Text(
                 text = value,
-                style = if (isExpressiveUi) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
-                color = if (isExpressiveUi) MaterialTheme.colorScheme.primary else Color.Unspecified,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else FontWeight.Bold
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Normal
             )
             Text(
                 text = label,
@@ -551,29 +549,9 @@ private fun StatCard(
 
 @Composable
 private fun InfoRow(label: String, value: String) {
-    if (isExpressiveUi) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
-        }
-        return
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace
-        )
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -587,36 +565,8 @@ internal fun SettingSwitch(
     icon: ImageVector = Icons.Filled.Settings,
     position: MoreSettingsItemPosition = MoreSettingsItemPosition.Middle,
 ) {
-    if (isExpressiveUi) {
-        SwitchSettingItem(icon = icon, title = title, summary = subtitle, checked = checked,
-            enabled = enabled, groupPosition = position, onChange = onCheckedChange)
-        return
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.5f)
-            )
-        }
-        YukiSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled
-        )
-    }
+    SwitchSettingItem(icon = icon, title = title, summary = subtitle, checked = checked,
+        enabled = enabled, groupPosition = position, onChange = onCheckedChange)
 }
 
 @Composable
@@ -646,12 +596,12 @@ internal fun SettingTextField(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
-                        style = if (isExpressiveUi) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                     Text(
                         text = subtitle,
-                        style = if (isExpressiveUi) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.5f)
                     )
                 }
@@ -966,7 +916,7 @@ internal fun RulesTab(
         )
 
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(if (isExpressiveUi) ListItemDefaults.SegmentedGap else 8.dp)
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
         ) {
             itemsIndexed(activeRules) { index, rule ->
                 RuleItem(rule, index, activeRules.size)
@@ -995,32 +945,22 @@ internal fun RulesTab(
 private fun RuleItem(rule: KasumiManager.ActiveRule, index: Int = 0, count: Int = 1) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = if (isExpressiveUi) ListItemDefaults.segmentedShapes(index, count).shape else RoundedCornerShape(8.dp),
-        colors = getCardColors(if (isExpressiveUi) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = ListItemDefaults.segmentedShapes(index, count).shape,
+        colors = getCardColors(MaterialTheme.colorScheme.surfaceContainer),
         elevation = getCardElevation()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(if (isExpressiveUi) 16.dp else 12.dp),
+                .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = if (isExpressiveUi) MaterialTheme.shapes.small else RoundedCornerShape(4.dp),
-                color = if (isExpressiveUi) when (rule.type) {
+                shape = MaterialTheme.shapes.small,
+                color = when (rule.type) {
                     "hide", "mount_hide", "stealth" -> MaterialTheme.colorScheme.tertiaryContainer
                     "add", "inject", "merge" -> MaterialTheme.colorScheme.primaryContainer
-                    else -> MaterialTheme.colorScheme.secondaryContainer
-                } else when (rule.type) {
-                    "add" -> Color(0xFF1B5E20).copy(alpha = 0.3f)
-                    "hide" -> Color(0xFFB71C1C).copy(alpha = 0.3f)
-                    "inject" -> Color(0xFF1565C0).copy(alpha = 0.3f)
-                    "merge" -> Color(0xFF4A148C).copy(alpha = 0.3f)
-                    "mount_hide" -> Color(0xFF0D47A1).copy(alpha = 0.3f)
-                    "maps_spoof" -> Color(0xFF1A237E).copy(alpha = 0.3f)
-                    "statfs_spoof" -> Color(0xFF311B92).copy(alpha = 0.3f)
-                    "stealth" -> Color(0xFF37474F).copy(alpha = 0.3f)
                     else -> MaterialTheme.colorScheme.secondaryContainer
                 }
             ) {
@@ -1377,7 +1317,7 @@ internal fun LogsTab(
                         .padding(12.dp),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = if (isExpressiveUi) 12.sp else 11.sp
+                    fontSize = 12.sp
                 )
 
                 SnackbarHost(

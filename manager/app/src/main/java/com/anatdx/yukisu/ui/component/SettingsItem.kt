@@ -14,8 +14,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.dergoogler.mmrl.ui.component.LabelItem
 import com.dergoogler.mmrl.ui.component.text.TextRow
-import com.anatdx.yukisu.ui.theme.CardConfig
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 
 @Composable
 fun SwitchItem(
@@ -32,11 +30,7 @@ fun SwitchItem(
 
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
-            surface = if (isExpressiveUi || CardConfig.isCustomBackgroundEnabled) {
-                Color.Transparent
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            }
+            surface = Color.Transparent
         )
     ) {
         ListItem(
@@ -63,7 +57,7 @@ fun SwitchItem(
                     Text(
                         modifier = Modifier.then(stateAlpha),
                         text = title,
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                        fontWeight = FontWeight.Normal,
                     )
                 }
             },
@@ -94,20 +88,4 @@ fun SwitchItem(
             }
         )
     }
-}
-
-@Composable
-fun RadioItem(
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    ListItem(
-        content = {
-            Text(title)
-        },
-        leadingContent = {
-            RadioButton(selected = selected, onClick = onClick)
-        }
-    )
 }

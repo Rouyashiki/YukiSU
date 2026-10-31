@@ -34,7 +34,6 @@ import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.KeyEventBlocker
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.LocalSnackbarHost
 import com.anatdx.yukisu.ui.util.listModules
 import com.anatdx.yukisu.ui.util.module.moduleActionAvailability
@@ -203,7 +202,7 @@ internal fun ActionOutputScreen(
                 Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary)
             }
             Text(
-                modifier = Modifier.padding(if (isExpressiveUi) 16.dp else 8.dp),
+                modifier = Modifier.padding(16.dp),
                 text = text,
                 fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 fontFamily = FontFamily.Monospace,
@@ -224,7 +223,7 @@ private fun TopBar(
     val title: @Composable () -> Unit = {
         Text(
             text = titleText,
-            fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+            fontWeight = FontWeight.Normal,
         )
     }
     val actions: @Composable RowScope.() -> Unit = {
@@ -239,31 +238,14 @@ private fun TopBar(
         }
     }
     val colors = getTopAppBarColors(
-        containerColor = if (isExpressiveUi) {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        } else {
-            MaterialTheme.colorScheme.background
-        },
-        scrolledContainerColor = if (isExpressiveUi) {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        } else {
-            MaterialTheme.colorScheme.background
-        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = title,
-            actions = actions,
-            colors = colors,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = title,
-            actions = actions,
-            colors = colors,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = title,
+        actions = actions,
+        colors = colors,
+        scrollBehavior = scrollBehavior,
+    )
 }

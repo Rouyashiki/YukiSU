@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Registros em excesso, exibindo apenas as %1$d entradas mais recentes</string>
     <string name="log_viewer_load_more">Carregar mais registros</string>
     <string name="log_viewer_all_logs_loaded">Todos os registros exibidos</string>
-    <string name="incompatible_kernel_msg">O gerenciador atual é incompatível com este kernel! Atualize o kernel para a versão %2$d ou superior (atualmente %1$d)</string>
     <string name="umount_path_manager">Gerenciamento de caminhos de umount</string>
     <string name="umount_path_manager_summary">Gerenciar os caminhos de desmontagem do kernel</string>
     <string name="umount_path_restart_notice">É necessário reiniciar para que as alterações tenham efeito. O sistema aplicará a nova configuração na próxima inicialização</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Confirme que a imagem boot selecionada é uma imagem de fábrica sem modificações.</string>
     <string name="hide_seccomp_status">Ocultar estado do Seccomp</string>
     <string name="hide_seccomp_status_summary">Ocultar informações de estado do Seccomp na página inicial</string>
-    <string name="ui_style">Estilo da interface</string>
-    <string name="ui_style_classic">Material 3 clássico</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Gesto de voltar preditivo</string>
     <string name="predictive_back_gesture_summary">Visualizar a página anterior durante o gesto de voltar. Desativado por padrão.</string>
     <string name="feature_control">Controle de recursos</string>

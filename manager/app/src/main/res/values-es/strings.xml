@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Demasiados registros, mostrando solo las %1$d entradas más recientes</string>
     <string name="log_viewer_load_more">Cargar más registros</string>
     <string name="log_viewer_all_logs_loaded">Todos los registros mostrados</string>
-    <string name="incompatible_kernel_msg">¡El administrador actual es incompatible con este kernel! Actualiza el kernel a la versión %2$d o superior (actualmente %1$d)</string>
     <string name="umount_path_manager">Gestión de rutas de desmontaje</string>
     <string name="umount_path_manager_summary">Gestionar las rutas de desmontaje del kernel</string>
     <string name="umount_path_restart_notice">Es necesario reiniciar para que los cambios surtan efecto. El sistema aplicará la nueva configuración en el próximo arranque</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Confirma que la imagen boot seleccionada sea una imagen de fábrica sin modificar.</string>
     <string name="hide_seccomp_status">Ocultar estado de Seccomp</string>
     <string name="hide_seccomp_status_summary">Ocultar el estado de Seccomp en la página de inicio</string>
-    <string name="ui_style">Estilo de interfaz</string>
-    <string name="ui_style_classic">Material 3 clásico</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Gesto de retroceso predictivo</string>
     <string name="predictive_back_gesture_summary">Previsualizar la página anterior durante el gesto de retroceso. Desactivado de forma predeterminada.</string>
     <string name="feature_control">Control de funciones</string>

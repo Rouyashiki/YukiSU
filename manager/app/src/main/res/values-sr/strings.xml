@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">Превише дневника, приказујући само најновије %1$d уносе</string>
     <string name="log_viewer_load_more">Учитај још дневника</string>
     <string name="log_viewer_all_logs_loaded">Сви дневници су приказани</string>
-    <string name="incompatible_kernel_msg">Тренутни менаџер је некомпатибилан са овим кернелом! Молимо надоградите кернел на верзију %2$d или новију (тренутно %1$d)</string>
     <string name="umount_path_manager">Управљање путањама за демонтирање</string>
     <string name="umount_path_manager_summary">Управљајте путањама за демонтирање на нивоу језгра</string>
     <string name="umount_path_restart_notice">Потребно је поновно покретање да би промене ступиле на снагу. Систем ће применити нову конфигурацију при следећем покретању</string>
@@ -674,9 +673,6 @@
     <string name="install_force_backup_summary">Проверите је ли одабрана boot слика неизмењена фабричка слика.</string>
     <string name="hide_seccomp_status">Сакриј стање Seccomp-а</string>
     <string name="hide_seccomp_status_summary">Скрива податке о стању Seccomp-а на почетној страници</string>
-    <string name="ui_style">Стил интерфејса</string>
-    <string name="ui_style_classic">Класични Material 3</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Предиктивна геста за повратак</string>
     <string name="predictive_back_gesture_summary">Приказује претходну страницу пратећи гесту повратка. Подразумевано је искључено</string>
     <string name="feature_control">Управљање функцијама</string>

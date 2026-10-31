@@ -370,7 +370,6 @@
     <string name="log_viewer_too_many_logs">Zu viele Protokolle, es werden nur die neuesten %1$d Einträge angezeigt</string>
     <string name="log_viewer_load_more">Mehr Protokolle laden</string>
     <string name="log_viewer_all_logs_loaded">Alle Protokolle angezeigt</string>
-    <string name="incompatible_kernel_msg">Der aktuelle Manager ist mit diesem Kernel nicht kompatibel! Bitte aktualisiere den Kernel auf Version %2$d oder höher (aktuell %1$d)</string>
     <string name="umount_path_manager">Verwaltung der Aushängepfade</string>
     <string name="umount_path_manager_summary">Kernel-Aushängepfade verwalten</string>
     <string name="umount_path_restart_notice">Damit die Änderungen wirksam werden, ist ein Neustart erforderlich. Das System wendet die neue Konfiguration beim nächsten Start an</string>
@@ -676,9 +675,6 @@
     <string name="install_force_backup_summary">Stelle sicher, dass das ausgewählte boot-Image ein unverändertes Werks-Image ist.</string>
     <string name="hide_seccomp_status">Seccomp-Status verbergen</string>
     <string name="hide_seccomp_status_summary">Seccomp-Status auf der Startseite verbergen</string>
-    <string name="ui_style">Oberflächenstil</string>
-    <string name="ui_style_classic">Material 3 Klassisch</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="predictive_back_gesture">Vorausschauende Zurück-Geste</string>
     <string name="predictive_back_gesture_summary">Beim Zurückgehen eine Vorschau der vorherigen Seite passend zur Geste anzeigen. Standardmäßig deaktiviert.</string>
     <string name="feature_control">Funktionssteuerung</string>

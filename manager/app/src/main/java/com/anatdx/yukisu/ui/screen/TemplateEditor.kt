@@ -40,7 +40,6 @@ import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.component.profile.RootProfileConfig
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.deleteAppProfileTemplate
 import com.anatdx.yukisu.ui.util.getAppProfileTemplate
 import com.anatdx.yukisu.ui.util.setAppProfileTemplate
@@ -116,7 +115,7 @@ fun TemplateEditorScreen(
     ) { innerPadding ->
         MaterialTheme(
             colorScheme = MaterialTheme.colorScheme.copy(
-                surface = if (isExpressiveUi) Color.Transparent else MaterialTheme.colorScheme.surface
+                surface = Color.Transparent
             )
         ) {
             Column(
@@ -124,19 +123,15 @@ fun TemplateEditorScreen(
                     .padding(innerPadding)
                     .nestedScroll(scrollBehavior.nestedScrollConnection)
                     .then(
-                        if (isExpressiveUi) {
-                            Modifier
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .clip(MaterialTheme.shapes.large)
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceContainer.copy(
-                                        alpha = cardAlpha
-                                    )
+                        Modifier
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clip(MaterialTheme.shapes.large)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainer.copy(
+                                    alpha = cardAlpha
                                 )
-                                .padding(vertical = 8.dp)
-                        } else {
-                            Modifier
-                        }
+                            )
+                            .padding(vertical = 8.dp)
                     )
                     .verticalScroll(rememberScrollState())
                     .pointerInteropFilter {
@@ -278,7 +273,7 @@ private fun TopBar(
         Column {
             Text(
                 text = title,
-                fontWeight = if (isExpressiveUi) FontWeight.Normal else null,
+                fontWeight = FontWeight.Normal,
             )
             if (summary.isNotBlank()) {
                 Text(
@@ -310,40 +305,21 @@ private fun TopBar(
         }
     }
     val colors = getTopAppBarColors(
-        containerColor = if (isExpressiveUi) {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        } else {
-            MaterialTheme.colorScheme.background
-        },
-        scrolledContainerColor = if (isExpressiveUi) {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        } else {
-            MaterialTheme.colorScheme.background
-        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     )
     val windowInsets = WindowInsets.safeDrawing.only(
         WindowInsetsSides.Top + WindowInsetsSides.Horizontal
     )
 
-    if (isExpressiveUi) {
-        YukiLargeTopAppBar(
-            title = titleContent,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    } else {
-        TopAppBar(
-            title = titleContent,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors,
-            windowInsets = windowInsets,
-            scrollBehavior = scrollBehavior,
-        )
-    }
+    YukiLargeTopAppBar(
+        title = titleContent,
+        navigationIcon = navigationIcon,
+        actions = actions,
+        colors = colors,
+        windowInsets = windowInsets,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 @Composable
@@ -356,7 +332,7 @@ private fun TextEdit(
 ) {
     ListItem(
         colors = ListItemDefaults.colors(
-            containerColor = if (isExpressiveUi) Color.Transparent else MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
         ),
         content = {
         val keyboardController = LocalSoftwareKeyboardController.current

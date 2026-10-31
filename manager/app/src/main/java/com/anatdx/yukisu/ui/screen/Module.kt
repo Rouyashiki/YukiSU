@@ -103,7 +103,6 @@ import com.anatdx.yukisu.ui.motion.LocalYukiMotion
 import com.anatdx.yukisu.ui.component.*
 import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getElevatedCardElevation
-import com.anatdx.yukisu.ui.theme.isExpressiveUi
 import com.anatdx.yukisu.ui.util.*
 import com.anatdx.yukisu.ui.util.module.ModuleUtils
 import com.anatdx.yukisu.ui.util.module.Shortcut
@@ -415,7 +414,7 @@ fun ModuleScreen(navigator: DestinationsNavigator) {
                 title = {
                     Text(
                         text = stringResource(R.string.module),
-                        fontWeight = if (isExpressiveUi) FontWeight.Normal else null
+                        fontWeight = FontWeight.Normal
                     )
                 },
                 searchText = viewModel.search,
@@ -445,11 +444,7 @@ fun ModuleScreen(navigator: DestinationsNavigator) {
         floatingActionButton = {
             AnimatedFab(visible = !hideInstallButton && fabVisible) {
                 FloatingActionButton(
-                    shape = if (isExpressiveUi) {
-                        CircleShape
-                    } else {
-                        FloatingActionButtonDefaults.shape
-                    },
+                    shape = CircleShape,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     containerColor = MaterialTheme.colorScheme.primary,
                     onClick = {
@@ -891,8 +886,7 @@ private fun ModuleBottomSheetContent(
             FilledTonalButton(
                 onClick = onModuleCompat,
                 modifier = Modifier.fillMaxWidth(),
-                shapes = if (isExpressiveUi) ButtonDefaults.shapes() else
-                    ButtonDefaults.shapes(shape = ButtonDefaults.shape, pressedShape = ButtonDefaults.shape),
+                shapes = ButtonDefaults.shapes(),
             ) { Text(stringResource(R.string.module_compat_title)) }
             OutlinedButton(onClick = onPreinit, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.module_preinit_title))
@@ -1248,18 +1242,14 @@ fun ModuleItem(
 
     ElevatedCard(
         colors = getCardColors(
-            if (isExpressiveUi) {
-                MaterialTheme.colorScheme.surfaceContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            }
+            MaterialTheme.colorScheme.surfaceContainer
         ),
         elevation = getElevatedCardElevation(),
-        shape = if (isExpressiveUi) MaterialTheme.shapes.large else CardDefaults.elevatedShape,
+        shape = MaterialTheme.shapes.large,
     ) {
         val textDecoration = if (!module.remove) null else TextDecoration.LineThrough
         val viewModel = viewModel<ModuleViewModel>()
-        
+
         var localEnabled by remember(module.enabled) { mutableStateOf(module.enabled) }
         val scope = rememberCoroutineScope()
 
@@ -1642,44 +1632,23 @@ private fun ModuleActionButton(
         )
     }
 
-    if (isExpressiveUi) {
-        if (prominent) {
-            FilledIconButton(
-                onClick = onClick,
-                shapes = IconButtonDefaults.shapes(),
-                modifier = Modifier.size(40.dp).then(longClickModifier),
-                enabled = enabled,
-                interactionSource = interactionSource,
-                content = icon
-            )
-        } else {
-            FilledTonalIconButton(
-                onClick = onClick,
-                shapes = IconButtonDefaults.shapes(),
-                modifier = Modifier.size(40.dp).then(longClickModifier),
-                enabled = enabled,
-                interactionSource = interactionSource,
-                content = icon
-            )
-        }
-    } else if (prominent) {
-        Button(
-            modifier = Modifier.defaultMinSize(minWidth = 52.dp, minHeight = 32.dp).then(longClickModifier),
-            enabled = enabled,
+    if (prominent) {
+        FilledIconButton(
             onClick = onClick,
-            shape = ButtonDefaults.textShape,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.size(40.dp).then(longClickModifier),
+            enabled = enabled,
             interactionSource = interactionSource,
-            contentPadding = ButtonDefaults.TextButtonContentPadding,
-            content = { icon() }
+            content = icon
         )
     } else {
-        FilledTonalButton(
-            modifier = Modifier.defaultMinSize(minWidth = 52.dp, minHeight = 32.dp).then(longClickModifier),
-            enabled = enabled,
+        FilledTonalIconButton(
             onClick = onClick,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.size(40.dp).then(longClickModifier),
+            enabled = enabled,
             interactionSource = interactionSource,
-            contentPadding = ButtonDefaults.TextButtonContentPadding,
-            content = { icon() }
+            content = icon
         )
     }
 }

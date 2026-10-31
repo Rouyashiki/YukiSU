@@ -407,9 +407,6 @@
     <string name="hide_tag_card">隐藏模块标签行</string>
     <string name="hide_tag_card_summary">隐藏模块卡片中的文件夹名称、大小标签和是否为元模块</string>
     <string name="theme_mode">主题模式</string>
-    <string name="ui_style">界面风格</string>
-    <string name="ui_style_classic">Material 3 经典</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="theme_follow_system">跟随系统</string>
     <string name="theme_light">浅色</string>
     <string name="theme_dark">深色</string>
@@ -584,7 +581,6 @@
     <string name="log_viewer_load_more">加载更多日志</string>
     <string name="log_viewer_all_logs_loaded">已显示所有日志</string>
     <!-- Umount Path Manager -->
-    <string name="incompatible_kernel_msg">    当前管理器与此内核不兼容！请将内核升级至版本 %2$d 或以上（当前 %1$d）</string>
     <string name="umount_path_manager">Umount 路径管理</string>
     <string name="umount_path_manager_summary">管理内核卸载路径</string>
     <string name="umount_path_restart_notice">添加或删除路径后需要重启设备才能生效。系统会在下次启动时应用新的配置。</string>

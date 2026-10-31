@@ -368,7 +368,6 @@
     <string name="log_viewer_too_many_logs">खूप जास्त लॉग, फक्त नवीनतम %1$d नोंदी दाखवत आहे</string>
     <string name="log_viewer_load_more">अधिक लॉग लोड करा</string>
     <string name="log_viewer_all_logs_loaded">सर्व लॉग प्रदर्शित केले</string>
-    <string name="incompatible_kernel_msg">सध्याचा व्यवस्थापक या कर्नलशी विसंगत आहे! कृपया कर्नल आवृत्ती %2$d किंवा उच्चतर वर अपग्रेड करा (सध्या %1$d)</string>
     <string name="umount_path_manager">Umount पथ व्यवस्थापन</string>
     <string name="umount_path_manager_summary">कर्नल अनमाउंट पथ व्यवस्थापित करा</string>
     <string name="umount_path_restart_notice">बदल प्रभावी होण्यासाठी रीबूट आवश्यक आहे. सिस्टम पुढील बूटवर नवीन कॉन्फिगरेशन लागू करेल</string>
@@ -513,7 +512,6 @@
     <string name="uts_field_version">Version</string>
     <string name="uts_field_machine">Machine</string>
     <string name="download_dialog_msg">HTTPS URL</string>
-    <string name="ui_style_expressive">Material 3 Expressive</string>
     <string name="ramdisk_editor_title">%s Ramdisk</string>
     <string name="ramdisk_editor_elf_value_enum">%1$s（%2$d）</string>
     <string name="ramdisk_editor_cancel">रद्द करा</string>
@@ -693,8 +691,6 @@
     <string name="install_force_backup_summary">निवडलेली boot इमेज बदल न केलेली फॅक्टरी इमेज असल्याची खात्री करा.</string>
     <string name="hide_seccomp_status">Seccomp स्थिती लपवा</string>
     <string name="hide_seccomp_status_summary">मुख्यपृष्ठावरील Seccomp स्थितीची माहिती लपवा</string>
-    <string name="ui_style">इंटरफेस शैली</string>
-    <string name="ui_style_classic">Material 3 क्लासिक</string>
     <string name="predictive_back_gesture">अंदाजाधारित मागे जाण्याचा जेस्चर</string>
     <string name="predictive_back_gesture_summary">मागे जाण्याच्या जेस्चरसोबत मागील पृष्ठाचे पूर्वावलोकन दाखवा. डीफॉल्टनुसार बंद आहे.</string>
     <string name="feature_control">सुविधा नियंत्रण</string>
