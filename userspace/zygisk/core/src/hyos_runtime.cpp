@@ -138,6 +138,11 @@ void dispatch_specialized(const char *se_info, const char *package_name) {
   if (!g_hooks_ready || !g_child_ready || g_child_dispatched)
     return;
   g_child_dispatched = true;
+  plt_lifecycle::ExternalScope external;
+  if (!external) {
+    ZLOGE("HyperOS callback barrier: errno=%d", external.error());
+    return;
+  }
 
   if (!copy_value(g_package_name, sizeof(g_package_name), package_name) ||
       !copy_value(g_se_info, sizeof(g_se_info), se_info) ||
@@ -150,8 +155,11 @@ void dispatch_specialized(const char *se_info, const char *package_name) {
       .se_info = g_se_info,
   };
   for (const auto &entry : g_modules) {
-    yukizygisk::plt_lifecycle::end_fork_window();
+    if (!plt_lifecycle::dispatch_allowed())
+      return;
     entry.module.onAppSpecialized(&args);
+    if (!plt_lifecycle::dispatch_allowed())
+      return;
     if (g_recover_plt != nullptr)
       g_recover_plt();
     if (g_report_callback != nullptr && entry.module_index != nullptr &&

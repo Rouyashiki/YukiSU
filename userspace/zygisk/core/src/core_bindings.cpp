@@ -1,6 +1,7 @@
 #include "core_bindings.hpp"
 #include "loader_handoff.hpp"
 
+#include <atomic>
 #include <cerrno>
 #include <climits>
 #include <cstdint>
@@ -21,6 +22,50 @@ struct Key {
 Key keys[PTHREAD_KEYS_MAX];
 pthread_mutex_t key_mutex = PTHREAD_MUTEX_INITIALIZER;
 uint64_t next_generation = 1;
+static_assert(std::atomic<uint64_t>::is_always_lock_free);
+static_assert(sizeof(pid_t) == sizeof(uint32_t));
+constexpr uint64_t kForkOwner = uint64_t{1} << 63;
+std::atomic<uint64_t> key_admission{0};
+
+class KeyOperation {
+public:
+  KeyOperation() noexcept {
+    uint64_t state = key_admission.load(std::memory_order_acquire);
+    for (;;) {
+      if (state & kForkOwner) {
+        const auto parent = static_cast<pid_t>((state & ~kForkOwner) >> 32);
+        const auto thread = static_cast<pid_t>(state & UINT32_MAX);
+        const pid_t process = getpid();
+        const pid_t current = gettid();
+        // The fork caller becomes the child's main thread before child
+        // handlers.
+        admitted_ = process == parent ? current == thread : current == process;
+        return;
+      }
+      if (state == kForkOwner - 1)
+        return;
+      if (key_admission.compare_exchange_weak(state, state + 1,
+                                              std::memory_order_acq_rel,
+                                              std::memory_order_acquire)) {
+        admitted_ = counted_ = true;
+        return;
+      }
+    }
+  }
+  ~KeyOperation() {
+    if (counted_)
+      key_admission.fetch_sub(1, std::memory_order_release);
+  }
+  KeyOperation(const KeyOperation &) = delete;
+  KeyOperation &operator=(const KeyOperation &) = delete;
+  KeyOperation(KeyOperation &&) = delete;
+  KeyOperation &operator=(KeyOperation &&) = delete;
+  explicit operator bool() const noexcept { return admitted_; }
+
+private:
+  bool admitted_ = false;
+  bool counted_ = false;
+};
 
 #if !defined(YUKILINKER_BOOTSTRAP)
 extern "C" __attribute__((visibility("hidden"))) const ElfW(Ehdr) __ehdr_start;
@@ -59,6 +104,9 @@ extern "C" int __real_pthread_key_delete(pthread_key_t);
 
 extern "C" __attribute__((visibility("hidden"))) int
 __wrap_pthread_key_create(pthread_key_t *key, void (*destroy)(void *)) {
+  const KeyOperation operation;
+  if (!operation)
+    return EAGAIN;
   const int locked = pthread_mutex_lock(&key_mutex);
   if (locked != 0)
     return locked;
@@ -80,6 +128,9 @@ __wrap_pthread_key_create(pthread_key_t *key, void (*destroy)(void *)) {
 
 extern "C" __attribute__((visibility("hidden"))) int
 __wrap_pthread_key_delete(pthread_key_t key) {
+  const KeyOperation operation;
+  if (!operation)
+    return EBUSY;
   const int locked = pthread_mutex_lock(&key_mutex);
   if (locked != 0)
     return locked;
@@ -95,6 +146,9 @@ __wrap_pthread_key_delete(pthread_key_t key) {
 }
 
 bool core_private_tsd_used() noexcept {
+  const KeyOperation operation;
+  if (!operation)
+    return true;
   if (pthread_mutex_lock(&key_mutex) != 0)
     return true;
   bool live = false;
@@ -105,18 +159,26 @@ bool core_private_tsd_used() noexcept {
 }
 
 bool core_prepare_fork() noexcept {
-  return pthread_mutex_trylock(&key_mutex) == 0;
+  const uint64_t owner = kForkOwner |
+                         (uint64_t{static_cast<uint32_t>(getpid())} << 32) |
+                         static_cast<uint32_t>(gettid());
+  uint64_t empty = 0;
+  return key_admission.compare_exchange_strong(empty, owner,
+                                               std::memory_order_acq_rel);
 }
 
-void core_after_fork_parent() noexcept { pthread_mutex_unlock(&key_mutex); }
+void core_after_fork_parent() noexcept {
+  key_admission.store(0, std::memory_order_release);
+}
 
 void core_after_fork_child() noexcept {
-  // Inherited waiters belong to threads that do not exist in this child.
-  const pthread_mutex_t unlocked = PTHREAD_MUTEX_INITIALIZER;
-  key_mutex = unlocked;
+  key_admission.store(0, std::memory_order_release);
 }
 
 int core_drain_current_thread_tsd() noexcept {
+  const KeyOperation operation;
+  if (!operation)
+    return EBUSY;
   // The caller has excluded other participants, including destructor epilogues.
   for (int round = 0; round < PTHREAD_DESTRUCTOR_ITERATIONS; ++round) {
     const int locked = pthread_mutex_lock(&key_mutex);
@@ -189,6 +251,9 @@ bool own_range(const dl_phdr_info &info, uintptr_t address, size_t bytes,
 }
 
 int runtime_thread_state(Key *remaining = nullptr) noexcept {
+  const KeyOperation operation;
+  if (!operation)
+    return -EBUSY;
   const int locked = pthread_mutex_lock(&key_mutex);
   if (locked != 0)
     return -locked;
@@ -211,6 +276,9 @@ int runtime_thread_state(Key *remaining = nullptr) noexcept {
 }
 
 int finish_closed_key() noexcept {
+  const KeyOperation operation;
+  if (!operation)
+    return EBUSY;
   const int locked = pthread_mutex_lock(&key_mutex);
   if (locked != 0)
     return locked;
@@ -371,6 +439,9 @@ CoreUnmapFunction core_retirement_unmap() noexcept { return retirement.unmap; }
 bool core_runtime_closed() noexcept { return retirement.closed; }
 
 int core_finish_runtime_retirement() noexcept {
+  const KeyOperation operation;
+  if (!operation)
+    return EBUSY;
   if (retirement.base == 0)
     return EINVAL;
   if (retirement.busy)

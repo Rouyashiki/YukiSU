@@ -4,7 +4,9 @@
 #include <link.h>
 
 bool core_private_tsd_used() noexcept;
-// Serialize private key metadata across the host's controlled fork window.
+// Freeze other threads' key operations; the fork caller may run atfork
+// handlers.
+// Other threads' create/delete fail with EAGAIN/EBUSY until completion.
 bool core_prepare_fork() noexcept;
 void core_after_fork_parent() noexcept;
 void core_after_fork_child() noexcept;

@@ -12,7 +12,7 @@ def native_source(core):
     return source[source.index('struct NativePltBinding {'):source.index('int api_inline_hook(')]
 
 
-def build_archive(root, build, compiler, flags):
+def build_archive(root, build, compiler, flags, export_lifecycle=False):
     core = root / 'userspace/zygisk/core/src'
     vendor = root / 'userspace/zygisk/third_party/yukiplt'
     common = [*compiler, '-std=c++17', '-O1', '-g', '-fPIC', '-fexceptions',
@@ -24,7 +24,8 @@ def build_archive(root, build, compiler, flags):
     def compile_one(pair):
         source, output = pair
         definitions = ['-DYUKILINKER_BOOTSTRAP=1'] if source.name == 'core_bindings.cpp' else []
-        subprocess.run([*common, *definitions, '-fvisibility=hidden', '-fvisibility-inlines-hidden',
+        visibility = 'default' if export_lifecycle and source.name == 'plt_lifecycle.cpp' else 'hidden'
+        subprocess.run([*common, *definitions, '-fvisibility=' + visibility, '-fvisibility-inlines-hidden',
                         '-c', source, '-o', output], check=True)
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(compile_one, zip(sources, objects)))
@@ -32,7 +33,7 @@ def build_archive(root, build, compiler, flags):
 
 
 def build_backend(root, build, compiler, flags):
-    common, objects = build_archive(root, build, compiler, flags)
+    common, objects = build_archive(root, build, compiler, flags, export_lifecycle=True)
     source = """#include <yukiplt.hpp>
 #include <algorithm>
 #include <memory>
@@ -78,10 +79,27 @@ def build_tests(root, build, compiler, flags, runner):
     subprocess.run([*common, '-shared', tests / 'plt_target.cpp', *links,
                     '-lplt_provider', '-o', build / 'libplt_target.so'], check=True)
     (build / 'entry.cpp').write_text('int fixture_main(int, char **); extern "C" int run_test(int n, char **v) { return fixture_main(n,v); }')
-    (build / 'driver.cpp').write_text('#include <dlfcn.h>\n#include <cassert>\nint main(int n,char **v) { auto h=dlopen(v[1],RTLD_NOW); assert(h); auto f=(int(*)(int,char **))dlsym(h,"run_test"); assert(f); return f(n-1,v+1); }')
+    (build / 'driver.cpp').write_text('''#include <dlfcn.h>
+#include <cassert>
+#include <pthread.h>
+#include <unistd.h>
+void external_handler() {
+  pthread_key_t key;
+  if (pthread_key_create(&key, nullptr) || pthread_key_delete(key)) _exit(91);
+}
+int main(int n, char **v) {
+  assert(pthread_atfork(external_handler, external_handler, external_handler) == 0);
+  auto h = dlopen(v[1], RTLD_NOW);
+  assert(h);
+  auto f = (int(*)(int, char **))dlsym(h, "run_test");
+  assert(f);
+  return f(n-1, v+1);
+}
+''')
     subprocess.run([*common, build / 'driver.cpp', '-ldl', '-o', build / 'driver'], check=True)
     library = build / 'plt_state_test.so'
     wrapping = ['-Wl,--wrap=mprotect', '-Wl,--wrap=open',
+                '-Wl,--wrap=pthread_mutex_lock', '-Wl,--wrap=clock_gettime',
                 '-Wl,--wrap=pthread_key_create', '-Wl,--wrap=pthread_key_delete',
                 '-Wl,--wrap=' + ('_Znwj' if 'arm-linux' in str(compiler) else '_Znwm')]
     subprocess.run([*common, *wrapping, '-shared', '-Dmain=fixture_main', '-I' + str(build),

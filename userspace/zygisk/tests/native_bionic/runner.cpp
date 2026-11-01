@@ -1,4 +1,5 @@
 #include "check.hpp"
+#include "plt_lifecycle.hpp"
 #include "process_maps.hpp"
 #include "userspace/zygisk/daemon/zygiskd.hpp"
 #include "userspace/zygisk/load_policy.hpp"
@@ -11,6 +12,7 @@
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <cstdarg>
@@ -269,6 +271,29 @@ int main(int argc, char **argv) {
   CHECK(events[1] == prior_ctors + 3 && events[2] == prior_dtors);
   CHECK(yz_native_original() == 202);
 #endif
+  const pid_t child = yukizygisk::plt_lifecycle::fork_process(fork);
+  CHECK(child >= 0);
+  if (child == 0) {
+    alarm(10);
+    {
+      yukizygisk::plt_lifecycle::Operation operation;
+      CHECK(operation);
+      yukizygisk::plt_lifecycle::ExternalScope boundary;
+      CHECK(!boundary && boundary.error() == EDEADLK);
+    }
+    const int loads_before = loads, reports_before = reports;
+    const size_t retained = g_loaded_modules.size();
+    const int fd = open(good.lib_path, O_RDONLY | O_CLOEXEC);
+    CHECK(fd >= 0 && !load_native_module_from_fd(good, 0, fd, early));
+    CHECK(fcntl(fd, F_GETFD) == -1 && errno == EBADF);
+    CHECK(loads == loads_before && reports == reports_before);
+    CHECK(g_loaded_modules.size() == retained && yz_native_original() == 202);
+    CHECK(!fixture_retire_plt());
+    _exit(0);
+  }
+  int status = 0;
+  CHECK(waitpid(child, &status, 0) == child && WIFEXITED(status) &&
+        WEXITSTATUS(status) == 0);
   CHECK(fixture_retire_plt());
   CHECK(yz_native_original() == 29);
   puts("PASS: Native identity, local dependency, runtime PLT callback, "
