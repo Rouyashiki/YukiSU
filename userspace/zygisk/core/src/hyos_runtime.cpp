@@ -150,6 +150,7 @@ void dispatch_specialized(const char *se_info, const char *package_name) {
       .se_info = g_se_info,
   };
   for (const auto &entry : g_modules) {
+    yukizygisk::plt_lifecycle::end_fork_window();
     entry.module.onAppSpecialized(&args);
     if (g_recover_plt != nullptr)
       g_recover_plt();
@@ -220,8 +221,8 @@ bool restore_runtime_hooks() {
   if (!g_hook_handle.valid())
     return true;
   yukiplt::SlotReport slots[2];
-  const auto error =
-      yukiplt::unhook_diagnosed(g_hook_handle, slots, 2, &g_restore_diagnostic);
+  const auto error = yukizygisk::plt_lifecycle::unhook(g_hook_handle, slots, 2,
+                                                       &g_restore_diagnostic);
   yukizygisk::plt_lifecycle::set_recovery(g_recovery, g_hook_handle.valid());
   if (!error.ok())
     ZLOGE("HyperOS restoration: %s cause=%s errno=%d consumed=%d",
@@ -299,6 +300,12 @@ bool install_registered_hooks() {
   if (g_hook_handle.valid() ||
       g_install_diagnostic.stage >= yukiplt::OperationStage::kCommit)
     return false;
+  const auto captured = yukizygisk::plt_lifecycle::capture_maps();
+  if (!captured.ok()) {
+    ZLOGE("HyperOS maps: %s errno=%d", yukiplt::error_name(captured.code),
+          captured.sys_errno);
+    return false;
+  }
   const yukiplt::HookRequest requests[] = {
       {"fork", reinterpret_cast<void *>(replacement_fork),
        g_original_fork.output_address()},
@@ -306,8 +313,9 @@ bool install_registered_hooks() {
        reinterpret_cast<void *>(replacement_setcontext),
        g_original_setcontext.output_address()}};
   yukiplt::SlotReport slots[2];
-  auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
-      g_target_image, requests, 2, slots, &g_install_diagnostic);
+  auto result = yukiplt::hook_batch_nonnull_named_cached(
+      yukizygisk::plt_lifecycle::maps_cache(), g_target_image, requests, 2,
+      slots, &g_install_diagnostic);
   g_hook_handle = std::move(result.handle);
   yukizygisk::plt_lifecycle::set_recovery(
       g_recovery, !result.ok() && g_hook_handle.valid());
@@ -339,7 +347,10 @@ bool original_output_allowed(void **output) {
     return true;
   yukiplt::SlotReport slots[2];
   size_t count = 0;
-  if (!yukiplt::query(g_hook_handle, slots, 2, &count).ok() || count != 2)
+  if (!yukiplt::query_cached(yukizygisk::plt_lifecycle::maps_cache(),
+                             g_hook_handle, slots, 2, &count)
+           .ok() ||
+      count != 2)
     return false;
   for (const auto &slot : slots)
     if (slot.address == reinterpret_cast<uintptr_t>(output))

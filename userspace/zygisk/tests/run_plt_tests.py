@@ -18,11 +18,13 @@ def build_archive(root, build, compiler, flags):
     common = [*compiler, '-std=c++17', '-O1', '-g', '-fPIC', '-fexceptions',
               '-pthread', '-DYUKIPLT_STATIC=1', *flags,
               '-I' + str(core), '-I' + str(vendor / 'include')]
-    sources = [*sorted((vendor / 'src').glob('*.cpp')), core / 'plt_lifecycle.cpp', core / 'process_maps.cpp']
+    sources = [*sorted((vendor / 'src').glob('*.cpp')), core / 'plt_lifecycle.cpp',
+               core / 'process_maps.cpp', core / 'core_bindings.cpp']
     objects = [build / (source.stem + '.o') for source in sources]
     def compile_one(pair):
         source, output = pair
-        subprocess.run([*common, '-fvisibility=hidden', '-fvisibility-inlines-hidden',
+        definitions = ['-DYUKILINKER_BOOTSTRAP=1'] if source.name == 'core_bindings.cpp' else []
+        subprocess.run([*common, *definitions, '-fvisibility=hidden', '-fvisibility-inlines-hidden',
                         '-c', source, '-o', output], check=True)
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(compile_one, zip(sources, objects)))
@@ -55,6 +57,7 @@ extern "C" bool fixture_retire_plt() {
 """
     (build / 'native_host.cpp').write_text(source)
     subprocess.run([*common, '-shared', build / 'native_host.cpp', *objects, '-ldl',
+                    '-Wl,--wrap=pthread_key_create', '-Wl,--wrap=pthread_key_delete',
                     '-Wl,-z,now', '-Wl,-Bsymbolic-functions',
                     '-o', build / 'libyz_plt_backend.so'], check=True)
 
@@ -79,6 +82,7 @@ def build_tests(root, build, compiler, flags, runner):
     subprocess.run([*common, build / 'driver.cpp', '-ldl', '-o', build / 'driver'], check=True)
     library = build / 'plt_state_test.so'
     wrapping = ['-Wl,--wrap=mprotect', '-Wl,--wrap=open',
+                '-Wl,--wrap=pthread_key_create', '-Wl,--wrap=pthread_key_delete',
                 '-Wl,--wrap=' + ('_Znwj' if 'arm-linux' in str(compiler) else '_Znwm')]
     subprocess.run([*common, *wrapping, '-shared', '-Dmain=fixture_main', '-I' + str(build),
                     tests / 'plt_state_test.cpp', build / 'entry.cpp', *objects, *links,

@@ -271,6 +271,12 @@ bool api_plt_hook_commit() noexcept {
         group->native.push_back(
             {request.symbol.c_str(), request.replacement, request.original});
     }
+    const auto captured = yukizygisk::plt_lifecycle::capture_maps();
+    if (!captured.ok()) {
+      LOGE("module %d PLT maps: %s errno=%d", module->id,
+           yukiplt::error_name(captured.code), captured.sys_errno);
+      return false;
+    }
     module->plt_groups.reserve(module->plt_groups.size() + groups.size());
     const size_t first = module->plt_groups.size();
     for (auto &group : groups)
@@ -278,9 +284,10 @@ bool api_plt_hook_commit() noexcept {
     bool success = true;
     for (size_t i = first; i < module->plt_groups.size(); ++i) {
       auto &group = *module->plt_groups[i];
-      auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
-          group.image, group.native.data(), group.native.size(),
-          group.slots.data(), &group.install);
+      auto result = yukiplt::hook_batch_nonnull_named_cached(
+          yukizygisk::plt_lifecycle::maps_cache(), group.image,
+          group.native.data(), group.native.size(), group.slots.data(),
+          &group.install);
       group.handle = std::move(result.handle);
       group.published = group.install.stage >= yukiplt::OperationStage::kCommit;
       yukizygisk::plt_lifecycle::set_recovery(
@@ -310,8 +317,8 @@ void recover_module_plt(Module &module) {
     if (!group->recovery)
       continue;
     const auto error =
-        yukiplt::unhook_diagnosed(group->handle, group->slots.data(),
-                                  group->slots.size(), &group->restore);
+        yukizygisk::plt_lifecycle::unhook(group->handle, group->slots.data(),
+                                          group->slots.size(), &group->restore);
     yukizygisk::plt_lifecycle::set_recovery(group->recovery,
                                             group->handle.valid());
     LOGI("module %d PLT recovery: %s errno=%d consumed=%d", module.id,
@@ -335,6 +342,7 @@ bool module_plt_can_unload(Module &module) {
 class ModuleCallbackScope {
 public:
   explicit ModuleCallbackScope(Module &module) : module_(module) {
+    yukizygisk::plt_lifecycle::end_fork_window();
     g_cur = &module;
     g_plt_callback_tid.store(gettid(), std::memory_order_release);
   }
@@ -769,6 +777,7 @@ void load_modules_impl(JNIEnv *env) {
     int mfd = make_app_memfd(lib_fd);
     close(lib_fd);
     if (mfd >= 0) {
+      yukizygisk::plt_lifecycle::end_fork_window();
       const bool use_system_tls = image_has_tls(mfd);
       if (g_yz_config.yukilinker && !use_system_tls &&
           g_yuki_dlopen != nullptr && g_yuki_dlsym != nullptr &&
@@ -1240,6 +1249,12 @@ void zygisk_self_destruct(JNIEnv *env, bool /*isolated*/) {
   }
   // Hook quiescence and module retirement above exclude further Core users.
   // Unrelated ART threads do not own private runtime state when no key exists.
+  {
+    yukizygisk::plt_lifecycle::Operation operation(
+        yukizygisk::plt_lifecycle::Access::Retire);
+    if (!operation || !yukizygisk::plt_lifecycle::shutdown())
+      return;
+  }
   if (!yukizygisk::plt_lifecycle::retirement_window_ready(
           core_private_tsd_used()) ||
       g_loader_base != 0 || !yz_capture_ready() ||

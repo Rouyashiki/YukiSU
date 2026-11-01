@@ -821,6 +821,12 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
            yukiplt::error_name(image.error().code), image.error().sys_errno);
       return kFailed;
     }
+    const auto captured = yukizygisk::plt_lifecycle::capture_maps();
+    if (!captured.ok()) {
+      LOGE("PLT maps: %s errno=%d", yukiplt::error_name(captured.code),
+           captured.sys_errno);
+      return kFailed;
+    }
     NativePltBinding *existing = nullptr;
     for (const auto &binding : g_native_plt) {
       if (same_native_image(binding->image, image.value()) &&
@@ -843,7 +849,9 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
         if (binding->handle.valid()) {
           yukiplt::SlotReport slot;
           size_t count = 0;
-          if (!yukiplt::query(binding->handle, &slot, 1, &count).ok() ||
+          if (!yukiplt::query_cached(yukizygisk::plt_lifecycle::maps_cache(),
+                                     binding->handle, &slot, 1, &count)
+                   .ok() ||
               count != 1 ||
               slot.address == reinterpret_cast<uintptr_t>(original))
             return kFailed;
@@ -853,7 +861,9 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
     if (existing != nullptr) {
       yukiplt::SlotReport current;
       size_t count = 0;
-      const auto error = yukiplt::query(existing->handle, &current, 1, &count);
+      const auto error =
+          yukiplt::query_cached(yukizygisk::plt_lifecycle::maps_cache(),
+                                existing->handle, &current, 1, &count);
       if (!error.ok() || count != 1 ||
           current.status != yukiplt::SlotStatus::kInstalled ||
           current.value_observed != reinterpret_cast<uintptr_t>(hook_handler))
@@ -877,8 +887,9 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
     const yukiplt::HookRequest request{
         binding->symbol.c_str(), hook_handler,
         original != nullptr ? original : &binding->original};
-    auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
-        binding->image, &request, 1, &binding->slot, &binding->install);
+    auto result = yukiplt::hook_batch_nonnull_named_cached(
+        yukizygisk::plt_lifecycle::maps_cache(), binding->image, &request, 1,
+        &binding->slot, &binding->install);
     binding->handle = std::move(result.handle);
     const bool published =
         binding->install.stage >= yukiplt::OperationStage::kCommit;
@@ -912,8 +923,8 @@ void recover_native_plt() {
     if (!binding->recovery)
       continue;
     yukiplt::SlotReport slot;
-    const auto error =
-        yukiplt::unhook_diagnosed(binding->handle, &slot, 1, &binding->restore);
+    const auto error = yukizygisk::plt_lifecycle::unhook(binding->handle, &slot,
+                                                         1, &binding->restore);
     yukizygisk::plt_lifecycle::set_recovery(binding->recovery,
                                             binding->handle.valid());
     LOGI("native PLT recovery: symbol=%s result=%s errno=%d consumed=%d",

@@ -268,12 +268,20 @@ void hook_art_post_fork_child(bool early) {
       return;
     }
     g_art_image = std::move(art.value());
+    const auto captured = yukizygisk::plt_lifecycle::capture_maps();
+    if (!captured.ok()) {
+      g_art_state = early ? ArtHookState::Deferred : ArtHookState::Failed;
+      ZLOGE("ART maps: %s errno=%d", yukiplt::error_name(captured.code),
+            captured.sys_errno);
+      return;
+    }
     const yukiplt::HookRequest request{
         kArtPostForkChild, reinterpret_cast<void *>(new_art_post_fork_child),
         g_art_post_fork_child.output_address()};
     yukiplt::SlotReport slot;
-    auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
-        g_art_image, &request, 1, &slot, &g_art_diagnostic);
+    auto result = yukiplt::hook_batch_nonnull_named_cached(
+        yukizygisk::plt_lifecycle::maps_cache(), g_art_image, &request, 1,
+        &slot, &g_art_diagnostic);
     const bool installed = result.ok();
     g_art_requires_callback =
         installed || g_art_diagnostic.stage >= yukiplt::OperationStage::kCommit;
@@ -344,8 +352,8 @@ void retire_child_plt(bool include_art) {
       continue;
     if (hook.handle->valid()) {
       yukiplt::SlotReport slot;
-      const auto error =
-          yukiplt::unhook_diagnosed(*hook.handle, &slot, 1, hook.diagnostic);
+      const auto error = yukizygisk::plt_lifecycle::unhook(*hook.handle, &slot,
+                                                           1, hook.diagnostic);
       yukizygisk::plt_lifecycle::set_recovery(*hook.recovery,
                                               hook.handle->valid());
       if (!error.ok())
@@ -421,7 +429,11 @@ int new_fork() {
       retire_child_plt(false);
     return g_ctx->pid;
   }
-  return yukizygisk::plt_lifecycle::fork_process(g_orig_fork.load());
+  const int result =
+      yukizygisk::plt_lifecycle::fork_process(g_orig_fork.load());
+  if (result == 0)
+    g_plt_callbacks.store(1, std::memory_order_release);
+  return result;
 }
 
 size_t fd_table_size() {
@@ -455,6 +467,8 @@ void ctx_fork_pre(ZygiskContext *ctx, bool fifo_ui = false) {
     set_fifo_ui_scheduler(SCHED_FIFO, 1);
   ctx->fork_attempted = true;
   ctx->pid = yukizygisk::plt_lifecycle::fork_process(g_orig_fork.load());
+  if (ctx->pid == 0)
+    g_plt_callbacks.store(0, std::memory_order_release);
   ctx->fork_errno = ctx->pid < 0 ? errno : 0;
   if (fifo_ui) {
     if (ctx->pid == 0) {
@@ -1298,13 +1312,15 @@ void hook_zygote_jni() {
   {
     yukizygisk::plt_lifecycle::Operation operation;
     if (operation && g_runtime_ready && !g_fork_handle.valid() &&
+        yukizygisk::plt_lifecycle::capture_maps().ok() &&
         g_fork_diagnostic.stage < yukiplt::OperationStage::kCommit) {
       const yukiplt::HookRequest request{"fork",
                                          reinterpret_cast<void *>(new_fork),
                                          g_orig_fork.output_address()};
       yukiplt::SlotReport slot;
-      auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
-          g_runtime_image, &request, 1, &slot, &g_fork_diagnostic);
+      auto result = yukiplt::hook_batch_nonnull_named_cached(
+          yukizygisk::plt_lifecycle::maps_cache(), g_runtime_image, &request, 1,
+          &slot, &g_fork_diagnostic);
       fork_plt_hooked = result.ok();
       g_fork_handle = std::move(result.handle);
       yukizygisk::plt_lifecycle::set_recovery(
@@ -1405,12 +1421,19 @@ bool zygisk_hook_bootstrap(const char *self_path) {
       }
       g_runtime_image = std::move(image.value());
       g_runtime_ready = true;
+      const auto captured = yukizygisk::plt_lifecycle::capture_maps();
+      if (!captured.ok()) {
+        ZLOGE("bootstrap maps: %s errno=%d", yukiplt::error_name(captured.code),
+              captured.sys_errno);
+        return false;
+      }
       const yukiplt::HookRequest request{"strdup",
                                          reinterpret_cast<void *>(new_strdup),
                                          g_strdup.output_address()};
       yukiplt::SlotReport slot;
-      auto result = yukiplt::hook_batch_nonnull_diagnosed_named(
-          g_runtime_image, &request, 1, &slot, &g_strdup_diagnostic);
+      auto result = yukiplt::hook_batch_nonnull_named_cached(
+          yukizygisk::plt_lifecycle::maps_cache(), g_runtime_image, &request, 1,
+          &slot, &g_strdup_diagnostic);
       g_strdup_handle = std::move(result.handle);
       yukizygisk::plt_lifecycle::set_recovery(
           g_strdup_recovery, !result.ok() && g_strdup_handle.valid());

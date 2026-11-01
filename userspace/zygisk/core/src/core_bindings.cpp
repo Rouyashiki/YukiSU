@@ -104,6 +104,18 @@ bool core_private_tsd_used() noexcept {
   return live;
 }
 
+bool core_prepare_fork() noexcept {
+  return pthread_mutex_trylock(&key_mutex) == 0;
+}
+
+void core_after_fork_parent() noexcept { pthread_mutex_unlock(&key_mutex); }
+
+void core_after_fork_child() noexcept {
+  // Inherited waiters belong to threads that do not exist in this child.
+  const pthread_mutex_t unlocked = PTHREAD_MUTEX_INITIALIZER;
+  key_mutex = unlocked;
+}
+
 int core_drain_current_thread_tsd() noexcept {
   // The caller has excluded other participants, including destructor epilogues.
   for (int round = 0; round < PTHREAD_DESTRUCTOR_ITERATIONS; ++round) {

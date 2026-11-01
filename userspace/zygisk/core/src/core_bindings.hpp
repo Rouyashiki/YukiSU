@@ -4,6 +4,10 @@
 #include <link.h>
 
 bool core_private_tsd_used() noexcept;
+// Serialize private key metadata across the host's controlled fork window.
+bool core_prepare_fork() noexcept;
+void core_after_fork_parent() noexcept;
+void core_after_fork_child() noexcept;
 // Requires other participants to have exited and no active exception.
 // Drains current-thread values, without deleting keys or proving quiescence.
 int core_drain_current_thread_tsd() noexcept;
