@@ -2708,8 +2708,8 @@ yuki_bootstrap_tango(uint32_t got, uint32_t original, uint32_t stub,
   const TangoBootstrap tango{got, original, stub};
   const auto target = prepare_bootstrap(core_fd, early_packet_fd_plus1, &tango);
   if (target.tango != nullptr) [[clang::musttail]]
-    return target.tango(0, 0, 0, 0,
-                        0); // NOLINT(readability-avoid-return-with-void-value)
+    // NOLINTNEXTLINE(readability-avoid-return-with-void-value)
+    return target.tango(0, 0, 0, 0, 0);
 }
 #endif
 
