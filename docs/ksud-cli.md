@@ -59,14 +59,17 @@ For an interactive system mksh or the bundled BusyBox ash, `su` loads the shippe
 other userspace assets during installation. Without it, the system shell's normal
 initialization is used.
 
-The mksh setup reads `/system/etc/mkshrc` first, then adds a prompt showing the
-user, host, and current directory. HOME becomes `~`; long paths retain their final
-two components. A failed command's status appears before the next prompt without
-changing `$?`. BusyBox ash provides the same path shortening and exit-status
-display, with native user and host escapes. mksh expands its prompt in-process;
-ash uses a command substitution containing shell builtins only. Color follows
-terminal capabilities and `NO_COLOR`. Interactive `ksud debug su` uses the same
-startup setup; its noninteractive execution path is unchanged. Prompt setup checks
+The mksh setup reads `/system/etc/mkshrc` first. Both mksh and the bundled BusyBox
+ash show the device codename and full current directory, for example
+`popsicle:/data/data/com.termux/files/home # ` or `popsicle:/ # `. The codename is
+read once at shell startup from `ro.product.device`, falling back to `HOSTNAME`
+and then `android` if unavailable. The prompt omits the username and preserves
+the full path without HOME abbreviation or long-path shortening. A failed
+command's status appears before the next prompt without changing `$?`.
+mksh expands its prompt in-process; ash uses a command substitution containing
+shell builtins only. Color follows terminal capabilities and `NO_COLOR`.
+Interactive `ksud debug su` uses the same startup setup; its noninteractive
+execution path is unchanged. Prompt setup checks
 access after the requested identity/context change and falls back to the system
 startup when the target user cannot read the shipped rc. Exported generated
 prompts remain usable in nested shells. Control characters in displayed paths are
@@ -76,7 +79,7 @@ Put personal shell settings in `/data/adb/ksu/.shellrc`, which is sourced last a
 is not overwritten by feature saves or asset updates. For example:
 
 ```sh
-PS1='${USER}@${HOSTNAME}:${PWD} # '
+PS1='[${PWD}] # '
 ```
 
 An explicitly supplied `ENV`, exported `PS1`, `su -p`, or a custom shell keeps its

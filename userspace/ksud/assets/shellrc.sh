@@ -7,6 +7,10 @@ if [ -n "${KSH_VERSION-}" ] && [ -r /system/etc/mkshrc ]; then
     . /system/etc/mkshrc
 fi
 
+_ksu_device=$(/system/bin/getprop ro.product.device 2>/dev/null)
+# shellcheck disable=SC3028
+_ksu_device=${_ksu_device:-${HOSTNAME:-android}}
+
 _ksu_red='' _ksu_blue='' _ksu_reset='' _ksu_prefix=''
 if [ -n "${KSH_VERSION-}" ]; then
     _ksu_mark='#'
@@ -27,29 +31,16 @@ else
 fi
 _ksu_prompt() {
     # shellcheck disable=SC3043
-    local status="$1" path="${PWD:-?}" home="${HOME-}" tail parent identity
-    if [ -n "$home" ]; then
-        case $path in
-            "$home") path='~' ;;
-            "$home"/*) [ "$home" = / ] || path="~${path#"$home"}" ;;
-        esac
-    fi
-    if [ "${#path}" -gt 40 ]; then
-        tail=${path##*/}
-        parent=${path%/*}
-        path=".../${parent##*/}/$tail"
-    fi
+    local status="$1" path="${PWD:-?}" identity="${_ksu_device}"
     # shellcheck disable=SC3060
     path=${path//[[:cntrl:]]/?}
-    identity='\u@\h'
-    if [ -n "${KSH_VERSION-}" ]; then
-        # shellcheck disable=SC3028
-        identity="${USER:-root}@${HOSTNAME:-android}"
-        # shellcheck disable=SC3060
-        identity=${identity//[[:cntrl:]]/?}
-    else
+    # shellcheck disable=SC3060
+    identity=${identity//[[:cntrl:]]/?}
+    if [ -z "${KSH_VERSION-}" ]; then
         # shellcheck disable=SC3060
         path=${path//\\/\\\\}
+        # shellcheck disable=SC3060
+        identity=${identity//\\/\\\\}
     fi
     REPLY=
     [ "$status" = 0 ] || REPLY="${_ksu_red}${status}${_ksu_reset}|"
