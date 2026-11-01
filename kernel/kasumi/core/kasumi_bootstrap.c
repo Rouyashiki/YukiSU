@@ -26,6 +26,7 @@
 #include "kasumi_sop_shadow.h"
 #include "kasumi_fop_override.h"
 #include "kasumi_fake_mountinfo.h"
+#include "kasumi_fake_selinuxfs_access.h"
 
 /* VFS callbacks outlive individual control requests; pin their host module. */
 static bool kasumi_unload_pin_held;
@@ -167,6 +168,7 @@ static int kasumi_start_views(void)
 	 */
 	__module_get(THIS_MODULE);
 	WRITE_ONCE(kasumi_unload_pin_held, true);
+	(void)kasumi_fake_selinuxfs_access_init();
 	(void)kasumi_vfs_view_init();
 	pr_info("kasumi: ready; control via KSU fd\n");
 	return 0;
@@ -210,8 +212,10 @@ static void kasumi_stop_views(void)
 	kasumi_sop_shadow_stop_new();
 	kasumi_dirhijack_exit();
 	kasumi_fop_override_stop_new();
+	kasumi_fake_selinuxfs_access_stop_new();
 	kasumi_fop_bridge_stop_new();
 	kasumi_fop_override_exit();
+	kasumi_fake_selinuxfs_access_exit();
 	kasumi_fop_bridge_exit();
 	kasumi_iop_override_exit();
 	kasumi_sop_shadow_exit();

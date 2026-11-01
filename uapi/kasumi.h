@@ -96,6 +96,9 @@ struct kasumi_spoof_kstat {
               (INCONSISTENT_MOUNT) */
 #define KSM_FEATURE_FAKE_MOUNTINFO                                             \
   (1 << 9) /* shared donor mount views with normalized propagation IDs */
+/* Bounded timing compensation for proc attr/current writes. */
+#define KSM_FEATURE_SELINUX_FIX (1 << 10)
+#define KSM_FEATURE_FAKE_SELINUXFS KSM_FEATURE_SELINUX_FIX
 /* Bit 12 remains reserved for removed mount namespace link projection. */
 #define KSM_FEATURE_OVERLAY_XATTR_HIDE (1 << 13)
 #define KSM_FEATURE_MANAGED_HIDE (1 << 14)
@@ -239,6 +242,7 @@ struct kasumi_conflict_ack_arg {
 #define KSM_IOC_SET_STATFS_SPOOF                                               \
   _IOW(KSM_IOC_MAGIC, 27, struct kasumi_statfs_spoof_arg)
 /* Commands 17 and 28 remain reserved for removed uname operations. */
+#define KSM_IOC_SELINUX_FIX _IOW(KSM_IOC_MAGIC, 29, int)
 
 /* Command 38 remains reserved for removed mount-hide mode selection. */
 

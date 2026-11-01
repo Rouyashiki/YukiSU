@@ -57,6 +57,7 @@
 #include "kasumi_fop_override.h"
 #include "kasumi_sop_shadow.h"
 #include "kasumi_fake_mountinfo.h"
+#include "kasumi_fake_selinuxfs_access.h"
 
 static int KASUMI_NOCFI kasumi_resolve_rule_path(char **pathname,
 						 struct inode **target_out,
@@ -311,8 +312,6 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 			    scnprintf(kbuf + written, buf_size - written,
 				      "hide_xattr_sb %p\n", sb_entry->sb);
 		}
-		/* Feature rules: mount_hide, maps_spoof, statfs_spoof, stealth
-		 */
 		if (kasumi_feature_enabled_mask & KSM_FEATURE_MOUNT_HIDE) {
 			if (written < buf_size)
 				written += scnprintf(kbuf + written,
@@ -330,6 +329,12 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 				written += scnprintf(kbuf + written,
 						     buf_size - written,
 						     "statfs_spoof enabled\n");
+		}
+		if (kasumi_feature_enabled_mask & KSM_FEATURE_SELINUX_FIX) {
+			if (written < buf_size)
+				written += scnprintf(kbuf + written,
+						     buf_size - written,
+						     "selinux_fix enabled\n");
 		}
 		if (kasumi_stealth_enabled) {
 			if (written < buf_size)
@@ -637,6 +642,20 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		return 0;
 	}
 
+	if (cmd == KSM_IOC_SELINUX_FIX) {
+		int enable;
+
+		if (copy_from_user(&enable, arg, sizeof(enable)))
+			return -EFAULT;
+		if (enable && !kasumi_fake_selinuxfs_proc_attr_active())
+			return -EOPNOTSUPP;
+		if (enable)
+			kasumi_feature_enabled_mask |= KSM_FEATURE_SELINUX_FIX;
+		else
+			kasumi_feature_enabled_mask &= ~KSM_FEATURE_SELINUX_FIX;
+		return 0;
+	}
+
 	if (cmd == KSM_IOC_GET_FEATURES) {
 		int features = 0;
 		if (kasumi_hide_rules_available())
@@ -656,6 +675,8 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 			features |= KSM_FEATURE_MAPS_SPOOF;
 		if (kasumi_statfs_view_available())
 			features |= KSM_FEATURE_STATFS_SPOOF;
+		if (kasumi_fake_selinuxfs_proc_attr_active())
+			features |= KSM_FEATURE_SELINUX_FIX;
 		if (copy_to_user(arg, &features, sizeof(features)))
 			return -EFAULT;
 		return 0;
@@ -708,6 +729,21 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 			      "vfs: getattr=iop readdir=fop xattrs=%s\n",
 			      kasumi_overlay_xattr_available() ? "VFS-filter"
 							       : "none");
+		written += n;
+
+		n = scnprintf(
+		    kbuf + written, buf_size - written,
+		    "selinuxfs (passthrough): access/context=%s\n"
+		    "SELinux Guard: attr/current=%s delay=%uns "
+		    "phase=post-EINVAL "
+		    "spins=%llu\n",
+		    kasumi_fake_selinuxfs_access_active() ? "shadow fop"
+							  : "none",
+		    kasumi_fake_selinuxfs_proc_attr_active()
+			? "file-open/write proxy"
+			: "none",
+		    kasumi_fake_selinuxfs_delay_ns(),
+		    (unsigned long long)kasumi_fake_selinuxfs_spin_count());
 		written += n;
 
 		n = scnprintf(kbuf + written, buf_size - written,
@@ -1347,6 +1383,7 @@ long kasumi_handle_ioctl(unsigned int cmd, void __user *arg)
 	case KSM_IOC_SET_MOUNT_HIDE:
 	case KSM_IOC_SET_MAPS_SPOOF:
 	case KSM_IOC_SET_STATFS_SPOOF:
+	case KSM_IOC_SELINUX_FIX:
 	case KSM_IOC_ADD_SPOOF_KSTAT:
 	case KSM_IOC_UPDATE_SPOOF_KSTAT:
 		ret = kasumi_dispatch_cmd(cmd, arg);
