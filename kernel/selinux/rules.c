@@ -36,7 +36,7 @@ static struct policydb *get_policydb(void)
 
 static DEFINE_MUTEX(ksu_rules);
 
-static void reset_avc_cache(void);
+static void reset_avc_cache(u32 seqno);
 
 static void backup_original_sepolicy_once(void)
 {
@@ -654,10 +654,11 @@ static int ksu_file_load_policy_allow_sid(struct file *file, u32 ssid,
 		goto out_unlock;
 	}
 
+	pol->latest_granting = old_pol->latest_granting + 1;
 	rcu_assign_pointer(selinux_state.policy, pol);
 	synchronize_rcu();
 	ksu_destroy_sepolicy(old_pol);
-	reset_avc_cache();
+	reset_avc_cache(pol->latest_granting);
 
 add_leases:
 	ksu_temp_av_add_locked(&file_key, add_av, 1);
@@ -820,10 +821,11 @@ ksu_file_load_policy_allow_execmem_sid(u32 ssid,
 
 	pr_info("file_load_policy: allow src=%s process added=0x%x\n", src_name,
 		add_av);
+	pol->latest_granting = old_pol->latest_granting + 1;
 	rcu_assign_pointer(selinux_state.policy, pol);
 	synchronize_rcu();
 	ksu_destroy_sepolicy(old_pol);
-	reset_avc_cache();
+	reset_avc_cache(pol->latest_granting);
 
 out_unlock:
 	kfree(new_lease);
@@ -1010,10 +1012,11 @@ int ksu_file_load_policy_restore(const struct ksu_file_load_policy *state)
 		file_clear_av, dir_clear_av, tmpfs_clear_av,
 		release_process ? state->process_added_av : 0,
 		state->process_lease_refs);
+	pol->latest_granting = old_pol->latest_granting + 1;
 	rcu_assign_pointer(selinux_state.policy, pol);
 	synchronize_rcu();
 	ksu_destroy_sepolicy(old_pol);
-	reset_avc_cache();
+	reset_avc_cache(pol->latest_granting);
 	ksu_temp_av_release_locked(&file_key, state->added_av,
 				   state->file_lease_refs);
 	ksu_temp_av_release_locked(&tmpfs_key, state->tmpfs_added_av,
@@ -1140,10 +1143,11 @@ void apply_kernelsu_rules(void)
 
 	// YukiZygisk system_server trampolines.
 	ksu_allow(db, "system_server", "system_server", "process", "execmem");
+	pol->latest_granting = old_pol->latest_granting + 1;
 	rcu_assign_pointer(selinux_state.policy, pol);
 	synchronize_rcu();
 	ksu_destroy_sepolicy(old_pol);
-	reset_avc_cache();
+	reset_avc_cache(pol->latest_granting);
 out_unlock:
 	mutex_unlock(&selinux_state.policy_mutex);
 	mutex_unlock(&ksu_rules);
@@ -1403,21 +1407,19 @@ static int apply_one_sepolicy_cmd(struct policydb *db,
 extern int avc_ss_reset(u32 seqno);
 #else
 extern int avc_ss_reset(struct selinux_avc *avc, u32 seqno);
-#endif // #if (LINUX_VERSION_CODE >= KERNEL_VERSI...
-// reset avc cache table, otherwise the new rules will not take effect if
-// already denied
-static void reset_avc_cache(void)
+#endif
+static void reset_avc_cache(u32 seqno)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0))
-	avc_ss_reset(0);
-	selnl_notify_policyload(0);
-	selinux_status_update_policyload(0);
+	avc_ss_reset(seqno);
+	selnl_notify_policyload(seqno);
+	selinux_status_update_policyload(seqno);
 #else
 	struct selinux_avc *avc = selinux_state.avc;
-	avc_ss_reset(avc, 0);
-	selnl_notify_policyload(0);
-	selinux_status_update_policyload(&selinux_state, 0);
-#endif // #if (LINUX_VERSION_CODE >= KERNEL_VERSI...
+	avc_ss_reset(avc, seqno);
+	selnl_notify_policyload(seqno);
+	selinux_status_update_policyload(&selinux_state, seqno);
+#endif
 	selinux_xfrm_notify_policyload();
 }
 
@@ -1510,11 +1512,12 @@ int handle_sepolicy(void __user *user_data, u64 data_len)
 		cmd_index++;
 	}
 
+	pol->latest_granting = old_pol->latest_granting + 1;
 	rcu_assign_pointer(selinux_state.policy, pol);
 	synchronize_rcu();
 	ksu_destroy_sepolicy(old_pol);
 
-	reset_avc_cache();
+	reset_avc_cache(pol->latest_granting);
 	ret = success_cmd_count;
 	goto out_unlock;
 
