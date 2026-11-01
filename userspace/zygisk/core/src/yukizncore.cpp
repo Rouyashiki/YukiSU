@@ -5,6 +5,7 @@
 #include "loader_handoff.hpp"
 #include "log.hpp"
 #include "native_bionic.hpp"
+#include "native_module_binding.hpp"
 #include "plt_lifecycle.hpp"
 #include "solist.hpp"
 #include "userspace/zygisk/endpoint.hpp"
@@ -91,13 +92,12 @@ using ZdRequest = zygiskd::Request;
 
 struct ModuleHandle {
   uint32_t magic = kHandleMagic;
-  uint32_t index = 0;
+  yukizygisk::NativeModuleBinding binding;
   void *so = nullptr;
   uint64_t device = 0;
   uint64_t inode = 0;
   std::string module_id;
   bool early = false;
-  bool has_companion = false;
   bool reported = false;
   bool hyos_registered = false;
 };
@@ -1082,17 +1082,19 @@ int api_connect_companion(void *handle) {
     LOGE("connect companion: invalid handle=%p", handle);
     return -1;
   }
-  if (h->early && !h->has_companion) {
+  const auto binding = h->binding.load();
+  if (h->early && !binding.has_companion) {
     LOGE("connect companion: unavailable for early module id=%s",
          h->module_id.c_str());
     return -1;
   }
   const bool hyos_child = yukizygisk::hyos::in_specialized_child();
-  int fd = hyos_child ? request_fd_from_hyos_session(
-                            ZdRequest::ConnectNativeCompanion, h->index)
-                      : request_fd(ZdRequest::ConnectNativeCompanion, h->index);
+  int fd = hyos_child
+               ? request_fd_from_hyos_session(ZdRequest::ConnectNativeCompanion,
+                                              binding.index)
+               : request_fd(ZdRequest::ConnectNativeCompanion, binding.index);
   if (!hyos_child)
-    LOGI("connect companion: idx=%u fd=%d", h->index, fd);
+    LOGI("connect companion: idx=%u fd=%d", binding.index, fd);
   return fd;
 }
 
@@ -1226,13 +1228,12 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
   close(lib_fd);
   const auto retain = [&] {
     auto *handle = new ModuleHandle();
-    handle->index = idx;
+    handle->binding.publish(idx, info.has_companion != 0);
     handle->so = so;
     handle->device = identity.st_dev;
     handle->inode = identity.st_ino;
     handle->module_id = module_id;
     handle->early = early;
-    handle->has_companion = info.has_companion != 0;
     g_loaded_modules.push_back(handle);
     return handle;
   };
@@ -1279,7 +1280,7 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
        early ? 1U : 0U);
   const size_t registrations_before =
       yukizygisk::hyos::registered_module_count();
-  yukizygisk::hyos::begin_module_registration(&handle->index);
+  yukizygisk::hyos::begin_module_registration(&handle->binding);
   mod->onModuleLoaded(handle, &g_api);
   recover_native_plt();
   yukizygisk::hyos::end_module_registration();
@@ -1395,8 +1396,7 @@ void load_matching_modules() {
 
     std::string module_id = module_id_of(info);
     if (auto *loaded = find_loaded_module(module_id)) {
-      loaded->index = i;
-      loaded->has_companion = info.has_companion != 0;
+      loaded->binding.publish(i, info.has_companion != 0);
       LOGI("native core: duplicate skipped id=%s idx=%u early=%u",
            module_id.c_str(), i, loaded->early ? 1U : 0U);
       if (loaded->early && !loaded->reported && !yukizygisk::hyos::available())
@@ -1437,8 +1437,7 @@ bool sync_early_native_reports_once() {
         continue;
       if (module_id_of(info) != h->module_id)
         continue;
-      h->index = i;
-      h->has_companion = info.has_companion != 0;
+      h->binding.publish(i, info.has_companion != 0);
       h->reported = report_native_injection(i);
       found = true;
       break;

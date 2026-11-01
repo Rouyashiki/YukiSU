@@ -1,4 +1,5 @@
 #include "check.hpp"
+#include "hyos_runtime.hpp"
 #include "plt_lifecycle.hpp"
 #include "process_maps.hpp"
 #include "userspace/zygisk/daemon/zygiskd.hpp"
@@ -133,7 +134,7 @@ namespace yukizygisk::hyos {
 bool available() { return false; }
 bool in_specialized_child() { return false; }
 size_t registered_module_count() { return 0; }
-void begin_module_registration(uint32_t *) {}
+void begin_module_registration(const NativeModuleBinding *) {}
 void end_module_registration() {}
 } // namespace yukizygisk::hyos
 

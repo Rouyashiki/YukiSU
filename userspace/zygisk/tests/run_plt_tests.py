@@ -12,6 +12,25 @@ def native_source(core):
     return source[source.index('struct NativePltBinding {'):source.index('int api_inline_hook(')]
 
 
+def build_companion_test(root, build, compiler, flags, runner):
+    build.mkdir(parents=True, exist_ok=True)
+    core = root / 'userspace/zygisk/core/src'
+    source = (core / 'yukizncore.cpp').read_text()
+    (build / 'native_companion_types.inc').write_text(
+        source[source.index('struct ModuleHandle {'):source.index('struct InlineHookRecord {')])
+    methods = ''.join(source[source.index(begin):source.index(end)] for begin, end in [
+        ('bool has_pending_early_report()', 'bool map_from_base('),
+        ('int api_connect_companion(', 'const ZygiskNextRuntime *api_get_runtime()'),
+        ('bool sync_early_native_reports_once()', 'void *deferred_native_sync_main(')])
+    (build / 'native_companion_methods.inc').write_text(methods)
+    binary = build / 'native_companion_test'
+    subprocess.run([*compiler, '-std=c++17', '-O1', '-g', '-pthread', *flags,
+                    '-I' + str(core), '-I' + str(build),
+                    root / 'userspace/zygisk/tests/native_companion_test.cpp',
+                    '-o', binary], check=True)
+    subprocess.run([*runner, binary], check=True, timeout=15)
+
+
 def build_archive(root, build, compiler, flags, export_lifecycle=False):
     core = root / 'userspace/zygisk/core/src'
     vendor = root / 'userspace/zygisk/third_party/yukiplt'
@@ -65,6 +84,7 @@ extern "C" bool fixture_retire_plt() {
 
 def build_tests(root, build, compiler, flags, runner):
     build.mkdir(parents=True, exist_ok=True)
+    build_companion_test(root, build, compiler, flags, runner)
     core = root / 'userspace/zygisk/core/src'
     tests = Path(__file__).parent
     module = (core / 'core.cpp').read_text()

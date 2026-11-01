@@ -52,7 +52,7 @@ static_assert(sizeof(ZygiskNextHyosModule) ==
 static_assert(sizeof(ZnHyosAppSpecializeArgs) == 3 * sizeof(void *));
 struct RegisteredModule {
   ZygiskNextHyosModule module;
-  const uint32_t *module_index;
+  const NativeModuleBinding *binding;
 };
 
 std::vector<RegisteredModule> g_modules;
@@ -71,7 +71,7 @@ yukiplt::OriginalSlot<SetContextFn> g_original_setcontext;
 OpenControlSessionFn g_open_control_session = nullptr;
 ReportCallbackFn g_report_callback = nullptr;
 void (*g_recover_plt)() = nullptr;
-const uint32_t *g_registering_module_index = nullptr;
+const NativeModuleBinding *g_registering_binding = nullptr;
 int g_child_control_session = -1;
 std::atomic_flag g_child_control_lock = ATOMIC_FLAG_INIT;
 std::atomic_flag g_fork_lock = ATOMIC_FLAG_INIT;
@@ -162,9 +162,11 @@ void dispatch_specialized(const char *se_info, const char *package_name) {
       return;
     if (g_recover_plt != nullptr)
       g_recover_plt();
-    if (g_report_callback != nullptr && entry.module_index != nullptr &&
-        *entry.module_index != UINT32_MAX)
-      (void)g_report_callback(*entry.module_index);
+    if (g_report_callback != nullptr && entry.binding != nullptr) {
+      const auto binding = entry.binding->load();
+      if (binding.index != UINT32_MAX)
+        (void)g_report_callback(binding.index);
+    }
   }
 }
 
@@ -215,7 +217,7 @@ int register_module(const void *module_pointer) {
       module->onAppSpecialized == nullptr)
     return ZN_FAILED;
 
-  g_modules.push_back({*module, g_registering_module_index});
+  g_modules.push_back({*module, g_registering_binding});
   return ZN_SUCCESS;
 }
 
@@ -257,7 +259,7 @@ bool initialize(OpenControlSessionFn open_control_session,
   g_open_control_session = open_control_session;
   g_report_callback = report_callback;
   g_recover_plt = recover_plt;
-  g_registering_module_index = nullptr;
+  g_registering_binding = nullptr;
 
   yukizygisk::plt_lifecycle::Operation operation;
   if (!operation)
@@ -386,10 +388,10 @@ void invalidate_child_control_session() {
   g_child_ready = false;
 }
 
-void begin_module_registration(const uint32_t *module_index) {
-  g_registering_module_index = module_index;
+void begin_module_registration(const NativeModuleBinding *binding) {
+  g_registering_binding = binding;
 }
 
-void end_module_registration() { g_registering_module_index = nullptr; }
+void end_module_registration() { g_registering_binding = nullptr; }
 
 } // namespace yukizygisk::hyos
