@@ -33,6 +33,7 @@ object KasumiUiAdapter {
         val enableStealth: Boolean = true, val enableOverlayXattrHide: Boolean = false,
         val enableMountHide: Boolean = false,
         val enableMapsSpoof: Boolean = false, val enableStatfsSpoof: Boolean = false,
+        val enableSelinuxFix: Boolean = false,
         val kasumiEnabled: Boolean = true,
         val mirrorPath: String = "", val partitions: List<String> = emptyList(),
         val mountBackend: String = "auto", val overlayfsEnabled: Boolean = true, val magicMountEnabled: Boolean = true,
@@ -57,6 +58,7 @@ object KasumiUiAdapter {
             enableMountHide = raw.optBoolean("enable_mount_hide"),
             enableMapsSpoof = raw.optBoolean("enable_maps_spoof"),
             enableStatfsSpoof = raw.optBoolean("enable_statfs_spoof"),
+            enableSelinuxFix = raw.optBoolean("enable_selinux_fix"),
             kasumiEnabled = raw.optBoolean("kasumi_enabled", true), mirrorPath = raw.optString("mirror_dir"),
             partitions = if (partitions == null) emptyList() else (0 until partitions.length()).map(partitions::getString),
             mountBackend = raw.optString("mount_backend", "auto"),
@@ -180,6 +182,7 @@ object KasumiUiAdapter {
         change("enable_mount_hide", old.enableMountHide, value.enableMountHide)
         change("enable_maps_spoof", old.enableMapsSpoof, value.enableMapsSpoof)
         change("enable_statfs_spoof", old.enableStatfsSpoof, value.enableStatfsSpoof)
+        change("enable_selinux_fix", old.enableSelinuxFix, value.enableSelinuxFix)
         change("kasumi_enabled", old.kasumiEnabled, value.kasumiEnabled)
         change("mirror_dir", old.mirrorPath, value.mirrorPath)
         change("mount_backend", old.mountBackend, value.mountBackend)

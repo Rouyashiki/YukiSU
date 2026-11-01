@@ -72,7 +72,8 @@ void print_usage() {
               << "  ksud kagami hide list|apply|add|remove\n"
               << "  ksud kagami kasumi "
                  "version|list|enable|disable|clear|fix-mounts|hide-overlay-xattrs|mount-hide "
-                 "off|normal|maps\n";
+                 "off|normal|maps\n"
+              << "  ksud kagami kasumi selinux-fix on|off\n";
 }
 
 std::string arg_or_default(const std::vector<std::string>& args, std::size_t index,
@@ -1154,7 +1155,8 @@ int handle_kasumi(const std::vector<std::string>& args) {
         }
         return 0;
     }
-    if (sub == "mount-hide" || sub == "maps-spoof" || sub == "statfs-spoof") {
+    if (sub == "mount-hide" || sub == "maps-spoof" || sub == "statfs-spoof" ||
+        sub == "selinux-fix") {
         const std::string value = arg_or_default(args, 2, "off");
         const bool on = value == "on" || value == "normal";
         bool ok = false;
@@ -1168,6 +1170,12 @@ int handle_kasumi(const std::vector<std::string>& args) {
             ok = kasumi::set_maps_spoof(on);
         } else if (sub == "statfs-spoof") {
             ok = kasumi::set_statfs_spoof(on);
+        } else if (sub == "selinux-fix") {
+            if (value != "off" && value != "on") {
+                std::cerr << "usage: ksud kagami kasumi selinux-fix on|off\n";
+                return 1;
+            }
+            ok = kasumi::set_selinux_fix(on);
         }
         if (!ok) {
             std::cerr << "failed to set Kasumi " << sub << "\n";
@@ -1364,6 +1372,7 @@ std::string operation_description(const std::vector<std::string>& args) {
                                                          "enable_mount_hide",
                                                          "enable_maps_spoof",
                                                          "enable_statfs_spoof",
+                                                         "enable_selinux_fix",
                                                          "enable_overlay_xattr_hide",
                                                          "overlayfs_enabled",
                                                          "magic_mount_enabled",

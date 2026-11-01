@@ -969,6 +969,7 @@ private fun RuleItem(rule: KasumiManager.ActiveRule, index: Int = 0, count: Int 
                         "mount_hide" -> "MOUNT_HIDE"
                         "maps_spoof" -> "MAPS_SPOOF"
                         "statfs_spoof" -> "STATFS_SPOOF"
+                        "selinux_fix" -> "SELINUX_GUARD"
                         "stealth" -> "STEALTH"
                         else -> rule.type.uppercase()
                     },
@@ -983,12 +984,13 @@ private fun RuleItem(rule: KasumiManager.ActiveRule, index: Int = 0, count: Int 
                     "mount_hide" -> stringResource(R.string.kasumi_rule_mount_hide)
                     "maps_spoof" -> stringResource(R.string.kasumi_rule_maps_spoof)
                     "statfs_spoof" -> stringResource(R.string.kasumi_rule_statfs_spoof)
+                    "selinux_fix" -> stringResource(R.string.kasumi_selinux_guard_desc)
                     "stealth" -> stringResource(R.string.kasumi_rule_stealth)
                     else -> rule.src
                 }
                 ScrollableRuleText(
                     text = displayText,
-                    fontFamily = if (rule.type in listOf("mount_hide", "maps_spoof", "statfs_spoof", "stealth"))
+                    fontFamily = if (rule.type in listOf("mount_hide", "maps_spoof", "statfs_spoof", "selinux_fix", "stealth"))
                         FontFamily.Default else FontFamily.Monospace,
                 )
                 if (rule.hideState != null) {

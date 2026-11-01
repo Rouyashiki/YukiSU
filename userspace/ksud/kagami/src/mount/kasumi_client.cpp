@@ -136,6 +136,8 @@ std::vector<std::string> feature_names(int bitmask) {
         names.emplace_back("maps_spoof");
     if (bitmask & KSM_FEATURE_STATFS_SPOOF)
         names.emplace_back("statfs_spoof");
+    if (bitmask & KSM_FEATURE_SELINUX_FIX)
+        names.emplace_back("selinux_fix");
     if (bitmask & KSM_FEATURE_KSTAT_SPOOF)
         names.emplace_back("kstat_spoof");
     if (bitmask & KSM_FEATURE_MERGE_DIR)
@@ -337,6 +339,22 @@ bool set_statfs_spoof(bool enable) {
     arg.enable = enable ? 1 : 0;
     const int rc = execute(KSM_IOC_SET_STATFS_SPOOF, &arg);
     return ioctl_arg_ok(rc, arg.err);
+}
+
+bool set_selinux_fix(bool enable) {
+    const auto caps = feature_capabilities();
+    if (!caps.ok) {
+        errno = caps.last_errno;
+        return false;
+    }
+    if (!(caps.bitmask & KSM_FEATURE_SELINUX_FIX)) {
+        if (!enable)
+            return true;
+        errno = EOPNOTSUPP;
+        return false;
+    }
+    int value = enable ? 1 : 0;
+    return execute(KSM_IOC_SELINUX_FIX, &value) == 0;
 }
 
 bool clear_rules() {

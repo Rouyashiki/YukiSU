@@ -118,6 +118,8 @@
     <string name="kasumi_saved_apply_failed">Saved, but runtime apply failed: %1$s</string>
     <string name="kasumi_saved_reboot">Saved; mount backend changes apply after reboot</string>
     <string name="kasumi_statfs_spoof">Statfs spoof</string>
+    <string name="kasumi_selinux_guard">SELinux Guard</string>
+    <string name="kasumi_selinux_guard_desc">Experimental bounded timing compensation for SELinux context writes</string>
     <string name="kasumi_statfs_spoof_desc">Project filesystem type information</string>
     <string name="kasumi_stats_kasumi">Kasumi</string>
     <string name="kasumi_status_available">Available</string>

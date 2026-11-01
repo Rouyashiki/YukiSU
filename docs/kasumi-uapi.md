@@ -143,6 +143,44 @@ Manager keeps the displayed snapshot until explicit confirmation succeeds.
 Back and outside clicks cannot dismiss it. An acknowledgement failure leaves
 the warning available for retry. Unknown kinds receive a generic warning.
 
+## SELinux Guard
+
+SELinux Guard retains standalone Kasumi's feature bit 10
+(`KSM_FEATURE_SELINUX_FIX`, name `selinux_fix`) and command 29
+(`KSM_IOC_SELINUX_FIX`, `_IOW('S', 29, int)`). Zero disables the guard; nonzero
+enables it when the proc-attribute write proxy is available.
+An unavailable guard rejects enable requests with `EOPNOTSUPP`.
+
+Kagami persists `enable_selinux_fix`, defaulting to false. Manager exposes an
+independent SELinux Guard switch; `ksud kagami kasumi selinux-fix on|off`
+changes the runtime state. On older kernels without the capability, leaving
+the guard disabled remains compatible with other feature settings.
+
+The Android `android_vh_check_file_open` hook installs a shared `.write`
+proxy on newly opened writable proc `attr/current` files. With Guard enabled,
+SPOOF callers, including isolated app processes, receive bounded padding for
+zero-length writes or inputs whose first byte is NUL or LF. The proxy peeks
+one byte without faulting, then calls the original writer once with the
+original arguments. A failed peek or a nonzero offset bypasses padding.
+Padding runs only after the original writer returns `EINVAL`; successful
+writes and other errors receive no padding. The original handlers retain
+all permission checks and return values. The selinuxfs `access` and `context`
+hooks remain passthrough. Kasumi leaves `status` file operations untouched
+so SELinux Hide retains control of its `.open` callback lifetime.
+
+The module parameter `kasumi_guard_pad_ns` defaults to 1000 ns and is capped
+at 2000 ns; zero disables padding. Each wait uses a monotonic deadline and
+at most 256 iterations, and stops on a rescheduling request. Interrupts and
+preemption remain enabled, so this is not an upper bound on total wall time.
+`GET_HOOKS` reports proxy availability, effective budget, placement, and
+`spins`, the number of waits that executed at least one loop iteration.
+
+The proxy is installed independently of the feature switch, so writes on an
+already proxied FD observe later switch changes. FDs opened before hook
+registration are not covered. The nofault peek and the original user copy
+are separate reads, so their contents may differ. This is experimental
+compensation, not a guarantee that timing differences disappear on every device.
+
 ## Mount hiding and reserved slots
 
 Mount hiding now has one behavior, the former normal mode. Its existing

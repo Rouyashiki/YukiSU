@@ -102,6 +102,7 @@ internal fun SettingsTab(
                 FeatureToggle("maps_spoof", R.string.kasumi_maps_spoof, R.string.kasumi_maps_spoof_desc, config.enableMapsSpoof) { config.copy(enableMapsSpoof = it) },
                 FeatureToggle("overlay_xattr_hide", R.string.kasumi_overlay_xattr, R.string.kasumi_overlay_xattr_desc, config.enableOverlayXattrHide) { config.copy(enableOverlayXattrHide = it) },
                 FeatureToggle("statfs_spoof", R.string.kasumi_statfs_spoof, R.string.kasumi_statfs_spoof_desc, config.enableStatfsSpoof) { config.copy(enableStatfsSpoof = it) },
+                FeatureToggle("selinux_fix", R.string.kasumi_selinux_guard, R.string.kasumi_selinux_guard_desc, config.enableSelinuxFix) { config.copy(enableSelinuxFix = it) },
             )
             toggles.forEach { toggle ->
                 val supported = features?.names?.contains(toggle.capability) == true

@@ -63,6 +63,7 @@ bool clear_overlay_xattr_hiding();
 bool set_mount_hide(bool enable);
 bool set_maps_spoof(bool enable);
 bool set_statfs_spoof(bool enable);
+bool set_selinux_fix(bool enable);
 bool clear_rules();
 bool add_rule(const std::string& target, const std::string& source, int type);
 bool add_merge_rule(const std::string& target, const std::string& source, int flags = 0);

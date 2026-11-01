@@ -117,6 +117,37 @@ ACK 零成功且不做修改；尚未发出的未来序号返回 `EINVAL`，不�
 Manager 保留已显示的快照，直到用户确认且 ACK 成功。返回键和点击弹窗外部不能关闭
 警告；确认失败保留警告并允许重试。未知类型显示通用冲突提示。
 
+## SELinux Guard
+
+SELinux Guard 沿用独立 Kasumi 的能力位 10（`KSM_FEATURE_SELINUX_FIX`，
+名称 `selinux_fix`）和命令 29（`KSM_IOC_SELINUX_FIX`，`_IOW('S', 29, int)`）。
+传入零关闭，非零开启；proc 属性写入代理可用时才能开启，
+不可用时返回 `EOPNOTSUPP`。
+
+Kagami 通过 `enable_selinux_fix` 保存配置，默认关闭。管理器提供独立的
+SELinux Guard 开关，`ksud kagami kasumi selinux-fix on|off` 可修改运行状态。
+旧内核不支持该能力时不能开启，保持关闭则仍可正常应用其他配置。
+
+Android 的 `android_vh_check_file_open` hook 为新打开的可写 proc
+`attr/current` 文件安装共享 `.write` 代理。开启 Guard 后，对 SPOOF 范围
+内的调用者（包括 isolated app 进程），仅为零长度或首字节为 NUL、LF 的
+输入补时。非空输入通过无缺页预读读取一个字节；预读失败或偏移非零时
+跳过补时。原写入函数始终以原始参数调用一次，仅在它返回 `EINVAL` 后
+补时，成功写入和其他错误不补时；权限检查和返回结果仍由它负责。
+selinuxfs 的 `access`、`context` 入口继续透传。Kasumi 不替换 `status`
+的文件操作表，其 `.open` 回调生命周期由 SELinux Hide 自身管理。
+
+模块参数 `kasumi_guard_pad_ns` 默认 1000 ns，有效预算最高 2000 ns，
+设为零可关闭补时。每次等待使用单调时钟截止点，最多循环 256 次，出现
+调度请求时退出。保留中断和抢占，因此该预算不是整次调用墙钟耗时的上限。
+`GET_HOOKS` 显示代理状态、有效预算、
+补时位置和 `spins`（至少执行过一次循环的等待次数）。
+
+代理安装与 Guard 开关独立，已代理 FD 的后续写入会读取最新开关状态；
+hook 注册前已打开的 FD 不覆盖。预读和原函数复制用户缓冲区是两次读取，
+其间内容仍可能变化。本功能属于实验性补偿，不能保证所有设备上的
+时序差异都消失。
+
 ## 挂载隐藏与保留编号
 
 挂载隐藏仅保留原普通模式。`KSM_IOC_SET_MOUNT_HIDE` 的命令编号 25 和结构保持不变；

@@ -114,6 +114,8 @@
     <string name="kasumi_saved_apply_failed">已保存，但内核应用失败：%1$s</string>
     <string name="kasumi_saved_reboot">已保存，挂载后端在重启后生效</string>
     <string name="kasumi_statfs_spoof">Statfs 伪装</string>
+    <string name="kasumi_selinux_guard">SELinux Guard</string>
+    <string name="kasumi_selinux_guard_desc">对 SELinux context 写入进行有界时序补偿（实验性）</string>
     <string name="kasumi_statfs_spoof_desc">映射文件系统类型信息</string>
     <string name="kasumi_stats_kasumi">Kasumi</string>
     <string name="kasumi_status_available">可用</string>

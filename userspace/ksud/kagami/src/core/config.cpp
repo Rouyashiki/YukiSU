@@ -73,6 +73,7 @@ std::string default_config_json() {
   "enable_mount_hide": false,
   "enable_maps_spoof": false,
   "enable_statfs_spoof": false,
+  "enable_selinux_fix": false,
   "kasumi_enabled": true,
   "overlayfs_enabled": true,
   "magic_mount_enabled": true,
@@ -247,6 +248,8 @@ bool parse_config_json(const std::string& json, Config& config, std::string& err
     config.enable_maps_spoof = json_bool_or(&root, "enable_maps_spoof", config.enable_maps_spoof);
     config.enable_statfs_spoof =
         json_bool_or(&root, "enable_statfs_spoof", config.enable_statfs_spoof);
+    config.enable_selinux_fix =
+        json_bool_or(&root, "enable_selinux_fix", config.enable_selinux_fix);
     config.overlayfs_enabled = json_bool_or(&root, "overlayfs_enabled", config.overlayfs_enabled);
     config.magic_mount_enabled =
         json_bool_or(&root, "magic_mount_enabled", config.magic_mount_enabled);

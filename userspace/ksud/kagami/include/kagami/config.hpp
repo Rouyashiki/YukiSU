@@ -27,6 +27,7 @@ struct Config {
     bool enable_mount_hide = false;
     bool enable_maps_spoof = false;
     bool enable_statfs_spoof = false;
+    bool enable_selinux_fix = false;
     bool overlayfs_enabled = true;
     bool magic_mount_enabled = true;
     std::string mount_backend = "auto";

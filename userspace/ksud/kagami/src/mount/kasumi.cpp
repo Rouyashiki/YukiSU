@@ -296,6 +296,7 @@ bool disable_kernel_features(std::string* error = nullptr) {
     disable(::kagami::kasumi::set_mount_hide(false), "mount hide");
     disable(::kagami::kasumi::set_maps_spoof(false), "maps spoof");
     disable(::kagami::kasumi::set_statfs_spoof(false), "statfs spoof");
+    disable(::kagami::kasumi::set_selinux_fix(false), "SELinux Guard");
     return ok;
 }
 
@@ -305,6 +306,7 @@ bool apply_feature_config(const Config& config, std::string& error) {
     mlog("apply features: mount_hide=" + std::to_string(config.enable_mount_hide) +
          " maps=" + std::to_string(config.enable_maps_spoof) +
          " statfs=" + std::to_string(config.enable_statfs_spoof) +
+         " selinux_guard=" + std::to_string(config.enable_selinux_fix) +
          " overlay_xattrs=" + std::to_string(config.enable_overlay_xattr_hide));
     bool ok = true;
     const auto apply = [&](bool result, const char* name) {
@@ -321,6 +323,7 @@ bool apply_feature_config(const Config& config, std::string& error) {
     apply(::kagami::kasumi::set_mount_hide(config.enable_mount_hide), "mount hide");
     apply(::kagami::kasumi::set_maps_spoof(config.enable_maps_spoof), "maps spoof");
     apply(::kagami::kasumi::set_statfs_spoof(config.enable_statfs_spoof), "statfs spoof");
+    apply(::kagami::kasumi::set_selinux_fix(config.enable_selinux_fix), "SELinux Guard");
     if (!ok) {
         (void)disable_kernel_features();
     }
