@@ -1559,10 +1559,11 @@ private fun patchBootImage(
     }
     if (!bootConfig.noInstall) cmd += " --kmi ${shellArg(targetKmi)}"
 
-    // output dir
-    val downloadsDir =
-        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    cmd += " -o ${shellArg(downloadsDir.absolutePath)}"
+    if (bootFile != null) {
+        val downloadsDir =
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        cmd += " -o ${shellArg(downloadsDir.absolutePath)}"
+    }
 
     partition?.let { part ->
         cmd += " --partition ${shellArg(part)}"
