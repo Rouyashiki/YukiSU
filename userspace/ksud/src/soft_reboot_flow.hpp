@@ -67,6 +67,7 @@ struct SoftRebootResult {
     SoftRebootStage failed_stage = SoftRebootStage::Scripts;
     bool recovery_started = false;
     bool recovery_services = false;
+    bool recovery_deferred = false;
 };
 
 inline SoftRebootResult run_soft_reboot_flow(const SoftRebootActions& actions) {
@@ -97,10 +98,11 @@ inline SoftRebootResult run_soft_reboot_flow(const SoftRebootActions& actions) {
                 actions.restore_boot_flag();
             if (rebuilding && !start_attempted && actions.cleanup_confirmed())
                 actions.rollback();
-            const bool recovered = stop_attempted && !started && actions.recover_start();
+            const bool recovered = stop_attempted && !started && actions.cleanup_confirmed() &&
+                                   actions.recover_start();
             const bool services = scripts_attempted && (!stop_attempted || recovered) &&
                                   actions.cleanup_confirmed() && actions.recover_services();
-            return {false, stage, recovered, services};
+            return {false, stage, recovered, services, !actions.cleanup_confirmed()};
         }
         if (stage == SoftRebootStage::Start)
             started = true;

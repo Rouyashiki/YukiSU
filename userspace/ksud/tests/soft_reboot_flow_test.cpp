@@ -18,7 +18,10 @@ int main() {
     for (std::size_t failure = 0; failure <= stages.size(); ++failure) {
         for (const bool confirmed : {false, true}) {
             std::vector<SoftRebootStage> called;
-            int rollbacks = 0, starts = 0, flag_restores = 0, service_restores = 0;
+            int rollbacks = 0;
+            int starts = 0;
+            int flag_restores = 0;
+            int service_restores = 0;
             ksud::SoftRebootActions actions;
             actions.run = [&](SoftRebootStage stage) {
                 called.push_back(stage);
@@ -44,10 +47,11 @@ int main() {
                 assert(result.failed_stage == stages[failure]);
             // A partially started Android must never lose its mounts to rollback.
             assert(rollbacks == (confirmed && (failure == 6 || failure == 7) ? 1 : 0));
-            assert(starts == (failure >= 3 && failure <= 8 ? 1 : 0));
+            assert(starts == (confirmed && failure >= 3 && failure <= 8 ? 1 : 0));
             assert(flag_restores == (failure == 1 || failure == 2 ? 1 : 0));
             assert(service_restores == (confirmed && failure >= 2 && failure <= 8 ? 1 : 0));
             assert(result.recovery_services == (service_restores == 1));
+            assert(result.recovery_deferred == (!confirmed && failure < stages.size()));
         }
     }
     ksud::SoftRebootActions broken_start;
@@ -72,6 +76,25 @@ int main() {
     assert(!service_failure.ok && service_failure.recovery_started);
     assert(!service_failure.recovery_services);
     assert(service_failure.failed_stage == SoftRebootStage::Rebuild);
+
+    bool confirmed = true;
+    int rollback_calls = 0;
+    failed_service.rollback = [&] {
+        ++rollback_calls;
+        confirmed = false;
+    };
+    failed_service.cleanup_confirmed = [&] { return confirmed; };
+    failed_service.recover_start = [] {
+        assert(false);
+        return true;
+    };
+    failed_service.recover_services = [] {
+        assert(false);
+        return true;
+    };
+    const auto uncertain_rollback = ksud::run_soft_reboot_flow(failed_service);
+    assert(rollback_calls == 1 && uncertain_rollback.recovery_deferred);
+    assert(!uncertain_rollback.recovery_started && !uncertain_rollback.recovery_services);
     std::cout
         << "soft reboot flow: all stage failures, uncertain operations, and recovery passed\n";
 }

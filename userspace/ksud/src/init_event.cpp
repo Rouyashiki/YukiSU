@@ -736,7 +736,10 @@ int soft_reboot() {
     } else {
         error = std::string("failed during ") + soft_reboot_stage_name(result.failed_stage) +
                 (error.empty() ? "" : ": " + error);
-        (void)reboot::record(soft_reboot_stage_name(result.failed_stage), "failed", error, pending);
+        if (result.recovery_deferred)
+            error += "; controller completion unconfirmed; recovery deferred to the controller";
+        (void)reboot::record(soft_reboot_stage_name(result.failed_stage),
+                             result.recovery_deferred ? "accepted" : "failed", error, pending);
         LOGE("Soft reboot: %s", error.c_str());
     }
     reboot::release();

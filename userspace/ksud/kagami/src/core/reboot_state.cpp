@@ -147,7 +147,8 @@ bool recover_abandoned(
         recovery_error = "cannot authorize soft reboot recovery";
     current = state();
     current["result"] = "failed";
-    current["error"] = "coordinator exited during " + phase +
+    const auto failure = current.at("error").string_or("");
+    current["error"] = (failure.empty() ? "coordinator exited during " + phase : failure) +
                        (recovered ? "" : "; recovery failed: " + recovery_error);
     const bool written = ksud::write_file_atomic(state_file(), stringify_json(current) + "\n");
     release();

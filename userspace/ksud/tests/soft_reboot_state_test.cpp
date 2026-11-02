@@ -172,7 +172,7 @@ int main() {
     }
     int status;
     assert(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
-    assert(reboot::record("rebuild", "accepted"));
+    assert(reboot::record("rebuild", "accepted", "controller completion unconfirmed"));
     reboot::release();
     assert(!reboot::active());
     int recovery = 0;
@@ -199,6 +199,7 @@ int main() {
         return true;
     }));
     assert(recovery == 1 && reboot::state().at("result").s == "failed");
+    assert(reboot::state().at("error").s == "controller completion unconfirmed");
     assert(!reboot::active() && !reboot::authorized() && reboot::client_token().empty());
     assert(reboot::state().at("services_started").bool_or(false));
     assert(reboot::claim_services(error) == -1);

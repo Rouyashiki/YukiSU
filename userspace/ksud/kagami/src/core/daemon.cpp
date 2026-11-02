@@ -1,4 +1,5 @@
 #include "core/daemon.hpp"
+#include "core/request_completion.hpp"
 #include "core/socket_output.hpp"
 #include "init_event.hpp"
 #include "terminal.hpp"
@@ -180,7 +181,9 @@ int open_client_socket(std::string& error, int timeout_seconds) {
 }
 
 int send_request(const std::vector<std::string>& args, std::size_t start, std::string& response,
-                 std::string& error, int timeout_seconds = 0) {
+                 std::string& error, int timeout_seconds = 0, bool* completed = nullptr) {
+    if (completed)
+        *completed = true;
     const auto token = reboot::client_token();
     if (timeout_seconds <= 0 && !token.empty())
         timeout_seconds = 180;
@@ -188,20 +191,32 @@ int send_request(const std::vector<std::string>& args, std::size_t start, std::s
     if (fd < 0) {
         return 1;
     }
+    if (completed)
+        *completed = false;
     std::vector<std::string> request(args.begin() + static_cast<std::ptrdiff_t>(start), args.end());
     if (!token.empty())
         request.insert(request.begin(), {"@soft-reboot", token});
-    if (!write_all(fd, join_request(request, 0))) {
+    const bool sent = write_all(fd, join_request(request, 0));
+    if (!sent)
         error = std::strerror(errno);
-        close(fd);
-        return 2;
-    }
     shutdown(fd, SHUT_WR);
-    const bool complete = read_all(fd, 1024UL * 1024, response);
-    if (!complete)
+    const bool received = sent && read_all(fd, 1024UL * 1024, response);
+    if (sent && !received)
         error = std::strerror(errno);
+    bool settled = true;
+    if (!token.empty()) {
+        if (!received)
+            std::cerr << "Waiting for mount controller completion after RPC failure: " << error
+                      << '\n';
+        settled = daemon_protocol::wait_for_request_completion(fd);
+        if (completed)
+            *completed = settled;
+        if (!settled)
+            error += "; cannot confirm mount controller completion: " +
+                     std::string(std::strerror(errno));
+    }
     close(fd);
-    return complete ? 0 : 2;
+    return received && settled ? 0 : 2;
 }
 
 bool daemon_running() {
@@ -392,6 +407,8 @@ int serve_foreground(int ready_fd = -1) {
             continue;
         }
 
+        // Mount workers inherit client_fd. Keep its peer alive until every
+        // synchronous worker has finished, including when this daemon exits.
         const auto result = run_command_capture(request_args, capture);
         reboot::set_request_token({});
         send_response(client_fd, result.exit_code == 0, result.exit_code, result.error_number,
@@ -478,10 +495,10 @@ int run_via_daemon(const std::vector<std::string>& args, bool display_errors) {
 
     std::string response;
     std::string error;
-    int request_status = send_request(args, 0, response, error);
+    int request_status = send_request(args, 0, response, error, 0, &request_completed);
     if (request_status == 1) {
         if (start_background(false) == 0)
-            request_status = send_request(args, 0, response, error);
+            request_status = send_request(args, 0, response, error, 0, &request_completed);
     }
     if (request_status != 0) {
         if (display_errors)

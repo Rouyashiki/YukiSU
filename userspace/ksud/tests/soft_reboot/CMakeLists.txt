@@ -30,3 +30,10 @@ target_compile_options(soft_reboot_boundary_test PRIVATE -UNDEBUG -include linux
     -ffunction-sections -fdata-sections)
 target_link_options(soft_reboot_boundary_test PRIVATE -Wl,--gc-sections)
 add_test(NAME soft_reboot_boundaries COMMAND soft_reboot_boundary_test)
+
+find_package(Threads REQUIRED)
+add_executable(soft_reboot_request_test ../soft_reboot_request_test.cpp)
+target_compile_options(soft_reboot_request_test PRIVATE -UNDEBUG)
+target_link_libraries(soft_reboot_request_test PRIVATE Threads::Threads)
+add_test(NAME soft_reboot_requests COMMAND soft_reboot_request_test)
+set_tests_properties(soft_reboot_requests PROPERTIES TIMEOUT 10)
