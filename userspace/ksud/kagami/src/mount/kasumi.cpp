@@ -444,7 +444,7 @@ bool restore_persisted_hide_rules(std::string& error, bool before_start) {
 bool verify_persisted_hide_rules(int& pending, std::string& error) {
     pending = 0;
     Config config;
-    if (!read_config_file(config, error))
+    if (!read_config_file(config, error, MissingConfig::UseDefaults))
         return false;
     if (!config.kasumi_enabled)
         return true;

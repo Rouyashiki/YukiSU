@@ -167,16 +167,12 @@ bool check_support(std::string& error) {
         return false;
     }
     Config config;
-    std::error_code ec;
-    const bool configured = std::filesystem::exists(runtime_config_file(), ec);
-    if (ec || (configured && !read_config_file(config, error))) {
-        if (error.empty())
-            error = "cannot read saved mount configuration";
+    if (!read_config_file(config, error, MissingConfig::UseDefaults))
         return false;
-    }
     if (!saved_rules_readable(error))
         return false;
     ksud::GetFeatureCmd feature = {KSU_FEATURE_KASUMI, 0, 0};
+    std::error_code ec;
     if (std::filesystem::exists(runtime_data_dir() / "run" / "mount_disabled", ec) || ec) {
         error = "module mounting is disabled by bootloop protection or its state is unreadable";
         return false;

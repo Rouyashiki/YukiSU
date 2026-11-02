@@ -1030,7 +1030,8 @@ int handle_module(const std::vector<std::string>& args) {
         }
         Config config;
         std::string cfg_err;
-        if (!read_config_file(config, cfg_err) && reboot::authorized()) {
+        if (!read_config_file(config, cfg_err, MissingConfig::UseDefaults) &&
+            reboot::authorized()) {
             std::cerr << cfg_err << '\n';
             return 1;
         }
@@ -1314,7 +1315,7 @@ int run_command(const std::vector<std::string>& args) {
             return 1;
         }
         Config config;
-        if (!read_config_file(config, error) && errno != ENOENT) {
+        if (!read_config_file(config, error, MissingConfig::UseDefaults)) {
             std::cerr << error << '\n';
             return 1;
         }

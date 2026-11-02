@@ -259,10 +259,16 @@ bool parse_config_json(const std::string& json, Config& config, std::string& err
     return true;
 }
 
-bool read_config_file(Config& config, std::string& error) {
+bool read_config_file(Config& config, std::string& error, MissingConfig missing) {
+    error.clear();
     const auto input = ksud::read_file(runtime_config_file().string());
     if (!input) {
-        error = "read config: " + std::string(std::strerror(errno));
+        const int read_error = errno;
+        if (read_error == ENOENT && missing == MissingConfig::UseDefaults) {
+            config = Config{};
+            return true;
+        }
+        error = "read config: " + std::string(std::strerror(read_error));
         return false;
     }
     return parse_config_json(*input, config, error);

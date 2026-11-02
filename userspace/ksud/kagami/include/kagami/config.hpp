@@ -40,7 +40,9 @@ void prune_config_fields(json::Value& config);
 bool validate_config_patch(const json::Value& patch, std::string& error);
 bool write_default_config(std::string& error);
 bool parse_config_json(const std::string& json, Config& config, std::string& error);
-bool read_config_file(Config& config, std::string& error);
+enum class MissingConfig { Error, UseDefaults };
+bool read_config_file(Config& config, std::string& error,
+                      MissingConfig missing = MissingConfig::Error);
 bool merge_config_json(const std::string& updates, std::string& error);
 
 }  // namespace kagami

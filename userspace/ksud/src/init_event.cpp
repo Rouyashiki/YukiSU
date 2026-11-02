@@ -518,6 +518,11 @@ int on_boot_completed() {
     namespace reboot = kagami::reboot;
     if (reboot::active() && !reboot::authorized())
         return 0;
+    std::string error;
+    if (!kagami::prepare_runtime(error)) {
+        LOGE("Cannot prepare boot-completed state: %s", error.c_str());
+        return 1;
+    }
     const auto marker = kagami::runtime_data_dir() / "run" / "boot_completed_cycle";
     if (reboot::marker_matches_cycle(marker)) {
         std::ifstream saved(marker);

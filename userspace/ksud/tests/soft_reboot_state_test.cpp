@@ -69,7 +69,8 @@ bool prepare_runtime(std::string&) {
     std::filesystem::create_directories(root / "run");
     return true;
 }
-bool read_config_file(Config& config, std::string&) {
+bool read_config_file(Config& config, [[maybe_unused]] std::string& error,
+                      [[maybe_unused]] MissingConfig missing) {
     config.kasumi_enabled = configured_kasumi;
     return true;
 }
