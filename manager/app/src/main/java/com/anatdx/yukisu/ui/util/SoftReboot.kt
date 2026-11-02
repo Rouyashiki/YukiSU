@@ -31,6 +31,7 @@ data class SoftRebootStatus(
     val result: String = "",
     val error: String = "",
     val pending: Int = 0,
+    val rebootId: String = "",
 )
 
 var softRebootStatus by mutableStateOf(SoftRebootStatus())
@@ -49,6 +50,7 @@ private suspend fun querySoftRebootStatus(): SoftRebootStatus = withContext(Disp
             result = last.optString("result"),
             error = last.optString("error"),
             pending = last.optInt("pending"),
+            rebootId = "${last.optString("boot_id")}:${last.optLong("pid")}",
         )
     }.getOrElse { SoftRebootStatus(known = true) }
 }

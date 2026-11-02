@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -54,6 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.InstallScreenDestination
@@ -86,6 +90,7 @@ import com.anatdx.yukisu.ui.util.checkNewVersion
 import com.anatdx.yukisu.ui.util.isSoftRebootBlockedByKasumi
 import com.anatdx.yukisu.ui.util.refreshSoftRebootStatus
 import com.anatdx.yukisu.ui.util.softRebootResultMessage
+import com.anatdx.yukisu.ui.util.softRebootStatus
 import com.anatdx.yukisu.ui.util.module.LatestVersionInfo
 import com.anatdx.yukisu.ui.util.reboot
 import com.anatdx.yukisu.ui.viewmodel.HomeViewModel
@@ -97,8 +102,11 @@ import com.anatdx.yukisu.ui.activity.util.AppData
 import com.anatdx.yukisu.update.CiUpdateCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val SOFT_REBOOT_COMPLETED_NOTICE = "soft_reboot_completed_notice"
 
 /**
  * @author ShirkNeko
@@ -329,9 +337,7 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                     )
 
                     CiUpdateCard()
-                    softRebootResultMessage(context)?.let { message ->
-                        WarningCard(message, color = MaterialTheme.colorScheme.secondaryContainer)
-                    }
+                    SoftRebootStatusCard()
 
                     if (ksudIntegrityStatus == KsudIntegrityStatus.MISMATCH) {
                         WarningCard(stringResource(R.string.ksud_integrity_warning))
@@ -874,6 +880,52 @@ private fun StatusCard(
                 }
 
             }
+        }
+    }
+}
+
+@Composable
+private fun SoftRebootStatusCard() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val preferences = remember(context) {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    }
+    var dismissedId by remember(preferences) {
+        mutableStateOf(preferences.getString(SOFT_REBOOT_COMPLETED_NOTICE, null))
+    }
+    val status = softRebootStatus
+    val message = softRebootResultMessage(context)
+    val completedId = status.rebootId.takeIf { !status.running && status.result == "completed" }
+    val visible = message != null && (completedId == null || completedId != dismissedId)
+    val timeout = LocalAccessibilityManager.current?.calculateRecommendedTimeoutMillis(
+        originalTimeoutMillis = 5_000L,
+        containsText = true,
+    ) ?: 5_000L
+
+    LaunchedEffect(completedId, visible, timeout, lifecycleOwner) {
+        if (completedId != null && visible) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                delay(timeout)
+                preferences.edit { putString(SOFT_REBOOT_COMPLETED_NOTICE, completedId) }
+                dismissedId = completedId
+            }
+        }
+    }
+    LaunchedEffect(status.running, status.result, lifecycleOwner) {
+        if (status.running || status.result == "completed_pending") {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (isActive) {
+                    delay(2_000L)
+                    refreshSoftRebootStatus()
+                }
+            }
+        }
+    }
+
+    YukiExpandableContent(visible = visible) {
+        message?.let {
+            WarningCard(it, color = MaterialTheme.colorScheme.secondaryContainer)
         }
     }
 }
