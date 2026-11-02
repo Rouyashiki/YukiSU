@@ -58,13 +58,14 @@ int metamodule_init() {
     return 0;
 }
 
-int metamodule_exec_stage_script(const std::string& stage, ScriptWait wait) {
+int metamodule_exec_stage_script(const std::string& stage, ScriptWait wait, std::string* error) {
     std::string module_id;
     const std::string script = get_enabled_metamodule_script_path(stage + ".sh", &module_id);
-    return run_script(script, wait, module_id);
+    return run_script(script, wait, module_id, nullptr, nullptr, false,
+                      ScriptExitPolicy::ObserveExit, error);
 }
 
-int metamodule_exec_mount_script() {
+int metamodule_exec_mount_script(std::string* error) {
     std::string module_id;
     const std::string script =
         get_enabled_metamodule_script_path(METAMODULE_MOUNT_SCRIPT, &module_id);
@@ -79,7 +80,8 @@ int metamodule_exec_mount_script() {
 
     LOGI("External metamodule found, executing metamount.sh: %s", script.c_str());
     kagami::embedded_mount_skipped("external metamodule " + module_id);
-    const int ret = run_script(script, ScriptWait::forever(), module_id, "MODULE_DIR", MODULE_DIR);
+    const int ret = run_script(script, ScriptWait::forever(), module_id, "MODULE_DIR", MODULE_DIR,
+                               false, ScriptExitPolicy::RequireSuccess, error);
 
     if (ret == 0) {
         LOGI("External metamodule mount script executed successfully");

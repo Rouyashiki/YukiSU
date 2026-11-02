@@ -1361,7 +1361,8 @@ int handle_updated_modules() {
     const std::string update_dir = std::string(ADB_DIR) + "modules_update/";
     DIR* dir = opendir(update_dir.c_str());
     if (!dir)
-        return 0;
+        return errno == ENOENT ? 0 : 1;
+    int result = 0;
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
@@ -1382,24 +1383,29 @@ int handle_updated_modules() {
             if (remove_error) {
                 LOGW("Failed to remove old module %s: %s", dst.c_str(),
                      remove_error.message().c_str());
+                result = 1;
+                continue;
             }
         }
 
         // Move updated module
         if (rename(src.c_str(), dst.c_str()) == 0) {
             if (removed) {
-                ensure_file_exists(dst + "/" + REMOVE_FILE_NAME);
+                if (!ensure_file_exists(dst + "/" + REMOVE_FILE_NAME))
+                    result = 1;
             } else if (disabled) {
-                ensure_file_exists(dst + "/" + DISABLE_FILE_NAME);
+                if (!ensure_file_exists(dst + "/" + DISABLE_FILE_NAME))
+                    result = 1;
             }
             LOGI("Updated module: %s", entry->d_name);
         } else {
             LOGE("Failed to update module: %s", entry->d_name);
+            result = 1;
         }
     }
 
     closedir(dir);
-    return 0;
+    return result;
 }
 
 namespace {
@@ -1466,9 +1472,31 @@ private:
 }  // namespace
 
 int run_script(const std::string& script, ScriptWait wait, const std::string& module_id,
-               const char* extra_env_name, const char* extra_env_value, bool hot_install) {
+               const char* extra_env_name, const char* extra_env_value, bool hot_install,
+               ScriptExitPolicy exit_policy, std::string* error) {
     if (!file_exists(script))
         return 0;
+
+    const auto fail = [&](const char* action, int code) {
+        const std::string message = std::string(action) + " " + script + ": " + strerror(code);
+        LOGE("%s", message.c_str());
+        if (error && error->empty())
+            *error = message;
+        return -1;
+    };
+    const auto completed = [&](int status) {
+        const int result = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        if (result != 0) {
+            const std::string message =
+                script + (WIFEXITED(status) ? " exited with status " : " terminated by signal ") +
+                std::to_string(WIFEXITED(status) ? WEXITSTATUS(status) : WTERMSIG(status));
+            LOGW("%s", message.c_str());
+            if (exit_policy == ScriptExitPolicy::RequireSuccess && error && error->empty())
+                *error = message;
+        }
+        // KernelSU boot stages wait for completion without requiring a zero exit status.
+        return exit_policy == ScriptExitPolicy::ObserveExit ? 0 : result;
+    };
 
     LOGI("Running script: %s", script.c_str());
 
@@ -1497,20 +1525,15 @@ int run_script(const std::string& script, ScriptWait wait, const std::string& mo
     const char* extra_env_value_cstr = extra_env_value;
 
     SigchldBlock sigchld;
-    if (!sigchld.block()) {
-        LOGE("Failed to block SIGCHLD for script %s: %s", script.c_str(), strerror(errno));
-        return -1;
-    }
+    if (!sigchld.block())
+        return fail("Cannot block SIGCHLD for", errno);
 
     // Rust's Command::spawn waits for pre_exec and exec through an internal
     // CLOEXEC error pipe. Mirror that behavior: the parent must not return to
     // init until the child has detached, switched cgroups, and entered exec.
     int exec_status_pipe[2] = {-1, -1};
-    if (pipe2(exec_status_pipe, O_CLOEXEC) != 0) {
-        LOGE("Failed to create exec status pipe for script %s: %s", script.c_str(),
-             strerror(errno));
-        return -1;
-    }
+    if (pipe2(exec_status_pipe, O_CLOEXEC) != 0)
+        return fail("Cannot create exec status pipe for", errno);
 
     const pid_t pid = fork();
     if (pid == 0) {
@@ -1584,12 +1607,12 @@ int run_script(const std::string& script, ScriptWait wait, const std::string& mo
         _exit(127);
     }
 
+    const int fork_error = errno;
     close(exec_status_pipe[1]);
 
     if (pid < 0) {
         close(exec_status_pipe[0]);
-        LOGE("Failed to fork for script: %s", script.c_str());
-        return -1;
+        return fail("Cannot fork for", fork_error);
     }
 
     int child_errno = 0;
@@ -1597,34 +1620,30 @@ int run_script(const std::string& script, ScriptWait wait, const std::string& mo
     do {
         received = read(exec_status_pipe[0], &child_errno, sizeof(child_errno));
     } while (received < 0 && errno == EINTR);
+    const int receive_error = errno;
     close(exec_status_pipe[0]);
 
     if (received > 0) {
         int ignored_status;
         while (waitpid(pid, &ignored_status, 0) < 0 && errno == EINTR) {
         }
-        LOGE("Failed to exec script %s: %s", script.c_str(), strerror(child_errno));
-        return -1;
+        return fail("Cannot exec", child_errno);
     }
-    if (received < 0) {
-        LOGE("Failed to receive exec status for script %s: %s", script.c_str(), strerror(errno));
-        return -1;
-    }
+    if (received < 0)
+        return fail("Cannot receive exec status for", receive_error);
 
     if (wait.mode == ScriptWait::Mode::Until) {
         if (wait.deadline <= std::chrono::steady_clock::now())
             return 0;
         int status = 0;
         const int result = sigchld.wait_until(pid, wait.deadline, status);
-        if (result < 0) {
-            LOGE("Failed to wait for script %s: %s", script.c_str(), strerror(errno));
-            return -1;
-        }
+        if (result < 0)
+            return fail("Cannot wait for", errno);
         if (result == 0) {
             LOGW("Timed out waiting for script: %s", script.c_str());
             return hot_install ? ETIMEDOUT : 0;
         }
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return completed(status);
     }
 
     if (wait.mode == ScriptWait::Mode::Forever) {
@@ -1633,20 +1652,22 @@ int run_script(const std::string& script, ScriptWait wait, const std::string& mo
         do {
             waited = waitpid(pid, &status, 0);
         } while (waited < 0 && errno == EINTR);
-        if (waited < 0) {
-            LOGE("Failed to wait for script %s: %s", script.c_str(), strerror(errno));
-            return -1;
-        }
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        if (waited < 0)
+            return fail("Cannot wait for", errno);
+        return completed(status);
     }
 
     return 0;
 }
 
-int exec_stage_script(const std::string& stage, ScriptWait wait) {
+int exec_stage_script(const std::string& stage, ScriptWait wait, std::string* error) {
     DIR* dir = opendir(MODULE_DIR);
-    if (!dir)
-        return 0;
+    if (!dir) {
+        if (errno != ENOENT && error && error->empty())
+            *error = std::string("Cannot enumerate modules for ") + stage + ": " + strerror(errno);
+        return errno == ENOENT ? 0 : 1;
+    }
+    int result = 0;
 
     const std::string metamodule_id = get_metamodule_id_impl();
     struct dirent* entry;
@@ -1677,18 +1698,24 @@ int exec_stage_script(const std::string& stage, ScriptWait wait) {
         script += "/";
         script += stage;
         script += ".sh";
-        run_script(script, wait, module_id);
+        if (run_script(script, wait, module_id, nullptr, nullptr, false,
+                       ScriptExitPolicy::ObserveExit, error) != 0)
+            result = 1;
     }
 
     closedir(dir);
-    return 0;
+    return result;
 }
 
-int exec_common_scripts(const std::string& stage_dir, ScriptWait wait) {
+int exec_common_scripts(const std::string& stage_dir, ScriptWait wait, std::string* error) {
     const std::string dir_path = std::string(ADB_DIR) + stage_dir + "/";
     DIR* dir = opendir(dir_path.c_str());
-    if (!dir)
-        return 0;
+    if (!dir) {
+        if (errno != ENOENT && error && error->empty())
+            *error = "Cannot enumerate " + dir_path + ": " + strerror(errno);
+        return errno == ENOENT ? 0 : 1;
+    }
+    int result = 0;
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
@@ -1698,11 +1725,13 @@ int exec_common_scripts(const std::string& stage_dir, ScriptWait wait) {
         if (access(script.c_str(), X_OK) != 0)
             continue;
 
-        run_script(script, wait);
+        if (run_script(script, wait, "", nullptr, nullptr, false, ScriptExitPolicy::ObserveExit,
+                       error) != 0)
+            result = 1;
     }
 
     closedir(dir);
-    return 0;
+    return result;
 }
 
 int load_sepolicy_rule() {

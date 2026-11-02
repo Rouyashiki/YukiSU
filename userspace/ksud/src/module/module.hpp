@@ -50,11 +50,16 @@ struct ScriptWait {
     }
 };
 
+enum class ScriptExitPolicy { RequireSuccess, ObserveExit };
+
 int run_script(const std::string& script, ScriptWait wait, const std::string& module_id = "",
                const char* extra_env_name = nullptr, const char* extra_env_value = nullptr,
-               bool hot_install = false);
-int exec_stage_script(const std::string& stage, ScriptWait wait);
-int exec_common_scripts(const std::string& stage_dir, ScriptWait wait);
+               bool hot_install = false,
+               ScriptExitPolicy exit_policy = ScriptExitPolicy::RequireSuccess,
+               std::string* error = nullptr);
+int exec_stage_script(const std::string& stage, ScriptWait wait, std::string* error = nullptr);
+int exec_common_scripts(const std::string& stage_dir, ScriptWait wait,
+                        std::string* error = nullptr);
 int load_sepolicy_rule();
 int load_system_prop();
 
