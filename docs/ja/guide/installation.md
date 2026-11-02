@@ -6,7 +6,7 @@
 
 [KernelSU ドキュメント - LKM インストール](https://kernelsu.org/guide/installation.html#lkm-installation) を参照してください。
 
-Android 12 以降、カーネルバージョン 5.10 以上を搭載するデバイスは GKI カーネルを使用する必要があります。そのため、LKM モードを使用できる可能性があります。
+LKM モードには `arm64-v8a` の GKI 2.0 カーネル（5.10+）と、デバイスの KMI に一致するモジュールが必要です。Android のバージョンだけでは互換性を判断できません。マネージャーには Android 12（API 31）以降が必要です。
 
 ## カーネルのインストールによる導入
 

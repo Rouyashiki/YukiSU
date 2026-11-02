@@ -6,7 +6,7 @@
 
 请参阅 [KernelSU 文档 - LKM 安装](https://kernelsu.org/guide/installation.html#lkm-installation)
 
-从 Android 12 开始，搭载内核版本 5.10 或更高版本的设备必须搭载 GKI 内核。因此你或许可以使用 LKM 模式。
+LKM 模式要求 `arm64-v8a` GKI 2.0 内核（5.10+），并使用与设备 KMI 匹配的模块。不能仅凭 Android 版本判断兼容性；管理器要求 Android 12（API 31）或更高版本。
 
 ## 通过安装内核进行安装
 

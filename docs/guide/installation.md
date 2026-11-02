@@ -6,7 +6,7 @@ You can refer to the [KernelSU Documentation - Installation](https://kernelsu.or
 
 Please refer to the [KernelSU Documentation - LKM Installation](https://kernelsu.org/guide/installation.html#lkm-installation).
 
-Starting from Android 12, devices with kernel version 5.10 or higher must use a GKI kernel. Therefore, you may be able to use LKM mode.
+LKM mode requires an `arm64-v8a` GKI 2.0 kernel (5.10+) and a module matching the device's KMI. The Android version alone does not establish compatibility; the manager requires Android 12 (API 31) or later.
 
 ## Installation via Kernel Installation
 

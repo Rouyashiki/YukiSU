@@ -32,7 +32,7 @@ export ARCH=arm64
 export LLVM=1
 export LLVM_IAS=1
 
-git clone https://github.com/Anatdx/YukiSU
+git clone https://github.com/Rouyashiki/YukiSU
 cd YukiSU/kernel
 
 test -f include/uapi/supercall.h
