@@ -1,11 +1,13 @@
 #include "core/daemon.hpp"
 #include "core/socket_output.hpp"
+#include "init_event.hpp"
 #include "terminal.hpp"
 #include "utils.hpp"
 
 #include "core/command.hpp"
 #include "core/json.hpp"
 #include "core/log.hpp"
+#include "core/reboot_state.hpp"
 #include "core/runtime.hpp"
 #include "kagami/config.hpp"
 #include "kagami/kasumi_client.hpp"
@@ -36,6 +38,7 @@ namespace fs = std::filesystem;
 
 namespace {
 int print_status_json();
+bool request_completed = false;
 
 void append_log(const std::string& message, logging::Level level = logging::Level::Info) {
     logging::write(level, "daemon", message);
@@ -88,6 +91,7 @@ std::string status_json(bool running) {
 
     std::ostringstream out;
     out << "{"
+        << "\"soft_reboot_protocol\":1,"
         << "\"running\":" << (running ? "true" : "false") << ","
         << "\"data_dir\":" << json_quote(runtime_data_dir().string()) << ","
         << "\"config_file\":" << json_quote(runtime_config_file().string()) << ","
@@ -144,7 +148,7 @@ bool read_all(int fd, std::size_t limit, std::string& data) {
     }
 }
 
-int open_client_socket(std::string& error) {
+int open_client_socket(std::string& error, int timeout_seconds) {
     const auto path = runtime_socket_file().string();
     if (path.size() >= sizeof(sockaddr_un::sun_path)) {
         error = "socket path is too long: " + path;
@@ -157,27 +161,40 @@ int open_client_socket(std::string& error) {
         return -1;
     }
 
+    timeval timeout = {};
+    timeout.tv_sec = timeout_seconds;
+    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
     sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
     std::strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
     if (connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
-        error = std::strerror(errno);
+        const int saved_errno = errno;
+        error = std::strerror(saved_errno);
         close(fd);
+        errno = saved_errno;
         return -1;
     }
     return fd;
 }
 
 int send_request(const std::vector<std::string>& args, std::size_t start, std::string& response,
-                 std::string& error) {
-    const int fd = open_client_socket(error);
+                 std::string& error, int timeout_seconds = 0) {
+    const auto token = reboot::client_token();
+    if (timeout_seconds <= 0 && !token.empty())
+        timeout_seconds = 180;
+    const int fd = open_client_socket(error, timeout_seconds);
     if (fd < 0) {
         return 1;
     }
-    if (!write_all(fd, join_request(args, start))) {
+    std::vector<std::string> request(args.begin() + static_cast<std::ptrdiff_t>(start), args.end());
+    if (!token.empty())
+        request.insert(request.begin(), {"@soft-reboot", token});
+    if (!write_all(fd, join_request(request, 0))) {
         error = std::strerror(errno);
         close(fd);
-        return 1;
+        return 2;
     }
     shutdown(fd, SHUT_WR);
     const bool complete = read_all(fd, 1024UL * 1024, response);
@@ -191,11 +208,12 @@ bool daemon_running() {
     const std::vector<std::string> ping = {"daemon", "ping"};
     std::string response;
     std::string error;
-    return send_request(ping, 0, response, error) == 0 &&
+    return send_request(ping, 0, response, error, 5) == 0 &&
            response.find("\"ok\":true") != std::string::npos;
 }
 
 int serve_foreground(int ready_fd = -1) {
+    reboot::release();
     umask(0077);
     std::string preparation_error;
     if (!prepare_runtime(preparation_error) || !logging::prepare_boot_log(preparation_error)) {
@@ -287,10 +305,12 @@ int serve_foreground(int ready_fd = -1) {
     bool stopping = false;
     int exit_code = 0;
     while (!stopping) {
+        if (reboot::recover_abandoned(ksud::recover_soft_reboot))
+            append_log("recovered abandoned soft reboot transaction", logging::Level::Error);
         const bool pending_hides = mount::kasumi::has_pending_hide_rules();
         pollfd descriptors[] = {{server_fd, POLLIN, 0},
                                 {pending_hides ? mounts_fd : -1, POLLPRI, 0}};
-        const int ready = poll(descriptors, 2, -1);
+        const int ready = poll(descriptors, 2, 2000);
         if (ready < 0) {
             if (errno == EINTR)
                 continue;
@@ -328,6 +348,11 @@ int serve_foreground(int ready_fd = -1) {
 
         (void)read_all(client_fd, 64UL * 1024, request);
         auto request_args = split_request(request);
+        reboot::set_request_token({});
+        if (request_args.size() > 2 && request_args[0] == "@soft-reboot") {
+            reboot::set_request_token(request_args[1]);
+            request_args.erase(request_args.begin(), request_args.begin() + 2);
+        }
         if (request_args.empty()) {
             append_log("rejected malformed or empty request", logging::Level::Warning);
             send_response(client_fd, false, 1, EINVAL, "", "empty daemon request");
@@ -336,6 +361,11 @@ int serve_foreground(int ready_fd = -1) {
         }
 
         if (request_args[0] == "daemon" && request_args.size() >= 2 && request_args[1] == "stop") {
+            if (reboot::active()) {
+                send_response(client_fd, false, 1, EBUSY, "", "soft reboot is active\n");
+                close(client_fd);
+                continue;
+            }
             send_response(client_fd, true, 0, 0, "stopping\n", "");
             stopping = true;
             close(client_fd);
@@ -363,6 +393,7 @@ int serve_foreground(int ready_fd = -1) {
         }
 
         const auto result = run_command_capture(request_args, capture);
+        reboot::set_request_token({});
         send_response(client_fd, result.exit_code == 0, result.exit_code, result.error_number,
                       result.stdout_text, result.stderr_text);
         close(client_fd);
@@ -440,6 +471,7 @@ int start_background(bool report_status) {
 }  // namespace
 
 int run_via_daemon(const std::vector<std::string>& args, bool display_errors) {
+    request_completed = false;
     if (args.empty()) {
         return 1;
     }
@@ -476,12 +508,36 @@ int run_via_daemon(const std::vector<std::string>& args, bool display_errors) {
         std::cerr << "invalid daemon response fields\n";
         return 1;
     }
+    request_completed = true;
     std::cout << out->s;
     if (display_errors && code->n != 0 && !err->s.empty())
         ksud::terminal::diagnostics(err->s);
     else
         std::cerr << err->s;
     return static_cast<int>(code->n);
+}
+
+bool last_daemon_request_completed() {
+    return request_completed;
+}
+
+bool daemon_supports_soft_reboot(std::string& error) {
+    std::string response;
+    const int rc = send_request({"daemon", "status"}, 0, response, error, 5);
+    if (rc == 1 && (errno == ENOENT || errno == ECONNREFUSED)) {
+        error.clear();
+        return true;
+    }
+    JsonValue envelope;
+    JsonValue status;
+    if (rc != 0 || !parse_json(response, envelope, error) || !envelope.at("ok").bool_or(false) ||
+        !parse_json(envelope.at("stdout").string_or(""), status, error) ||
+        status.at("soft_reboot_protocol").u32_or(0) != 1) {
+        error = "update/restart the running ksud mount controller for soft reboot support";
+        return false;
+    }
+    error.clear();
+    return true;
 }
 
 namespace {

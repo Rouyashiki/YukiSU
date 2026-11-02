@@ -6,10 +6,12 @@
 #include "core/daemon.hpp"
 #include "core/ksucalls.hpp"
 #include "core/log.hpp"
+#include "core/reboot_state.hpp"
 #include "core/runtime.hpp"
 #include "kagami/config.hpp"
 #include "module/metamodule.hpp"
 #include "mount/backend.hpp"
+#include "mount/kasumi.hpp"
 #include "terminal.hpp"
 #include "utils.hpp"
 
@@ -58,13 +60,18 @@ int embedded_mount() try {
 
 void embedded_boot_completed() {
     logging::write(logging::Level::Info, "boot", "boot completed");
-    mount::recovery_boot_completed();
+    if (!reboot::authorized())
+        mount::recovery_boot_completed();
     if (ksud::is_safe_mode() || !embedded_external_mount_owner().empty()) {
         return;
     }
     if (run_via_daemon({"hide", "apply"}) != 0) {
         logging::write(logging::Level::Error, "boot", "failed to restore user hide rules");
     }
+}
+
+bool embedded_verify_hide_rules(int& pending, std::string& error) {
+    return mount::kasumi::verify_persisted_hide_rules(pending, error);
 }
 
 void embedded_post_fs_data() {

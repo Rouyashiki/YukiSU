@@ -141,6 +141,7 @@ const std::vector<Command>& commands() {
         {"services", "Trigger service scripts", ""},
         {"boot-completed", "Trigger boot-completed", ""},
         {"soft-reboot", "Restart Android and reapply module stages", ""},
+        {"soft-reboot-status", "Read soft reboot support and last result", "", 0, 0, {kJson}},
         {"unload", "Unload the kernel module and restart Android", ""},
         {"sepolicy", "Manage SELinux policy", "<COMMAND>"},
         {"sepolicy patch", "Apply a policy statement", "<POLICY>", 1, 1},

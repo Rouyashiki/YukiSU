@@ -706,6 +706,8 @@ int cli_run(int argc, char** argv) {
         return 0;
     } else if (cmd == "soft-reboot") {
         return soft_reboot();
+    } else if (cmd == "soft-reboot-status") {
+        return soft_reboot_status();
     } else if (cmd == "unload") {
         return unload();
     } else if (cmd == "module") {

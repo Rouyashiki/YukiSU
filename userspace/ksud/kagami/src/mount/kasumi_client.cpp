@@ -126,6 +126,8 @@ int features() {
 
 std::vector<std::string> feature_names(int bitmask) {
     std::vector<std::string> names;
+    if (bitmask & KSM_FEATURE_SAFE_RULE_RETIRE)
+        names.emplace_back("safe_rule_retire");
     if (bitmask & KSM_FEATURE_RULE_BYPASS)
         names.emplace_back("rule_bypass");
     if (bitmask & KSM_FEATURE_MANAGED_HIDE)

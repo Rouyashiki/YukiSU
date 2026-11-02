@@ -5,6 +5,7 @@
 #include "core/daemon.hpp"
 #include "core/json.hpp"
 #include "core/log.hpp"
+#include "core/reboot_state.hpp"
 #include "core/runtime.hpp"
 #include "defs.hpp"
 #include "kagami/config.hpp"
@@ -32,6 +33,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace kagami {
@@ -1015,6 +1017,11 @@ int handle_module(const std::vector<std::string>& args) {
         return 0;
     }
     if (sub == "mount-all") {
+        std::string support_error;
+        if (reboot::authorized() && !reboot::check_support(support_error)) {
+            std::cerr << support_error << '\n';
+            return 1;
+        }
         // Boot-only: mounting over live service namespaces is unsafe.
         if (system_boot_completed()) {
             std::cerr << "refusing module mount-all: magic mount only runs at boot via "
@@ -1023,7 +1030,10 @@ int handle_module(const std::vector<std::string>& args) {
         }
         Config config;
         std::string cfg_err;
-        read_config_file(config, cfg_err);  // defaults on error
+        if (!read_config_file(config, cfg_err) && reboot::authorized()) {
+            std::cerr << cfg_err << '\n';
+            return 1;
+        }
         const auto report = mount::mount_all_enabled(config);
         std::cout << "{"
                   << "\"ok\":" << (report.ok ? "true" : "false") << ","
@@ -1297,6 +1307,83 @@ int handle_recovery(const std::vector<std::string>& args) {
 }  // namespace
 
 int run_command(const std::vector<std::string>& args) {
+    if (args.size() == 2 && args[0] == "reboot-cycle") {
+        std::string error;
+        if (!reboot::authorized() || !reboot::check_support(error)) {
+            std::cerr << (error.empty() ? "no active soft reboot transaction" : error) << '\n';
+            return 1;
+        }
+        Config config;
+        if (!read_config_file(config, error) && errno != ENOENT) {
+            std::cerr << error << '\n';
+            return 1;
+        }
+        const auto phase = reboot::state().at("phase").string_or("");
+        const bool expected =
+            (args[1] == "begin" && phase == "preflight") ||
+            (args[1] == "prepare" && phase == "cleanup") ||
+            (args[1] == "restore-hide" && phase == "restore_hide") ||
+            (args[1] == "rollback" && (phase == "rebuild" || phase == "restore_hide"));
+        if (!expected) {
+            std::cerr << "unexpected soft reboot phase: " << phase << '\n';
+            return 1;
+        }
+        if (args[1] == "begin")
+            return 0;
+        if (args[1] == "prepare" || args[1] == "rollback") {
+            if (!mount::unmount_all(config)) {
+                std::cerr << "failed to retire previous mounts and rules\n";
+                return 1;
+            }
+            if (args[1] == "rollback")
+                return 0;
+            const auto transient = runtime_data_dir() / "run" / "hot_unmounted";
+            std::error_code ec;
+            if (fs::exists(transient, ec)) {
+                for (fs::directory_iterator it(transient, ec), end; it != end && !ec;
+                     it.increment(ec)) {
+                    if (!it->is_regular_file(ec) || it->is_symlink(ec)) {
+                        std::cerr << "invalid transient module marker\n";
+                        return 1;
+                    }
+                    fs::remove(it->path(), ec);
+                    if (ec)
+                        break;
+                }
+            }
+            if (ec || !reboot::advance_cycle(error)) {
+                std::cerr << (ec ? ec.message() : error) << '\n';
+                return 1;
+            }
+            return 0;
+        }
+        if (args[1] == "restore-hide") {
+            if (config.kasumi_enabled && kasumi::is_available() &&
+                (!mount::kasumi::apply_feature_config(config, error) ||
+                 !kasumi::set_enabled(true))) {
+                std::cerr << (error.empty() ? "cannot enable restored Kasumi state" : error)
+                          << '\n';
+                return 1;
+            }
+            const bool ok =
+                !config.kasumi_enabled || mount::kasumi::restore_persisted_hide_rules(error, true);
+            if (!ok) {
+                std::cerr << error << '\n';
+                return 1;
+            }
+            int pending = 0;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            do {
+                error.clear();
+                if (mount::kasumi::verify_persisted_hide_rules(pending, error))
+                    return reboot::record("restore_hide", "accepted", {}, pending) ? 0 : 1;
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            } while (std::chrono::steady_clock::now() < deadline);
+            std::cerr << error << '\n';
+            return 1;
+        }
+        return 1;
+    }
     if (args.empty() || args[0] == "help" || args[0] == "--help" || args[0] == "-h") {
         print_usage();
         return args.empty() ? 1 : 0;
@@ -1431,7 +1518,13 @@ CommandResult run_command_capture(const std::vector<std::string>& args, CommandC
         std::cerr.rdbuf(&capture.err);
         errno = 0;
         try {
-            exit_code = run_command(args);
+            if (!is_query(args) && reboot::active() && !reboot::authorized()) {
+                errno = EBUSY;
+                std::cerr << "soft reboot is rebuilding mount state; retry after completion\n";
+                exit_code = 1;
+            } else {
+                exit_code = run_command(args);
+            }
         } catch (const std::exception& error) {
             std::cerr << "Kagami: " << error.what() << '\n';
             errno = EIO;

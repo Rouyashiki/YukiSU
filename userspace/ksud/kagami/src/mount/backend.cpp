@@ -2,6 +2,7 @@
 #include <iterator>
 
 #include "core/json.hpp"
+#include "core/reboot_state.hpp"
 #include "core/runtime.hpp"
 #include "kagami/kasumi_client.hpp"
 #include "mount/kasumi.hpp"
@@ -88,8 +89,8 @@ fs::path mount_orchestrator_file() {
 }
 
 bool claim_mount_orchestrator() {
-    return !marker_matches_current_boot(mount_orchestrator_file()) &&
-           write_boot_marker(mount_orchestrator_file());
+    return !reboot::marker_matches_cycle(mount_orchestrator_file()) &&
+           reboot::write_cycle_marker(mount_orchestrator_file(), "running\n");
 }
 
 int read_boot_attempts() {
@@ -344,7 +345,14 @@ MountReport mount_all_enabled(const Config& config) {
     fsutil::mlog("mount plan begin config=" + runtime_config_file().string());
 
     if (!claim_mount_orchestrator()) {
-        report.detail = "module mount-all already ran this boot or its state could not be recorded";
+        std::ifstream marker(mount_orchestrator_file());
+        std::string cycle;
+        std::string result;
+        std::getline(marker, cycle);
+        std::getline(marker, result);
+        report.ok = reboot::marker_matches_cycle(mount_orchestrator_file()) && result == "complete";
+        report.detail = report.ok ? "module mount-all already completed this cycle"
+                                  : "module mount cycle is incomplete or could not be recorded";
         fsutil::mlog(report.detail, logging::Level::Warning);
         return report;
     }
@@ -385,7 +393,7 @@ MountReport mount_all_enabled(const Config& config) {
         return report;
     }
     const int attempts = read_boot_attempts();
-    if (attempts >= kMaxBootAttempts) {
+    if (!reboot::authorized() && attempts >= kMaxBootAttempts) {
         bool deactivate_ok = true;
         if (kasumi_present) {
             std::string error;
@@ -403,7 +411,8 @@ MountReport mount_all_enabled(const Config& config) {
                 : "bootloop protection tripped, but Kasumi cleanup failed (see controller log)";
         return report;
     }
-    write_boot_attempts(attempts + 1);
+    if (!reboot::authorized())
+        write_boot_attempts(attempts + 1);
 
     const bool manage_kasumi = config.kasumi_enabled && ::kagami::kasumi::is_available();
     bool kasumi_prepare_ok = true;
@@ -492,18 +501,22 @@ MountReport mount_all_enabled(const Config& config) {
     report.backend = "hybrid(overlay=" + std::to_string(overlay_set.size()) +
                      ",magic=" + std::to_string(magic_set.size()) +
                      ",kasumi=" + std::to_string(kasumi_set.size()) + ")";
-    report.ok = ok;
+    report.ok = ok && reboot::write_cycle_marker(mount_orchestrator_file(), "complete\n");
     report.mounts = static_cast<int>(magic::active_mounts(config).size());
-    report.detail = ok ? "ok" : "some backends reported errors (see controller log)";
+    report.detail = report.ok ? "ok" : "mounting or recording the plan failed (see controller log)";
     fsutil::mlog("mount plan complete backend=" + report.backend + " modules=" +
-                     std::to_string(report.modules) + " result=" + (ok ? "ok" : "failed"),
-                 ok ? logging::Level::Info : logging::Level::Error);
+                     std::to_string(report.modules) + " result=" + (report.ok ? "ok" : "failed"),
+                 report.ok ? logging::Level::Info : logging::Level::Error);
     return report;
 }
 
 bool unmount_all(const Config& config) {
     // Unwind the hybrid plan from its topmost backend.
     return fsutil::run_in_init_mount_ns([&]() {
+        if (reboot::authorized()) {
+            return kasumi::unmount_all(config) && overlay::unmount_all(config) &&
+                   magic::unmount_all(config) && storage::teardown_shared(config);
+        }
         bool r = true;
         r = kasumi::unmount_all(config) && r;
         r = overlay::unmount_all(config) && r;

@@ -12,6 +12,7 @@
 #include <csignal>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string_view>
 #include <thread>
 
@@ -140,9 +141,20 @@ bool wait_for_process_exit(pid_t pid, int pidfd, Clock::time_point deadline) {
 SoftRebootWaiter::~SoftRebootWaiter() {
     if (server_pidfd_ >= 0)
         close(server_pidfd_);
+    for (const auto& [pid, fd] : zygotes_) {
+        (void)pid;
+        if (fd >= 0)
+            close(fd);
+    }
 }
 
-void SoftRebootWaiter::prepare() {
+bool SoftRebootWaiter::prepare() {
+    for (const auto& [pid, fd] : zygotes_) {
+        (void)pid;
+        if (fd >= 0)
+            close(fd);
+    }
+    zygotes_.clear();
     if (server_pidfd_ >= 0)
         close(server_pidfd_);
     server_pidfd_ = -1;
@@ -154,12 +166,33 @@ void SoftRebootWaiter::prepare() {
     const auto pid = process.exit_code == 0 ? parse_pid(process.stdout_str) : std::nullopt;
     if (!pid) {
         LOGW("Could not identify system_server before stop");
-        return;
+        return false;
     }
     server_pid_ = *pid;
 #if defined(SYS_pidfd_open)
     server_pidfd_ = static_cast<int>(syscall(SYS_pidfd_open, server_pid_, 0));
 #endif
+
+    if (Clock::now() >= deadline)
+        return false;
+    const auto zygotes =
+        exec_command({"/system/bin/pidof", "zygote", "zygote64"}, remaining_time(deadline));
+    std::istringstream pids(zygotes.stdout_str);
+    std::string value;
+    while (pids >> value) {
+        const auto zygote = parse_pid(value);
+        if (!zygote)
+            return false;
+        int fd = -1;
+#if defined(SYS_pidfd_open)
+        fd = static_cast<int>(syscall(SYS_pidfd_open, *zygote, 0));
+#endif
+        zygotes_.emplace_back(*zygote, fd);
+    }
+    if (zygotes.exit_code != 0 || zygotes_.empty() || Clock::now() >= deadline) {
+        LOGW("Could not identify zygote before stop");
+        return false;
+    }
 
     // dumpsys resolves each service through checkService and queries its Binder debug PID.
     const auto snapshot =
@@ -168,41 +201,49 @@ void SoftRebootWaiter::prepare() {
         !collect_services(snapshot.stdout_str, server_pid_, services_)) {
         LOGW("Binder snapshot unavailable (exit=%d errno=%d); using system_server exit wait",
              snapshot.exit_code, snapshot.error_number);
-        return;
+        return true;
     }
     LOGI("Soft reboot monitor ready: system_server=%d, %zu Binder services", server_pid_,
          services_.size());
+    return true;
 }
 
-void SoftRebootWaiter::wait() {
+bool SoftRebootWaiter::wait() {
     if (server_pid_ <= 1)
-        return;
+        return false;
     const auto deadline = Clock::now() + 5s;
     if (!wait_for_process_exit(server_pid_, server_pidfd_, deadline)) {
         LOGW("Could not confirm system_server exit before soft reboot timeout");
-        return;
+        return false;
+    }
+    for (const auto& [pid, fd] : zygotes_) {
+        if (!wait_for_process_exit(pid, fd, deadline)) {
+            LOGW("Could not confirm zygote %d exit", pid);
+            return false;
+        }
     }
     LOGI("system_server exited after stop");
     if (services_.empty())
-        return;
+        return true;
     while (Clock::now() < deadline) {
         const auto running = exec_command({"/system/bin/dumpsys", "-l"}, remaining_time(deadline));
         std::map<std::string, pid_t> services;
         std::string_view tail;
         if (running.exit_code != 0 || !running.stderr_str.empty() ||
             !parse_service_list(running.stdout_str, services, tail) || !trim_view(tail).empty()) {
-            LOGW("Binder cleanup query failed (exit=%d errno=%d); using confirmed process exit",
-                 running.exit_code, running.error_number);
-            return;
+            LOGW("Binder cleanup query failed (exit=%d errno=%d)", running.exit_code,
+                 running.error_number);
+            return false;
         }
         if (std::none_of(services_.begin(), services_.end(),
                          [&](const auto& name) { return services.find(name) != services.end(); })) {
             LOGI("system_server Binder services removed from servicemanager");
-            return;
+            return true;
         }
         std::this_thread::sleep_for(std::min(remaining_time(deadline), 200ms));
     }
-    LOGW("Binder cleanup timed out; using confirmed system_server exit");
+    LOGW("Binder cleanup timed out");
+    return false;
 }
 
 }  // namespace ksud

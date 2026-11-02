@@ -1,6 +1,9 @@
 #include "init_event.hpp"
 #include "../kagami/include/kagami/embedded.hpp"
 #include "../kagami/include/kagami/kasumi_client.hpp"
+#include "../kagami/src/core/daemon.hpp"
+#include "../kagami/src/core/reboot_state.hpp"
+#include "../kagami/src/core/runtime.hpp"
 #include "assets.hpp"
 #include "core/feature.hpp"
 #include "core/hide_bootloader.hpp"
@@ -19,6 +22,7 @@
 #include "module/preinit.hpp"
 #include "plugin/lua_engine.hpp"
 #include "profile/profile.hpp"
+#include "soft_reboot_flow.hpp"
 #include "soft_reboot_waiter.hpp"
 #include "sulog.hpp"
 #include "umount.hpp"
@@ -29,6 +33,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -39,7 +44,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace ksud {
@@ -56,14 +64,20 @@ enum class DaemonizeResult : std::uint8_t {
     Error,
 };
 
-DaemonizeResult daemonize_soft_reboot() {
+DaemonizeResult daemonize_soft_reboot(int& ready_fd) {
+    int channel[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, channel) != 0)
+        return DaemonizeResult::Error;
     const pid_t pid = fork();
     if (pid < 0) {
+        close(channel[0]);
+        close(channel[1]);
         LOGE("Failed to fork soft reboot daemon: %s", strerror(errno));
         return DaemonizeResult::Error;
     }
 
     if (pid > 0) {
+        close(channel[1]);
         int status = 0;
         pid_t waited;
         do {
@@ -71,11 +85,21 @@ DaemonizeResult daemonize_soft_reboot() {
         } while (waited < 0 && errno == EINTR);
 
         if (waited < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            close(channel[0]);
             LOGE("Soft reboot daemon failed to initialize");
             return DaemonizeResult::Error;
         }
-        return DaemonizeResult::Parent;
+        pollfd descriptor{channel[0], POLLIN, 0};
+        char ready = 0;
+        const bool accepted = poll(&descriptor, 1, 30000) > 0 &&
+                              recv(channel[0], &ready, 1, 0) == 1 && ready == 1 &&
+                              send(channel[0], &ready, 1, MSG_NOSIGNAL) == 1;
+        close(channel[0]);
+        return accepted ? DaemonizeResult::Parent : DaemonizeResult::Error;
     }
+
+    close(channel[0]);
+    ready_fd = channel[1];
 
     detach_process_group(true);
     switch_cgroups();
@@ -100,44 +124,64 @@ DaemonizeResult daemonize_soft_reboot() {
     return DaemonizeResult::Daemon;
 }
 
-bool reset_boot_completed() {
-    LOGI("Resetting sys.boot_completed to 0");
+bool set_boot_completed(const char* value) {
+    LOGI("Setting sys.boot_completed to %s", value);
 #if defined(RESETPROP_ALONE_AVAILABLE) && RESETPROP_ALONE_AVAILABLE
     std::array<char*, 4> argv = {
         const_cast<char*>("resetprop"),
         const_cast<char*>("sys.boot_completed"),
-        const_cast<char*>("0"),
+        const_cast<char*>(value),
         nullptr,
     };
     return resetprop_main(3, argv.data()) == 0;
 #else
-    return exec_command({RESETPROP_PATH, "sys.boot_completed", "0"}).exit_code == 0;
+    return exec_command({RESETPROP_PATH, "sys.boot_completed", value}, std::chrono::seconds(5))
+               .exit_code == 0;
 #endif
 }
 
 bool wait_for_boot_completed() {
-    LOGI("Waiting for sys.boot_completed to change from 0");
-#if defined(RESETPROP_ALONE_AVAILABLE) && RESETPROP_ALONE_AVAILABLE
-    std::array<char*, 5> argv = {
-        const_cast<char*>("resetprop"),
-        const_cast<char*>("-w"),
-        const_cast<char*>("sys.boot_completed"),
-        const_cast<char*>("0"),
-        nullptr,
-    };
-    return resetprop_main(4, argv.data()) == 0;
-#else
-    return exec_command({RESETPROP_PATH, "-w", "sys.boot_completed", "0"}).exit_code == 0;
-#endif
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(180);
+    do {
+        if (getprop("sys.boot_completed") == "1")
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    } while (std::chrono::steady_clock::now() < deadline);
+    return false;
 }
 
 bool run_soft_reboot_command(const char* command) {
-    const auto result = exec_command({command});
+    const auto result = exec_command({command}, std::chrono::seconds(10));
     if (result.exit_code == 0)
         return true;
 
     LOGW("%s failed with exit code %d: %s", command, result.exit_code, result.stderr_str.c_str());
     return false;
+}
+
+bool capture_soft_reboot_log(std::string& error) {
+    const auto path = kagami::runtime_data_dir() / "run" / "soft-reboot.log";
+    const auto previous = path.string() + ".old";
+    if (!kagami::prepare_private_file(path, error))
+        return false;
+    if (rename(path.c_str(), previous.c_str()) != 0 && errno != ENOENT) {
+        error = "cannot rotate soft reboot log: " + std::string(strerror(errno));
+        return false;
+    }
+    const int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) {
+        error = "cannot open soft reboot log: " + std::string(strerror(errno));
+        return false;
+    }
+    const bool redirected = dup2(fd, STDOUT_FILENO) >= 0 && dup2(fd, STDERR_FILENO) >= 0;
+    const int redirect_error = errno;
+    close(fd);
+    if (!redirected) {
+        error = "cannot redirect soft reboot log: " + std::string(strerror(redirect_error));
+        return false;
+    }
+    log_set_stderr_enabled(true);
+    return true;
 }
 
 // Catch boot logs (logcat/dmesg) to file
@@ -194,31 +238,34 @@ void catch_bootlog(const char* logname, const std::vector<const char*>& command)
     LOGI("Started %s capture (pid %d)", logname, pid);
 }
 
-void run_stage(const std::string& stage, ScriptWait wait) {
+int run_stage(const std::string& stage, ScriptWait wait, std::string* error = nullptr) {
     umask(0);
 
     // Check for Magisk (like Rust version)
     if (has_magisk()) {
         LOGW("Magisk detected, skip %s", stage.c_str());
-        return;
+        return 0;
     }
 
     if (is_safe_mode()) {
         LOGW("safe mode, skip %s scripts", stage.c_str());
-        return;
+        return 0;
     }
 
     // Execute common scripts first
-    exec_common_scripts(stage + ".d", wait);
+    const int common = exec_common_scripts(stage + ".d", wait, error);
 
     // Execute metamodule stage script (priority)
-    metamodule_exec_stage_script(stage, wait);
+    const int meta = metamodule_exec_stage_script(stage, wait, error);
 
     // Execute regular modules stage scripts
-    exec_stage_script(stage, wait);
+    const int modules = exec_stage_script(stage, wait, error);
 
     // Execute plugin stage callbacks
-    exec_plugin_stage(stage, wait.mode != ScriptWait::Mode::NoWait);
+    const bool plugins = exec_plugin_stage(stage, wait.mode != ScriptWait::Mode::NoWait);
+    if (!plugins && error && error->empty())
+        *error = "plugin callback failed during " + stage;
+    return common != 0 || meta != 0 || modules != 0 || !plugins ? 1 : 0;
 }
 
 bool yukizygisk_feature_enabled() {
@@ -247,15 +294,24 @@ void ensure_zygiskd_running_if_enabled() {
 
 }  // namespace
 
-int on_post_data_fs() {
+int on_post_data_fs(std::string* error) {
     LOGI("post-fs-data triggered");
+    const auto fail = [&](const char* step) {
+        if (error && error->empty())
+            *error = std::string("post-fs-data: ") + step;
+        LOGE("post-fs-data failed: %s", step);
+        return 1;
+    };
+    const bool restoring = kagami::reboot::authorized();
+    if (kagami::reboot::active() && !restoring)
+        return fail("another soft reboot owns the controller");
     kagami::embedded_post_fs_data();
     (void)prepare_yukizygisk_diagnostics(false);
 
-    if (!ensure_uapi_version_matched()) {
+    if (!ensure_uapi_version_matched(error)) {
         LOGE("Skip post-fs-data due to UAPI version mismatch");
         kagami::embedded_mount_skipped("UAPI version mismatch");
-        return 0;
+        return restoring ? fail("UAPI version mismatch") : 0;
     }
 
     if (set_init_pgrp() != 0) {
@@ -303,6 +359,8 @@ int on_post_data_fs() {
     // Ensure binaries exist (AFTER safe mode check, like Rust)
     if (ensure_binaries(true) != 0) {
         LOGW("Failed to ensure binaries");
+        if (restoring)
+            return fail("ensure binaries");
     }
 
     clean_hot_install_trash();
@@ -311,7 +369,8 @@ int on_post_data_fs() {
         LOGW("safe mode, skip common post-fs-data.d scripts");
     } else {
         // Execute common post-fs-data scripts
-        exec_common_scripts("post-fs-data.d", wait);
+        if (exec_common_scripts("post-fs-data.d", wait, error) != 0 && restoring)
+            return fail("common scripts");
     }
 
     if (!restorecon())
@@ -326,10 +385,12 @@ int on_post_data_fs() {
     }
 
     // Handle updated modules
-    handle_updated_modules();
+    if (handle_updated_modules() != 0 && restoring)
+        return fail("apply module updates");
 
     // Prune modules marked for removal
-    prune_modules();
+    if (prune_modules() != 0 && restoring)
+        return fail("remove modules");
 
     // Refresh custom init rc for the next boot. This also covers manual edits in
     // /data/adb/initrc.d.
@@ -373,17 +434,28 @@ int on_post_data_fs() {
     // 5. Metamodule's metamount.sh  <-- MUST run AFTER all post-fs-data
     // 6. post-mount.d
 
-    metamodule_exec_stage_script("post-fs-data", wait);
-    exec_stage_script("post-fs-data", wait);
-    exec_plugin_stage("post-fs-data", true);
-    load_system_prop();
+    const int meta_scripts = metamodule_exec_stage_script("post-fs-data", wait, error);
+    const int module_scripts = exec_stage_script("post-fs-data", wait, error);
+    const bool plugins = exec_plugin_stage("post-fs-data", true);
+    const int properties = load_system_prop();
+    if (restoring) {
+        if (meta_scripts != 0 || module_scripts != 0)
+            return fail("module scripts");
+        if (!plugins)
+            return fail("plugin callbacks");
+        if (properties != 0)
+            return fail("load system.prop");
+    }
 
     // Metamodule metamount runs AFTER all post-fs-data.
-    metamodule_exec_mount_script();
+    const int mount_result = metamodule_exec_mount_script(error);
+    if (mount_result != 0 && restoring)
+        return fail("mount modules");
 
     umount_apply_config();
 
-    run_stage("post-mount", wait);
+    if (run_stage("post-mount", wait, error) != 0 && restoring)
+        return fail("post-mount scripts");
     if (refresh_sucompat_vfs() != 0) {
         LOGW("refresh vnode-backed su after final mounts failed");
     }
@@ -394,20 +466,34 @@ int on_post_data_fs() {
     return 0;
 }
 
-void on_services() {
-    if (!ensure_uapi_version_matched()) {
+int on_services(std::string* error) {
+    const bool restoring = kagami::reboot::authorized();
+    if (kagami::reboot::active() && !restoring)
+        return 0;
+    if (!ensure_uapi_version_matched(error)) {
         LOGE("Skip services due to UAPI version mismatch");
-        return;
+        return 1;
     }
 
+    if (restoring) {
+        std::string claim_error;
+        const int claim = kagami::reboot::claim_services(claim_error);
+        if (claim <= 0) {
+            if (claim < 0 && error)
+                *error = claim_error;
+            return claim < 0 ? 1 : 0;
+        }
+    }
     const int start = report_services();
     if (start < 0) {
+        if (error)
+            *error = "cannot report services: " + std::string(strerror(errno));
         LOGE("Failed to report services: %s", strerror(errno));
-        return;
+        return 1;
     }
-    if (start != 1) {
+    if (start != 1 && !restoring) {
         LOGI("services already started, skipping");
-        return;
+        return 0;
     }
 
     LOGI("services triggered");
@@ -415,18 +501,34 @@ void on_services() {
     // Hide bootloader unlock status (soft BL hiding)
     hide_bootloader_status();
 
-    run_stage("service", ScriptWait::no_wait());
+    const int result = run_stage("service", ScriptWait::no_wait(), error);
 
     LOGI("services completed");
+    return result;
 }
 
-void on_boot_completed() {
+int on_boot_completed() {
     LOGI("boot-completed triggered");
 
     if (!ensure_uapi_version_matched()) {
         LOGE("Skip boot-completed due to UAPI version mismatch");
-        return;
+        return 1;
     }
+
+    namespace reboot = kagami::reboot;
+    if (reboot::active() && !reboot::authorized())
+        return 0;
+    const auto marker = kagami::runtime_data_dir() / "run" / "boot_completed_cycle";
+    if (reboot::marker_matches_cycle(marker)) {
+        std::ifstream saved(marker);
+        std::string cycle;
+        std::string result;
+        std::getline(saved, cycle);
+        std::getline(saved, result);
+        return result.empty() || result == "complete" ? 0 : 1;
+    }
+    if (!reboot::write_cycle_marker(marker, "running\n"))
+        return 1;
 
     // Report to kernel
     report_boot_complete();
@@ -436,68 +538,204 @@ void on_boot_completed() {
     ensure_msud_running_if_enabled();
 
     // Run boot-completed stage
-    run_stage("boot-completed", ScriptWait::no_wait());
+    const int result = run_stage("boot-completed", ScriptWait::no_wait());
 
     LOGI("boot-completed completed");
+    const bool recorded =
+        reboot::write_cycle_marker(marker, result == 0 ? "complete\n" : "failed\n");
+    return recorded ? result : 1;
+}
+
+bool recover_soft_reboot(const std::string& phase, std::string& error) {
+    const bool before_stop = phase == "reset_boot" || phase == "scripts";
+    if (!(before_stop ? set_boot_completed("1") : run_soft_reboot_command("start"))) {
+        error = before_stop ? "cannot restore boot-completed property"
+                            : "Android recovery start failed";
+        return false;
+    }
+    return phase == "reset_boot" || on_services(&error) == 0;
+}
+
+int soft_reboot_status() {
+    using namespace kagami;
+    const bool running = reboot::active();
+    std::string reason;
+    bool supported =
+        !running && reboot::check_support(reason) && daemon_supports_soft_reboot(reason);
+    if (running)
+        reason = "soft reboot already running";
+    if (supported && getprop("sys.boot_completed") != "1") {
+        supported = false;
+        reason = "Android has not completed boot";
+    }
+    auto last = reboot::state();
+    last.o.erase("token");
+    if (!running && last.at("boot_id").string_or("") == runtime_boot_id()) {
+        const auto result = last.at("result").string_or("");
+        if (result == "accepted") {
+            last["result"] = "failed";
+            last["error"] =
+                "soft reboot coordinator exited during " + last.at("phase").string_or("");
+        } else if (result == "completed_pending") {
+            int pending = 0;
+            std::string error;
+            const bool restored = embedded_verify_hide_rules(pending, error);
+            last["pending"] = pending;
+            last["result"] = pending ? "completed_pending" : "completed";
+            if (!restored)
+                last["result"] = "failed";
+            last["error"] = error;
+        }
+    }
+    JsonValue result = JsonValue::object();
+    result["interface_version"] = 1;
+    result["supported"] = supported;
+    result["blocked_reason"] = reason;
+    result["running"] = running;
+    result["last"] = last;
+    std::cout << stringify_json(result) << '\n';
+    return 0;
 }
 
 int soft_reboot() {
-    std::string version_error;
-    if (!ensure_uapi_version_matched(&version_error)) {
-        LOGE("Skip soft reboot due to UAPI version mismatch: %s", version_error.c_str());
-        return 0;
-    }
-
-    const bool kasumi_available = kagami::kasumi::is_available();
-    const int kasumi_runtime = kagami::kasumi::enabled_state();
-    const auto [kasumi_requested, kasumi_supported] = get_feature(KSU_FEATURE_KASUMI);
-    if (kasumi_runtime > 0 || (kasumi_supported && kasumi_requested != 0)) {
-        LOGE("Soft reboot is unavailable while Kasumi is active; use a full reboot");
+    namespace reboot = kagami::reboot;
+    std::string error;
+    if (reboot::active() || !reboot::check_support(error) ||
+        !kagami::daemon_supports_soft_reboot(error) || getprop("sys.boot_completed") != "1") {
+        std::cerr << (error.empty() ? "soft reboot is busy or Android has not completed boot"
+                                    : error)
+                  << '\n';
         return 1;
     }
-    if (kasumi_runtime < 0 && kasumi_requested < 0 && (kasumi_supported || kasumi_available)) {
-        LOGE("Cannot determine Kasumi runtime state; refusing soft reboot");
-        return 1;
-    }
-    if (kasumi_runtime < 0 && kasumi_requested == 0)
-        LOGW("Kasumi runtime state is unavailable while the feature is disabled; continuing");
 
-    switch (daemonize_soft_reboot()) {
+    int ready_fd = -1;
+    switch (daemonize_soft_reboot(ready_fd)) {
     case DaemonizeResult::Parent:
         return 0;
     case DaemonizeResult::Error:
+        std::cerr << "soft reboot was not accepted; inspect soft-reboot-status --json\n";
         return 1;
     case DaemonizeResult::Daemon:
         break;
     }
 
-    LOGI("Emulating soft reboot");
-    if (!reset_boot_completed())
-        LOGW("Failed to reset sys.boot_completed");
-
-    run_stage("emulated-soft-reboot",
-              ScriptWait::until(std::chrono::steady_clock::now() + EMULATED_SOFT_REBOOT_TIMEOUT));
-
-    {
-        SoftRebootWaiter waiter;
-        waiter.prepare();
-        LOGI("Stopping Android services");
-        (void)run_soft_reboot_command("stop");
-        waiter.wait();
+    const bool accepted = reboot::acquire(error) && capture_soft_reboot_log(error) &&
+                          reboot::check_support(error) &&
+                          kagami::run_via_daemon({"reboot-cycle", "begin"}) == 0;
+    char ready = accepted ? 1 : 0;
+    bool acknowledged = send(ready_fd, &ready, 1, MSG_NOSIGNAL) == 1;
+    if (accepted && acknowledged) {
+        pollfd descriptor{ready_fd, POLLIN, 0};
+        acknowledged =
+            poll(&descriptor, 1, 5000) > 0 && recv(ready_fd, &ready, 1, 0) == 1 && ready == 1;
+    }
+    close(ready_fd);
+    if (!accepted || !acknowledged) {
+        (void)reboot::record("preflight", "failed",
+                             error.empty() ? "controller or caller handshake failed" : error);
+        reboot::release();
+        _exit(1);
     }
 
-    LOGI("Running post-fs-data after stop");
-    (void)on_post_data_fs();
-
-    LOGI("Starting Android services");
-    (void)run_soft_reboot_command("start");
-
-    on_services();
-    if (!wait_for_boot_completed())
-        LOGW("Failed while waiting for boot completion");
-    on_boot_completed();
-
-    _exit(0);
+    SoftRebootWaiter waiter;
+    bool cleanup_confirmed = true;
+    int pending = 0;
+    const auto controller = [&](const char* action) {
+        const int status = kagami::run_via_daemon({"reboot-cycle", action});
+        cleanup_confirmed = kagami::last_daemon_request_completed();
+        return status == 0;
+    };
+    SoftRebootActions actions;
+    actions.run = [&](SoftRebootStage stage) {
+        error.clear();
+        const auto* name = soft_reboot_stage_name(stage);
+        if (!reboot::record(name, "accepted", {}, pending)) {
+            error = "cannot persist soft reboot phase";
+            return false;
+        }
+        LOGI("Soft reboot phase: %s", name);
+        switch (stage) {
+        case SoftRebootStage::Scripts:
+            return run_stage("emulated-soft-reboot",
+                             ScriptWait::until(std::chrono::steady_clock::now() +
+                                               EMULATED_SOFT_REBOOT_TIMEOUT),
+                             &error) == 0;
+        case SoftRebootStage::PrepareWaiter:
+            return waiter.prepare();
+        case SoftRebootStage::ResetBoot:
+            return set_boot_completed("0") && getprop("sys.boot_completed") == "0";
+        case SoftRebootStage::Stop:
+            return run_soft_reboot_command("stop");
+        case SoftRebootStage::WaitStopped:
+            return waiter.wait();
+        case SoftRebootStage::Cleanup:
+            return controller("prepare");
+        case SoftRebootStage::Rebuild: {
+            if (!reboot::check_support(error))
+                return false;
+            const int result = on_post_data_fs(&error);
+            cleanup_confirmed = kagami::last_daemon_request_completed();
+            return result == 0;
+        }
+        case SoftRebootStage::RestoreHide: {
+            const bool restored = controller("restore-hide");
+            pending = static_cast<int>(reboot::state().at("pending").u32_or(0));
+            return restored;
+        }
+        case SoftRebootStage::Start:
+            return run_soft_reboot_command("start");
+        case SoftRebootStage::Services:
+            return on_services(&error) == 0;
+        case SoftRebootStage::WaitBoot:
+            return wait_for_boot_completed();
+        case SoftRebootStage::Complete:
+            return on_boot_completed() == 0;
+        case SoftRebootStage::Verify: {
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            do {
+                error.clear();
+                if (kagami::embedded_verify_hide_rules(pending, error))
+                    return true;
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            } while (std::chrono::steady_clock::now() < deadline);
+            return false;
+        }
+        }
+        return false;
+    };
+    actions.rollback = [&] {
+        if (!controller("rollback"))
+            error += "; partial state cleanup failed";
+    };
+    actions.cleanup_confirmed = [&] { return cleanup_confirmed; };
+    actions.recover_start = [&] {
+        const bool recovered = run_soft_reboot_command("start");
+        if (!recovered)
+            error += "; Android recovery start failed";
+        return recovered;
+    };
+    actions.recover_services = [&] {
+        std::string service_error;
+        const bool recovered = on_services(&service_error) == 0;
+        if (!recovered)
+            error += "; module service recovery failed: " + service_error;
+        return recovered;
+    };
+    actions.restore_boot_flag = [&] {
+        if (!set_boot_completed("1"))
+            error += "; cannot restore boot-completed property";
+    };
+    const auto result = run_soft_reboot_flow(actions);
+    if (result.ok) {
+        (void)reboot::record("complete", pending ? "completed_pending" : "completed", {}, pending);
+    } else {
+        error = std::string("failed during ") + soft_reboot_stage_name(result.failed_stage) +
+                (error.empty() ? "" : ": " + error);
+        (void)reboot::record(soft_reboot_stage_name(result.failed_stage), "failed", error, pending);
+        LOGE("Soft reboot: %s", error.c_str());
+    }
+    reboot::release();
+    _exit(result.ok ? 0 : 1);
 }
 
 }  // namespace ksud

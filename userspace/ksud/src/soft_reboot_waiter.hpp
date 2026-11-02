@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ksud {
@@ -15,13 +16,14 @@ public:
     SoftRebootWaiter(SoftRebootWaiter&&) = delete;
     SoftRebootWaiter& operator=(SoftRebootWaiter&&) = delete;
 
-    void prepare();
-    void wait();
+    bool prepare();
+    bool wait();
 
 private:
     pid_t server_pid_ = -1;
     int server_pidfd_ = -1;
     std::vector<std::string> services_;
+    std::vector<std::pair<pid_t, int>> zygotes_;
 };
 
 }  // namespace ksud

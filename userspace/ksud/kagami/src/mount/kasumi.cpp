@@ -2,6 +2,7 @@
 #include "mount/kasumi_rule_index.hpp"
 
 #include "core/json.hpp"
+#include "core/reboot_state.hpp"
 #include "core/runtime.hpp"
 #include "kagami/kasumi_client.hpp"
 #include "mount/mount_fs.hpp"
@@ -344,13 +345,18 @@ bool disable_control_state(std::string& error) {
 }
 
 namespace {
-bool restore_user_hide_rules(std::string& error, bool retry) {
+bool restore_user_hide_rules(std::string& error, bool retry, bool before_start = false) {
     const auto bypasses = load_module_modes("hide_bypass.json");
     const auto bypass = [&](const std::string& path) {
         const auto it = bypasses.find(path);
         return it != bypasses.end() && it->second == "on";
     };
-    if (ksud::getprop("sys.boot_completed") != "1" || !::kagami::kasumi::is_available()) {
+    if (!::kagami::kasumi::is_available() && before_start && !load_user_hide_rules().empty()) {
+        error = "Kasumi is unavailable for saved hide rules";
+        return false;
+    }
+    if ((!before_start && ksud::getprop("sys.boot_completed") != "1") ||
+        !::kagami::kasumi::is_available()) {
         user_hide_restore_pending = false;
         return true;
     }
@@ -427,8 +433,57 @@ bool restore_user_hide_rules(std::string& error, bool retry) {
 }
 }  // namespace
 
-bool restore_persisted_hide_rules(std::string& error) {
-    return restore_user_hide_rules(error, false);
+bool restore_persisted_hide_rules(std::string& error, bool before_start) {
+    if (before_start && !reboot::authorized()) {
+        error = "early hide restoration requires an active soft reboot";
+        return false;
+    }
+    return restore_user_hide_rules(error, false, before_start);
+}
+
+bool verify_persisted_hide_rules(int& pending, std::string& error) {
+    pending = 0;
+    Config config;
+    if (!read_config_file(config, error))
+        return false;
+    if (!config.kasumi_enabled)
+        return true;
+    if (::kagami::kasumi::is_available() && ::kagami::kasumi::enabled_state() != 1) {
+        error = "restored Kasumi runtime is not enabled";
+        return false;
+    }
+    const auto paths = load_user_hide_rules();
+    if (paths.empty())
+        return true;
+    std::vector<::kagami::kasumi::UserHideRule> rules;
+    if (!::kagami::kasumi::user_hide_rules(rules)) {
+        error = "cannot query restored hide rules";
+        return false;
+    }
+    const auto bypasses = load_module_modes("hide_bypass.json");
+    bool ok = true;
+    for (const auto& path : paths) {
+        const auto rule = std::find_if(rules.begin(), rules.end(), [&](const auto& candidate) {
+            return candidate.path == path;
+        });
+        const auto bypass = bypasses.find(path);
+        const bool expected_bypass = bypass != bypasses.end() && bypass->second == "on";
+        if (rule == rules.end() || rule->management != KSM_USER_HIDE_LIVE ||
+            rule->bypass != expected_bypass || rule->binding == KSM_USER_HIDE_ERROR) {
+            error = "hide rule restoration failed: " + path;
+            ok = false;
+            continue;
+        }
+        if (rule->binding == KSM_USER_HIDE_BOUND)
+            continue;
+        ++pending;
+        struct stat parent = {};
+        if (stat(fs::path(path).parent_path().c_str(), &parent) == 0 || errno != ENOENT) {
+            error = "hide rule is not bound: " + path;
+            ok = false;
+        }
+    }
+    return ok;
 }
 
 bool update_legacy_user_hide(const std::string& path, bool remove, int flags) {
@@ -509,7 +564,7 @@ bool mount_modules(const std::vector<ModuleEntry>& modules, const Config& config
     }
     std::error_code ec;
     fs::create_directories(active_file().parent_path(), ec);
-    if (ok && !write_boot_marker(active_file())) {
+    if (ok && !reboot::write_cycle_marker(active_file())) {
         ok = false;
         mlog("kasumi: failed to record restored runtime state", logging::Level::Error);
     }
@@ -540,7 +595,7 @@ bool unmount_all(const Config& config) {
 }
 
 bool is_active() {
-    return marker_matches_current_boot(active_file());
+    return reboot::marker_matches_cycle(active_file());
 }
 
 void invalidate_active_state() {
@@ -551,7 +606,7 @@ void invalidate_active_state() {
 
 std::vector<std::string> replayable_module_ids() {
     std::vector<std::string> ids;
-    if (!marker_matches_current_boot(mapping_plan_file())) {
+    if (!reboot::marker_matches_cycle(mapping_plan_file())) {
         return ids;
     }
     std::ifstream in(mapping_plan_file());
@@ -578,7 +633,7 @@ bool record_replayable_mappings(const std::vector<ModuleEntry>& modules) {
     for (const auto& module : modules) {
         ids << module.id << "\n";
     }
-    if (write_boot_marker(mapping_plan_file(), ids.str())) {
+    if (reboot::write_cycle_marker(mapping_plan_file(), ids.str())) {
         return true;
     }
     clear_replayable_mappings();

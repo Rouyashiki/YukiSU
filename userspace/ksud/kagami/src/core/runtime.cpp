@@ -143,6 +143,10 @@ bool prepare_runtime(std::string& error) {
         if (!prepare_private_file(runtime_data_dir() / name, error))
             return false;
     }
+    for (const auto* name : {"soft_reboot.lock", "soft_reboot.json", "mount_cycle"}) {
+        if (!prepare_private_file(runtime_data_dir() / "run" / name, error))
+            return false;
+    }
     return true;
 }
 

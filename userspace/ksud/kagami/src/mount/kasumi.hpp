@@ -17,7 +17,8 @@ bool disable_control_state(std::string& error);
 
 // Restore user HIDE rules in init's mount namespace after boot completion,
 // only while Kasumi is enabled. Failures must not roll back module mappings.
-bool restore_persisted_hide_rules(std::string& error);
+bool restore_persisted_hide_rules(std::string& error, bool before_start = false);
+bool verify_persisted_hide_rules(int& pending, std::string& error);
 // Legacy user and module hides share one kernel slot; preserve every owner.
 bool update_legacy_user_hide(const std::string& path, bool remove, int flags = 0);
 bool has_pending_hide_rules();
