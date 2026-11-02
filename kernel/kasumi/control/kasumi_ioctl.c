@@ -663,6 +663,7 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		features |= KSM_FEATURE_KSTAT_SPOOF;
 		features |= KSM_FEATURE_MERGE_DIR;
 		features |= KSM_FEATURE_RULE_BYPASS;
+		features |= KSM_FEATURE_SAFE_RULE_RETIRE;
 		if (kasumi_overlay_xattr_available())
 			features |= KSM_FEATURE_OVERLAY_XATTR_HIDE;
 		if (kasumi_proc_proxy_registered ||
@@ -708,6 +709,11 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		n = scnprintf(kbuf + written, buf_size - written,
 			      "path: none\n");
 		written += n;
+		written += scnprintf(kbuf + written, buf_size - written,
+				     "fop_inodes: live=%d retiring=%d\n",
+				     kasumi_fop_live_count(),
+				     kasumi_fop_retiring_count());
+
 		{
 			dev_t vnode_dev = kasumi_vnode_device();
 
@@ -909,10 +915,6 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 				if (me->resolved_src)
 					kasumi_add_inject_rule(kstrdup(
 					    me->resolved_src, GFP_KERNEL));
-				kasumi_mark_dir_has_inject(me->src);
-				if (me->resolved_src)
-					kasumi_mark_dir_has_inject(
-					    me->resolved_src);
 				if (mat_src && mat_tgt)
 					ret = kasumi_materialize_merge(
 					    mat_src, mat_tgt, 0, req.type);
@@ -1074,7 +1076,6 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		new_entry = NULL;
 
 		if (install_side_effects && parent_dir) {
-			kasumi_mark_dir_has_inject(parent_dir);
 			kasumi_add_inject_rule(parent_dir);
 			parent_dir = NULL;
 		}
@@ -1295,6 +1296,8 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		    &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node)
 		{
 			if (strcmp(inject_entry->dir, src) == 0) {
+				kasumi_fop_put(inject_entry->fop_inode, true);
+				inject_entry->fop_inode = NULL;
 				hlist_del_rcu(&inject_entry->node);
 				atomic_dec(&kasumi_rule_count);
 				kasumi_log("del rule: src=%s\n", src);
@@ -1305,6 +1308,7 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		}
 	del_done:
 		mutex_unlock(&kasumi_config_mutex);
+		kasumi_prune_inject_parent(src);
 		if (del_inode) {
 			if (del_inode->i_mapping)
 				clear_bit(AS_FLAGS_KASUMI_HIDE,

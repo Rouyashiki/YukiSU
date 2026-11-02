@@ -11,6 +11,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/srcu.h>
+#include <linux/workqueue.h>
 
 #define KASUMI_FOP_HASH_BITS 10
 #define KASUMI_FOP_TEMPLATE_HASH_BITS 6
@@ -26,6 +27,10 @@ struct kasumi_fop_template {
 
 struct kasumi_fop_meta {
 	struct inode *inode;
+	struct super_block *sb;
+	unsigned int inject_owners;
+	unsigned int iterate_owners;
+	bool retired;
 	struct kasumi_fop_template *template;
 	kasumi_fop_iterate_client_fn iterate_client;
 	void *iterate_client_data;
@@ -36,7 +41,12 @@ struct kasumi_fop_meta {
 static DEFINE_HASHTABLE(kasumi_fop_table, KASUMI_FOP_HASH_BITS);
 static DEFINE_HASHTABLE(kasumi_fop_templates, KASUMI_FOP_TEMPLATE_HASH_BITS);
 static DEFINE_SPINLOCK(kasumi_fop_lock);
+static LIST_HEAD(kasumi_fop_retiring);
+static void kasumi_fop_reap(struct work_struct *work);
+static DECLARE_WORK(kasumi_fop_reap_work, kasumi_fop_reap);
 DEFINE_STATIC_SRCU(kasumi_fop_client_srcu);
+static atomic_t kasumi_fop_live = ATOMIC_INIT(0);
+static atomic_t kasumi_fop_retired = ATOMIC_INIT(0);
 static bool kasumi_fop_override_ready;
 static bool kasumi_fop_override_stopped;
 
@@ -66,8 +76,14 @@ static void kasumi_fop_meta_free(struct kasumi_fop_meta *m)
 {
 	if (!m)
 		return;
-	if (m->inode)
+	if (m->inode) {
 		iput(m->inode);
+		atomic_dec(&kasumi_fop_live);
+	}
+	if (m->retired)
+		atomic_dec(&kasumi_fop_retired);
+	if (m->sb)
+		deactivate_super(m->sb);
 	kfree(m);
 }
 
@@ -177,7 +193,18 @@ out:
 	return ret;
 }
 
-KASUMI_NOCFI int kasumi_fop_install(struct inode *inode)
+static void kasumi_fop_add_owner(struct kasumi_fop_meta *m, bool inject)
+{
+	if (inject) {
+		m->inject_owners++;
+		set_bit(AS_FLAGS_KASUMI_DIR_HAS_INJECT,
+			&m->inode->i_mapping->flags);
+	} else {
+		m->iterate_owners++;
+	}
+}
+
+KASUMI_NOCFI int kasumi_fop_get(struct inode *inode, bool inject)
 {
 	struct kasumi_fop_template *template, *spare;
 	struct kasumi_fop_meta *m, *existing;
@@ -191,10 +218,16 @@ KASUMI_NOCFI int kasumi_fop_install(struct inode *inode)
 		return -EINVAL;
 	if (!inode->i_sb)
 		return -EINVAL;
-	if (test_bit(AS_FLAGS_KASUMI_FOP_INSTALLED, &inode->i_mapping->flags))
+	spin_lock(&kasumi_fop_lock);
+	existing = kasumi_fop_lookup_rcu(inode);
+	if (existing && READ_ONCE(kasumi_fop_override_ready)) {
+		kasumi_fop_add_owner(existing, inject);
+		spin_unlock(&kasumi_fop_lock);
 		return 0;
+	}
 
 	orig = READ_ONCE(inode->i_fop);
+	spin_unlock(&kasumi_fop_lock);
 	if (!orig || !orig->iterate_shared)
 		return -EOPNOTSUPP;
 	spare = kasumi_fop_template_alloc(orig);
@@ -207,7 +240,14 @@ KASUMI_NOCFI int kasumi_fop_install(struct inode *inode)
 		return -ENOMEM;
 	}
 
+	if (!atomic_inc_not_zero(&inode->i_sb->s_active)) {
+		kfree(m);
+		kasumi_fop_template_free(spare);
+		return -ESTALE;
+	}
+	m->sb = inode->i_sb;
 	m->inode = inode;
+	atomic_inc(&kasumi_fop_live);
 	INIT_LIST_HEAD(&m->retire_node);
 	ihold(inode);
 
@@ -218,6 +258,7 @@ KASUMI_NOCFI int kasumi_fop_install(struct inode *inode)
 	}
 	existing = kasumi_fop_lookup_rcu(inode);
 	if (existing) {
+		kasumi_fop_add_owner(existing, inject);
 		ret = 0;
 		goto out_unlock;
 	}
@@ -237,6 +278,7 @@ KASUMI_NOCFI int kasumi_fop_install(struct inode *inode)
 		spare = NULL;
 	}
 	m->template = template;
+	kasumi_fop_add_owner(m, inject);
 	hash_add_rcu(kasumi_fop_table, &m->node, (unsigned long)inode);
 	set_bit(AS_FLAGS_KASUMI_FOP_INSTALLED, &inode->i_mapping->flags);
 	smp_wmb();
@@ -274,9 +316,10 @@ int kasumi_fop_bind_iterate_client(struct inode *inode,
 		ret = -ENOENT;
 		goto out;
 	}
-	if (READ_ONCE(m->iterate_client) &&
-	    (READ_ONCE(m->iterate_client) != client ||
-	     READ_ONCE(m->iterate_client_data) != data)) {
+	if (READ_ONCE(m->iterate_client_data) &&
+	    (READ_ONCE(m->iterate_client_data) != data ||
+	     (READ_ONCE(m->iterate_client) &&
+	      READ_ONCE(m->iterate_client) != client))) {
 		ret = -EBUSY;
 		goto out;
 	}
@@ -327,8 +370,13 @@ static struct kasumi_fop_meta *kasumi_fop_uninstall_locked(struct inode *inode)
 	}
 
 	hash_del_rcu(&m->node);
+	m->retired = true;
+	atomic_inc(&kasumi_fop_retired);
 	if (inode->i_mapping)
 		clear_bit(AS_FLAGS_KASUMI_FOP_INSTALLED,
+			  &inode->i_mapping->flags);
+	if (inode->i_mapping)
+		clear_bit(AS_FLAGS_KASUMI_DIR_HAS_INJECT,
 			  &inode->i_mapping->flags);
 	return m;
 }
@@ -358,6 +406,62 @@ static void kasumi_fop_retire_list(struct list_head *retiring)
 		WRITE_ONCE(m->iterate_client_data, NULL);
 		kasumi_fop_meta_free(m);
 	}
+}
+
+static void kasumi_fop_reap(struct work_struct *work)
+{
+	LIST_HEAD(retiring);
+
+	(void)work;
+	for (;;) {
+		spin_lock(&kasumi_fop_lock);
+		list_splice_init(&kasumi_fop_retiring, &retiring);
+		spin_unlock(&kasumi_fop_lock);
+		if (list_empty(&retiring))
+			return;
+		kasumi_fop_retire_list(&retiring);
+	}
+}
+
+void kasumi_fop_put(struct inode *inode, bool inject)
+{
+	struct kasumi_fop_meta *m;
+	unsigned int *owners;
+
+	if (!inode)
+		return;
+	spin_lock(&kasumi_fop_lock);
+	m = kasumi_fop_lookup_rcu(inode);
+	if (!m)
+		goto out;
+	owners = inject ? &m->inject_owners : &m->iterate_owners;
+	if (WARN_ON_ONCE(!*owners))
+		goto out;
+	--*owners;
+	if (!inject && !m->iterate_owners)
+		WRITE_ONCE(m->iterate_client_data, NULL);
+	if (inject && !m->inject_owners)
+		clear_bit(AS_FLAGS_KASUMI_DIR_HAS_INJECT,
+			  &m->inode->i_mapping->flags);
+	if (!m->inject_owners && !m->iterate_owners) {
+		m = kasumi_fop_uninstall_locked(inode);
+		list_add_tail(&m->retire_node, &kasumi_fop_retiring);
+		/* Materialization can release an owner inside iterate_shared.
+		 */
+		schedule_work(&kasumi_fop_reap_work);
+	}
+out:
+	spin_unlock(&kasumi_fop_lock);
+}
+
+int kasumi_fop_live_count(void)
+{
+	return atomic_read(&kasumi_fop_live);
+}
+
+int kasumi_fop_retiring_count(void)
+{
+	return atomic_read(&kasumi_fop_retired);
 }
 
 int kasumi_fop_override_init(void)
@@ -395,6 +499,7 @@ static void kasumi_fop_override_retire_all(bool stop_new)
 	spin_unlock(&kasumi_fop_lock);
 
 	kasumi_fop_retire_list(&retiring);
+	flush_work(&kasumi_fop_reap_work);
 
 	/* Runtime CLEAR is reusable.  A concurrent/permanent stop wins and
 	 * keeps the install gate closed. */

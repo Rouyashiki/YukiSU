@@ -785,24 +785,6 @@ void kasumi_mark_inode_hidden(struct inode *inode)
 		set_bit(AS_FLAGS_KASUMI_HIDE, &inode->i_mapping->flags);
 }
 
-KASUMI_NOCFI void kasumi_mark_dir_has_inject(const char *path_str)
-{
-	struct path p;
-
-	if (!path_str)
-		return;
-	if (kern_path(path_str, LOOKUP_FOLLOW, &p) != 0)
-		return;
-	if (p.dentry && d_inode(p.dentry) && d_inode(p.dentry)->i_mapping) {
-		struct inode *inode = d_inode(p.dentry);
-
-		set_bit(AS_FLAGS_KASUMI_DIR_HAS_INJECT,
-			&inode->i_mapping->flags);
-		(void)kasumi_fop_install(inode);
-	}
-	path_put(&p);
-}
-
 KASUMI_NOCFI void kasumi_clear_inode_flags_for_path(const char *path_str,
 						    unsigned int bit)
 {
@@ -893,8 +875,8 @@ void kasumi_cleanup_locked(void)
 	}
 	hash_for_each_safe(kasumi_inject_dirs, bkt, tmp, inject_entry, node)
 	{
-		kasumi_clear_inode_flags_for_path(
-		    inject_entry->dir, AS_FLAGS_KASUMI_DIR_HAS_INJECT);
+		kasumi_fop_put(inject_entry->fop_inode, true);
+		inject_entry->fop_inode = NULL;
 		hlist_del_rcu(&inject_entry->node);
 		call_rcu(&inject_entry->rcu, kasumi_inject_entry_free_rcu);
 	}

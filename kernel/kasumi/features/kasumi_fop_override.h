@@ -9,6 +9,8 @@ typedef int (*kasumi_fop_iterate_client_fn)(struct file *file,
 					    void *data);
 
 int kasumi_fop_override_init(void);
+int kasumi_fop_live_count(void);
+int kasumi_fop_retiring_count(void);
 void kasumi_fop_override_stop_new(void);
 void kasumi_fop_override_exit(void);
 /* Retire all inode bindings without permanently disabling future installs.
@@ -16,7 +18,10 @@ void kasumi_fop_override_exit(void);
  * module exit so already-open directory files stay safe. */
 void kasumi_fop_override_clear(void);
 
-int kasumi_fop_install(struct inode *inode);
+/* Acquire under an active path or s_op client. Last-owner release retires on
+ * a worker; CLEAR/stop drains that worker before returning. */
+int kasumi_fop_get(struct inode *inode, bool inject);
+void kasumi_fop_put(struct inode *inode, bool inject);
 /* Bind one specialized iterate client to an installed inode shadow.  The data
  * pointer is release-published with @client and is protected by the client SRCU
  * domain while callbacks execute. */

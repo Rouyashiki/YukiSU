@@ -65,6 +65,7 @@ struct kasumi_hide_entry {
 
 struct kasumi_inject_entry {
 	char *dir;
+	struct inode *fop_inode;
 	struct hlist_node node;
 	struct rcu_head rcu;
 };

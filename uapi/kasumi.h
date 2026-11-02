@@ -103,6 +103,7 @@ struct kasumi_spoof_kstat {
 #define KSM_FEATURE_OVERLAY_XATTR_HIDE (1 << 13)
 #define KSM_FEATURE_MANAGED_HIDE (1 << 14)
 #define KSM_FEATURE_RULE_BYPASS (1 << 15)
+#define KSM_FEATURE_SAFE_RULE_RETIRE (1U << 16)
 
 #define KSM_USER_HIDE_PATH_MAX 4096
 #define KSM_USER_HIDE_LIVE 0

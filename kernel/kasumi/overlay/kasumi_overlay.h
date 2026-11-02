@@ -5,6 +5,7 @@
 #include <linux/list.h>
 
 void kasumi_add_inject_rule(char *dir);
+void kasumi_prune_inject_parent(const char *deleted_path);
 int kasumi_check_merge_target(const char *target);
 int kasumi_materialize_merge(const char *src_prefix, const char *target_dir,
 			     int depth, u32 rule_flags);

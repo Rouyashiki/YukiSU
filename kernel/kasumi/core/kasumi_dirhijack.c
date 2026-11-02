@@ -68,6 +68,7 @@ struct kasumi_dh_dir {
 	struct kasumi_dh_iop *iop_meta;
 	spinlock_t lock;
 	bool iterate_bound; /* client of the shared fop_override owner */
+	bool iterate_owned;
 	bool sop_client; /* exactly one s_op client per installed dir */
 	bool retiring; /* blocks late d_op installs during CLEAR */
 	struct list_head list;
@@ -1091,12 +1092,15 @@ static int kasumi_dh_install_iterate(struct inode *inode,
 
 	if (dir->iterate_bound)
 		return 0;
-	ret = kasumi_fop_install(inode);
+	ret = kasumi_fop_get(inode, false);
 	if (ret)
 		return ret;
 	ret = kasumi_fop_bind_iterate_client(inode, kasumi_dh_iterate, dir);
-	if (ret)
+	if (ret) {
+		kasumi_fop_put(inode, false);
 		return ret;
+	}
+	dir->iterate_owned = true;
 	dir->iterate_bound = true;
 	return 0;
 }
@@ -1215,6 +1219,10 @@ static void kasumi_dh_release_detached_dir(struct kasumi_dh_dir *dir)
 	}
 	inode = dir->dir_inode;
 	sb = inode ? inode->i_sb : NULL;
+	if (dir->iterate_owned) {
+		kasumi_fop_put(inode, false);
+		dir->iterate_owned = false;
+	}
 	/* Keep the s_op client's s_active pin until the parent inode reference
 	 * is gone.  A concurrent late-vnode reap may otherwise drop the final
 	 * active superblock reference and start shutdown while iput still uses
@@ -2162,6 +2170,10 @@ void kasumi_dirhijack_clear(void)
 			kasumi_dh_child_free(c);
 		}
 		list_del(&dir->list);
+		if (dir->iterate_owned) {
+			kasumi_fop_put(inode, false);
+			dir->iterate_owned = false;
+		}
 		/* dh_clients owns the s_active pin that makes this final parent
 		 * iput safe; publish that the dir no longer owns the inode
 		 * before allowing the shared s_op meta to reap.

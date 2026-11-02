@@ -44,6 +44,7 @@
 #include "kasumi_iop_override.h"
 #include "kasumi_dirhijack.h"
 #include "kasumi_vnode.h"
+#include "kasumi_fop_override.h"
 /* ======================================================================
  * Part 10: Inject Rule Helper
  * ====================================================================== */
@@ -53,15 +54,28 @@ void kasumi_add_inject_rule(char *dir)
 	struct kasumi_inject_entry *ie;
 	u32 hash;
 	bool found = false;
+	struct path path;
+	struct inode *inode = NULL;
 
 	if (!dir)
 		return;
+	if (!kern_path(dir, LOOKUP_FOLLOW, &path)) {
+		inode = d_inode(path.dentry);
+		if (!inode || kasumi_fop_get(inode, true))
+			inode = NULL;
+		path_put(&path);
+	}
 
 	hash = full_name_hash(NULL, dir, strlen(dir));
+	mutex_lock(&kasumi_config_mutex);
 	hlist_for_each_entry(
 	    ie, &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node)
 	{
 		if (strcmp(ie->dir, dir) == 0) {
+			struct inode *old = ie->fop_inode;
+
+			ie->fop_inode = inode;
+			inode = old;
 			found = true;
 			break;
 		}
@@ -70,6 +84,8 @@ void kasumi_add_inject_rule(char *dir)
 		ie = kmalloc(sizeof(*ie), GFP_KERNEL);
 		if (ie) {
 			ie->dir = dir;
+			ie->fop_inode = inode;
+			inode = NULL;
 			hlist_add_head_rcu(&ie->node,
 					   &kasumi_inject_dirs[hash_min(
 					       hash, KASUMI_HASH_BITS)]);
@@ -80,11 +96,66 @@ void kasumi_add_inject_rule(char *dir)
 	} else {
 		kfree(dir);
 	}
+	mutex_unlock(&kasumi_config_mutex);
+	kasumi_fop_put(inode, true);
 }
 
-/* ======================================================================
- * Part 10b: Inject - populate list for merge/add rule dirs
- * ====================================================================== */
+void kasumi_prune_inject_parent(const char *deleted_path)
+{
+	struct kasumi_entry *entry;
+	struct kasumi_merge_entry *merge;
+	struct kasumi_inject_entry *inject;
+	char *parent, *slash;
+	size_t len;
+	u32 hash;
+	int bkt;
+
+	parent = kstrdup(deleted_path, GFP_KERNEL);
+	if (!parent)
+		return;
+	slash = strrchr(parent, '/');
+	if (!slash)
+		goto free_parent;
+	slash[slash == parent ? 1 : 0] = '\0';
+	len = strlen(parent);
+	mutex_lock(&kasumi_config_mutex);
+	hash_for_each(kasumi_paths, bkt, entry, node)
+	{
+		const char *child;
+
+		if (strncmp(entry->src, parent, len))
+			continue;
+		child = entry->src + len;
+		if (len != 1 && *child++ != '/')
+			continue;
+		if (*child && !strchr(child, '/'))
+			goto unlock;
+	}
+	hash_for_each(kasumi_merge_dirs, bkt, merge, node)
+	{
+		if (!strcmp(merge->src, parent) ||
+		    (merge->resolved_src &&
+		     !strcmp(merge->resolved_src, parent)))
+			goto unlock;
+	}
+	hash = full_name_hash(NULL, parent, len);
+	hlist_for_each_entry(
+	    inject, &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node)
+	{
+		if (strcmp(inject->dir, parent))
+			continue;
+		hlist_del_rcu(&inject->node);
+		atomic_dec(&kasumi_rule_count);
+		kasumi_fop_put(inject->fop_inode, true);
+		inject->fop_inode = NULL;
+		call_rcu(&inject->rcu, kasumi_inject_entry_free_rcu);
+		break;
+	}
+unlock:
+	mutex_unlock(&kasumi_config_mutex);
+free_parent:
+	kfree(parent);
+}
 
 /* Called under RCU; a missing exact rule leaves merge-only directories alone.
  */
@@ -610,9 +681,6 @@ static KASUMI_NOCFI bool kasumi_register_nested_merge(const char *src_str,
 		if (me->resolved_src)
 			kasumi_add_inject_rule(
 			    kstrdup(me->resolved_src, GFP_KERNEL));
-		kasumi_mark_dir_has_inject(src_str);
-		if (me->resolved_src)
-			kasumi_mark_dir_has_inject(me->resolved_src);
 	}
 
 	kfree(resolved_src);
@@ -708,7 +776,6 @@ kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
 	inj_dir = kstrdup(mc->src_prefix, GFP_KERNEL);
 	if (inj_dir)
 		kasumi_add_inject_rule(inj_dir);
-	kasumi_mark_dir_has_inject(mc->src_prefix);
 
 	kfree(src_path);
 	kfree(tgt_path);
