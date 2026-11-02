@@ -1903,11 +1903,7 @@ fun restartAdbd(): Boolean =
 
 fun reboot(reason: String = "") {
     if (reason == "soft_reboot") {
-        if (isSoftRebootBlockedByKasumi()) {
-            Toast.makeText(ksuApp, R.string.soft_reboot_kasumi_unavailable, Toast.LENGTH_LONG).show()
-            return
-        }
-        execKsud("soft-reboot", newShell = true)
+        requestSoftReboot()
         return
     }
     val shell = getRootShell()

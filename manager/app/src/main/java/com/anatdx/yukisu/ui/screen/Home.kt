@@ -84,6 +84,8 @@ import com.anatdx.yukisu.ui.theme.getCardElevation
 import com.anatdx.yukisu.ui.util.LocalSnackbarHost
 import com.anatdx.yukisu.ui.util.checkNewVersion
 import com.anatdx.yukisu.ui.util.isSoftRebootBlockedByKasumi
+import com.anatdx.yukisu.ui.util.refreshSoftRebootStatus
+import com.anatdx.yukisu.ui.util.softRebootResultMessage
 import com.anatdx.yukisu.ui.util.module.LatestVersionInfo
 import com.anatdx.yukisu.ui.util.reboot
 import com.anatdx.yukisu.ui.viewmodel.HomeViewModel
@@ -327,6 +329,9 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                     )
 
                     CiUpdateCard()
+                    softRebootResultMessage(context)?.let { message ->
+                        WarningCard(message, color = MaterialTheme.colorScheme.secondaryContainer)
+                    }
 
                     if (ksudIntegrityStatus == KsudIntegrityStatus.MISMATCH) {
                         WarningCard(stringResource(R.string.ksud_integrity_warning))
@@ -546,10 +551,10 @@ private fun TopBar(
                     Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.kasumi_title))
                 }
                 var showDropdown by remember { mutableStateOf(false) }
-                var softRebootBlocked by remember { mutableStateOf(false) }
+                val softRebootBlocked = isSoftRebootBlockedByKasumi()
                 KsuIsValid {
                     IconButton(onClick = {
-                        softRebootBlocked = isSoftRebootBlockedByKasumi()
+                        refreshSoftRebootStatus()
                         showDropdown = true
                     }) {
                         YukiIcon(

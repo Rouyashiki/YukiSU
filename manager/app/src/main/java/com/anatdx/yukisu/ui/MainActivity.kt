@@ -56,6 +56,7 @@ import com.anatdx.yukisu.ui.theme.KernelSUTheme
 import com.anatdx.yukisu.ui.theme.ThemeManager
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.KsuCli
+import com.anatdx.yukisu.ui.util.refreshSoftRebootStatus
 import com.anatdx.yukisu.ui.util.LocalNavigationLeaveGuard
 import com.anatdx.yukisu.ui.util.LocalSnackbarHost
 import com.anatdx.yukisu.ui.util.NavigationLeaveGuard
@@ -340,7 +341,10 @@ class MainActivity : ComponentActivity() {
                     KsudIntegrity.refresh(this@MainActivity, notifyOnMismatch = false)
                     manager
                 }
-                if (manager) onManagerAccessChanged()
+                if (manager) {
+                    onManagerAccessChanged()
+                    refreshSoftRebootStatus()
+                }
                 if (isInitialized) {
                     refreshData()
                 }

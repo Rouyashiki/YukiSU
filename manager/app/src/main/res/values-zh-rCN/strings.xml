@@ -287,8 +287,16 @@
     <string name="settings_auto_jailbreak_summary">开机检测到 Permissive SELinux 时自动使用 Magica 引导 late-load。需要授予本应用自启动权限。</string>
     <string name="settings_soft_reboot">使用软重启代替重启</string>
     <string name="settings_soft_reboot_summary">安装、更新、启用、停用或移除模块后使用软重启。</string>
-    <string name="settings_soft_reboot_kasumi_unavailable">Kasumi 运行期间无法使用软重启；模块变更后将使用完整重启。</string>
-    <string name="soft_reboot_kasumi_unavailable">Kasumi 正在运行，请使用完整重启。</string>
+    <string name="soft_reboot_checking">正在检查模拟软重启支持情况…</string>
+    <string name="soft_reboot_unavailable">无法确认模拟软重启能力，请检查 root 授权并更新 ksud。</string>
+    <string name="soft_reboot_unavailable_reason">暂时无法模拟软重启：%1$s</string>
+    <string name="soft_reboot_accepted">模拟软重启已受理，正在恢复 Android 和已保存规则。</string>
+    <string name="soft_reboot_completed">模拟软重启已完成，已保存规则已恢复。</string>
+    <plurals name="soft_reboot_pending">
+        <item quantity="other">Android 已重启；%1$d 条隐藏规则将在对应目录可用后自动绑定。</item>
+    </plurals>
+    <string name="soft_reboot_failed">模拟软重启恢复失败：%1$s</string>
+    <string name="soft_reboot_rejected">模拟软重启未被受理，请刷新状态查看详情。</string>
     <string name="settings_adb_root">ADB Root</string>
     <string name="settings_adb_root_summary">让 adbd 以 root 权限运行</string>
     <string name="settings_shell_su_adb_only">限制 Shell 仅可通过 ADB 获取 Root</string>

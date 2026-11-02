@@ -671,8 +671,6 @@
     <string name="ci_update_error_stream_failed">CI 更新資料流傳輸失敗。</string>
     <string name="settings_soft_reboot">以軟重新啟動取代重新啟動</string>
     <string name="settings_soft_reboot_summary">安裝、更新、啟用、停用或移除模組後使用軟重新啟動。</string>
-    <string name="settings_soft_reboot_kasumi_unavailable">Kasumi 運行期間無法使用軟重新啟動；模組變更後將使用完整重新啟動。</string>
-    <string name="soft_reboot_kasumi_unavailable">Kasumi 正在運行，請使用完整重新啟動。</string>
     <string name="install_direct_lkm_title">將 LKM 直接嵌入 boot 核心</string>
     <string name="install_direct_lkm_summary">選擇修補映像檔、直接安裝和 OTA 槽位安裝均改用 boot 而不是 init_boot，並先清理舊的 KernelSU ramdisk 注入。</string>
     <string name="install_direct_lkm_warning_title">已啟用核心直嵌模式</string>

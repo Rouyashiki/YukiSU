@@ -119,11 +119,9 @@ fun updateModuleInstallStatus(
 @Destination<RootGraph>
 fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
     val context = LocalContext.current
-    val softReboot = remember(flashIt, context) {
-        (flashIt is FlashIt.FlashModule ||
-            flashIt is FlashIt.FlashModules ||
-            flashIt is FlashIt.FlashModuleUpdate) && isSoftRebootPreferred(context)
-    }
+    val softReboot = (flashIt is FlashIt.FlashModule ||
+        flashIt is FlashIt.FlashModules ||
+        flashIt is FlashIt.FlashModuleUpdate) && isSoftRebootPreferred(context)
 
     val isExternalInstall = remember {
         when (flashIt) {

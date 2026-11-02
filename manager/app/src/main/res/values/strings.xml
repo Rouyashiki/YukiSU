@@ -291,8 +291,17 @@
     <string name="settings_auto_jailbreak_summary">Automatically use Magica to bootstrap late-load when Permissive SELinux is detected at boot. Requires granting autostart permission to this app.</string>
     <string name="settings_soft_reboot" tools:ignore="MissingTranslation">Soft restart instead of reboot</string>
     <string name="settings_soft_reboot_summary" tools:ignore="MissingTranslation">Use a soft restart after installing, updating, enabling, disabling, or removing modules.</string>
-    <string name="settings_soft_reboot_kasumi_unavailable" tools:ignore="MissingTranslation">Unavailable while Kasumi is active; module changes will use a full reboot.</string>
-    <string name="soft_reboot_kasumi_unavailable" tools:ignore="MissingTranslation">Kasumi is active. Use a full reboot.</string>
+    <string name="soft_reboot_checking" tools:ignore="MissingTranslation">Checking soft restart support…</string>
+    <string name="soft_reboot_unavailable" tools:ignore="MissingTranslation">Cannot verify soft restart support. Check root access and update ksud.</string>
+    <string name="soft_reboot_unavailable_reason" tools:ignore="MissingTranslation">Soft restart unavailable: %1$s</string>
+    <string name="soft_reboot_accepted" tools:ignore="MissingTranslation">Soft restart accepted. Android and saved rules are being restored.</string>
+    <string name="soft_reboot_completed" tools:ignore="MissingTranslation">Soft restart completed and saved rules restored.</string>
+    <plurals name="soft_reboot_pending" tools:ignore="MissingTranslation">
+        <item quantity="one">Android restarted. %1$d hide rule will bind automatically when its directory becomes available.</item>
+        <item quantity="other">Android restarted. %1$d hide rules will bind automatically when their directories become available.</item>
+    </plurals>
+    <string name="soft_reboot_failed" tools:ignore="MissingTranslation">Soft restart recovery failed: %1$s</string>
+    <string name="soft_reboot_rejected" tools:ignore="MissingTranslation">Soft restart was not accepted. Refresh its status for details.</string>
     <string name="settings_adb_root">ADB Root</string>
     <string name="settings_adb_root_summary">Run adbd with root privileges</string>
     <string name="settings_shell_su_adb_only" tools:ignore="MissingTranslation">Restrict shell root to ADB</string>
