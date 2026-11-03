@@ -321,7 +321,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                     }
 
                     var autoUpdateKsud by rememberSaveable {
-                        mutableStateOf(prefs.getBoolean("auto_update_ksud", false))
+                        mutableStateOf(prefs.getBoolean("auto_update_ksud", true))
                     }
                     SwitchItem(
                         icon = Icons.Filled.Sync,

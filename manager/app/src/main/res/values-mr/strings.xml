@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">सेटिंग जतन केली, प्रभावी होण्यासाठी रीबूट करा</string>
     <string name="setting_change_failed">सेटिंग अयशस्वी</string>
     <string name="settings_auto_update_ksud">ksud daemon स्वयं-अपडेट करा</string>
-    <string name="settings_auto_update_ksud_summary">अॅप कोल्ड-स्टार्टवर बंडल केलेले ksud बायनरी /data/adb/ksud मध्ये सिंक करा. डीफॉल्टनुसार बंद; अन्यथा होम पृष्ठावरील व्यक्तिचलित बटण वापरा.</string>
+    <string name="settings_auto_update_ksud_summary">अॅप कोल्ड-स्टार्टवर बंडल केलेले ksud बायनरी /data/adb/ksud मध्ये सिंक करा.</string>
 
     <string name="su_request_desc">एक अॅप सुपरयूजर (su) प्रवेशाची विनंती करत आहे.</string>
     <string name="su_request_allow_forever">नेहमी परवानगी द्या</string>

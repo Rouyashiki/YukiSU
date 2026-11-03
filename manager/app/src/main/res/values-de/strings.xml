@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Einstellung gespeichert, zum Anwenden neu starten</string>
     <string name="setting_change_failed">Einstellung fehlgeschlagen</string>
     <string name="settings_auto_update_ksud">ksud-Daemon automatisch aktualisieren</string>
-    <string name="settings_auto_update_ksud_summary">Die gebündelte ksud-Binärdatei beim Kaltstart der App nach /data/adb/ksud synchronisieren. Standardmäßig deaktiviert; verwende sonst die manuelle Schaltfläche auf der Startseite.</string>
+    <string name="settings_auto_update_ksud_summary">Die gebündelte ksud-Binärdatei beim Kaltstart der App nach /data/adb/ksud synchronisieren.</string>
 
     <string name="su_request_desc">Eine App fordert Superuser-Zugriff (su) an.</string>
     <string name="su_request_allow_forever">Immer erlauben</string>

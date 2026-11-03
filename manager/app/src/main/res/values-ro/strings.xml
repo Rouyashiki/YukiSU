@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Setare salvată, reporniți pentru a aplica</string>
     <string name="setting_change_failed">Setarea a eșuat</string>
     <string name="settings_auto_update_ksud">Actualizează automat daemonul ksud</string>
-    <string name="settings_auto_update_ksud_summary">Sincronizează binarul ksud inclus în /data/adb/ksud la pornirea la rece a aplicației. Dezactivat implicit; altfel, folosiți butonul manual de pe pagina principală.</string>
+    <string name="settings_auto_update_ksud_summary">Sincronizează binarul ksud inclus în /data/adb/ksud la pornirea la rece a aplicației.</string>
 
     <string name="su_request_desc">O aplicație solicită acces de superutilizator (su).</string>
     <string name="su_request_allow_forever">Permite întotdeauna</string>

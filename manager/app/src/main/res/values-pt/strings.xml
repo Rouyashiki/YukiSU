@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Configuração salva, reinicie para aplicar</string>
     <string name="setting_change_failed">Falha na configuração</string>
     <string name="settings_auto_update_ksud">Atualizar automaticamente o daemon ksud</string>
-    <string name="settings_auto_update_ksud_summary">Sincronizar o binário ksud incluído para /data/adb/ksud na inicialização a frio do aplicativo. Desativado por padrão; caso contrário, use o botão manual na página inicial.</string>
+    <string name="settings_auto_update_ksud_summary">Sincronizar o binário ksud incluído para /data/adb/ksud na inicialização a frio do aplicativo.</string>
 
     <string name="su_request_desc">Um aplicativo está solicitando acesso de superusuário (su).</string>
     <string name="su_request_allow_forever">Permitir sempre</string>

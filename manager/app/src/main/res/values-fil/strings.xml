@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Na-save ang setting, i-reboot para magkabisa</string>
     <string name="setting_change_failed">Nabigo ang setting</string>
     <string name="settings_auto_update_ksud">Auto-update ng ksud daemon</string>
-    <string name="settings_auto_update_ksud_summary">I-sync ang kasamang ksud binary sa /data/adb/ksud sa app cold-start. Naka-off bilang default; kung hindi, gamitin ang manu-manong button sa home page.</string>
+    <string name="settings_auto_update_ksud_summary">I-sync ang kasamang ksud binary sa /data/adb/ksud sa app cold-start.</string>
 
     <string name="su_request_desc">May app na humihiling ng superuser (su) access.</string>
     <string name="su_request_allow_forever">Laging payagan</string>

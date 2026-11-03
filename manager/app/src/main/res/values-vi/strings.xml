@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Đã lưu cài đặt, khởi động lại để áp dụng</string>
     <string name="setting_change_failed">Cài đặt thất bại</string>
     <string name="settings_auto_update_ksud">Tự động cập nhật daemon ksud</string>
-    <string name="settings_auto_update_ksud_summary">Đồng bộ tệp nhị phân ksud đi kèm vào /data/adb/ksud khi khởi động nguội ứng dụng. Mặc định tắt; nếu không hãy dùng nút thủ công ở trang chính.</string>
+    <string name="settings_auto_update_ksud_summary">Đồng bộ tệp nhị phân ksud đi kèm vào /data/adb/ksud khi khởi động nguội ứng dụng.</string>
 
     <string name="su_request_desc">Một ứng dụng đang yêu cầu quyền truy cập siêu người dùng (su).</string>
     <string name="su_request_allow_forever">Luôn cho phép</string>

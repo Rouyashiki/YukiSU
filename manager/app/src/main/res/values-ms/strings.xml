@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Tetapan disimpan, but semula untuk berkuat kuasa</string>
     <string name="setting_change_failed">Tetapan gagal</string>
     <string name="settings_auto_update_ksud">Kemas kini automatik daemon ksud</string>
-    <string name="settings_auto_update_ksud_summary">Segerakkan binari ksud yang disertakan ke /data/adb/ksud semasa permulaan sejuk aplikasi. Dilumpuhkan secara lalai; jika tidak, gunakan butang manual di halaman utama.</string>
+    <string name="settings_auto_update_ksud_summary">Segerakkan binari ksud yang disertakan ke /data/adb/ksud semasa permulaan sejuk aplikasi.</string>
 
     <string name="su_request_desc">Sebuah aplikasi meminta akses superuser (su).</string>
     <string name="su_request_allow_forever">Sentiasa benarkan</string>

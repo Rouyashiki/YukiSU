@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">設定を保存しました。再起動して適用してください</string>
     <string name="setting_change_failed">設定に失敗しました</string>
     <string name="settings_auto_update_ksud">ksud デーモンを自動更新</string>
-    <string name="settings_auto_update_ksud_summary">アプリのコールドスタート時に同梱の ksud バイナリを /data/adb/ksud に同期します。デフォルトはオフです。それ以外はホーム画面の手動ボタンを使用してください。</string>
+    <string name="settings_auto_update_ksud_summary">アプリのコールドスタート時に同梱の ksud バイナリを /data/adb/ksud に同期します。</string>
 
     <string name="su_request_desc">アプリがスーパーユーザー (su) アクセスを要求しています。</string>
     <string name="su_request_allow_forever">常に許可</string>

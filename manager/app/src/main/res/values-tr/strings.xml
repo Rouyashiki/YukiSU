@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Ayar kaydedildi, uygulamak için yeniden başlatın</string>
     <string name="setting_change_failed">Ayar başarısız</string>
     <string name="settings_auto_update_ksud">ksud arka plan hizmetini otomatik güncelle</string>
-    <string name="settings_auto_update_ksud_summary">Uygulama soğuk başlangıcında birlikte gelen ksud ikili dosyasını /data/adb/ksud konumuna eşitle. Varsayılan olarak kapalı; aksi takdirde ana sayfadaki elle düğmesini kullanın.</string>
+    <string name="settings_auto_update_ksud_summary">Uygulama soğuk başlangıcında birlikte gelen ksud ikili dosyasını /data/adb/ksud konumuna eşitle.</string>
 
     <string name="su_request_desc">Bir uygulama süper kullanıcı (su) erişimi istiyor.</string>
     <string name="su_request_allow_forever">Her zaman izin ver</string>

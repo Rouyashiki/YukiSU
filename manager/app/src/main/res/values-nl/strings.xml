@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Instelling opgeslagen, herstart om toe te passen</string>
     <string name="setting_change_failed">Instelling mislukt</string>
     <string name="settings_auto_update_ksud">ksud-daemon automatisch bijwerken</string>
-    <string name="settings_auto_update_ksud_summary">Synchroniseer het gebundelde ksud-binaire bestand naar /data/adb/ksud bij de koude start van de app. Standaard uitgeschakeld; gebruik anders de handmatige knop op de startpagina.</string>
+    <string name="settings_auto_update_ksud_summary">Synchroniseer het gebundelde ksud-binaire bestand naar /data/adb/ksud bij de koude start van de app.</string>
 
     <string name="su_request_desc">Een app vraagt om supergebruiker-toegang (su).</string>
     <string name="su_request_allow_forever">Altijd toestaan</string>

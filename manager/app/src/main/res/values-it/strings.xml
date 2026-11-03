@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Impostazione salvata, riavvia per applicare</string>
     <string name="setting_change_failed">Impostazione non riuscita</string>
     <string name="settings_auto_update_ksud">Aggiorna automaticamente il demone ksud</string>
-    <string name="settings_auto_update_ksud_summary">Sincronizza il binario ksud incluso in /data/adb/ksud all\'avvio a freddo dell\'app. Disabilitato per impostazione predefinita; altrimenti usa il pulsante manuale nella pagina iniziale.</string>
+    <string name="settings_auto_update_ksud_summary">Sincronizza il binario ksud incluso in /data/adb/ksud all\'avvio a freddo dell\'app.</string>
 
     <string name="su_request_desc">Un\'app sta richiedendo l\'accesso come superutente (su).</string>
     <string name="su_request_allow_forever">Consenti sempre</string>

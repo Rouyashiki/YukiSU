@@ -251,7 +251,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         initPlatform()
                         if (getSharedPreferences("settings", MODE_PRIVATE)
-                                .getBoolean("auto_update_ksud", false)
+                                .getBoolean("auto_update_ksud", true)
                         ) {
                             KsuCli.autoSyncKsudIfNeeded()
                         }

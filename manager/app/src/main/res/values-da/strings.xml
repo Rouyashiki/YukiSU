@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Indstilling gemt, genstart for at træde i kraft</string>
     <string name="setting_change_failed">Indstilling mislykkedes</string>
     <string name="settings_auto_update_ksud">Auto-opdater ksud daemon</string>
-    <string name="settings_auto_update_ksud_summary">Synkronisér den medfølgende ksud-binærfil til /data/adb/ksud ved appens koldstart. Fra som standard; ellers brug den manuelle knap på startsiden.</string>
+    <string name="settings_auto_update_ksud_summary">Synkronisér den medfølgende ksud-binærfil til /data/adb/ksud ved appens koldstart.</string>
 
     <string name="su_request_desc">En app anmoder om superbruger (su)-adgang.</string>
     <string name="su_request_allow_forever">Tillad altid</string>

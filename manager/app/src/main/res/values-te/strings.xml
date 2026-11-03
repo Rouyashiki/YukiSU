@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">సెట్టింగ్ సేవ్ చేయబడింది, అమలులోకి రావడానికి రీబూట్ చేయండి</string>
     <string name="setting_change_failed">సెట్టింగ్ విఫలమైంది</string>
     <string name="settings_auto_update_ksud">ksud daemonను స్వయంచాలకంగా అప్‌డేట్ చేయండి</string>
-    <string name="settings_auto_update_ksud_summary">యాప్ కోల్డ్-స్టార్ట్‌లో బండిల్ చేసిన ksud బైనరీని /data/adb/ksudకు సింక్ చేయండి. డిఫాల్ట్‌గా ఆఫ్; లేకపోతే హోమ్ పేజీలో మాన్యువల్ బటన్‌ను ఉపయోగించండి.</string>
+    <string name="settings_auto_update_ksud_summary">యాప్ కోల్డ్-స్టార్ట్‌లో బండిల్ చేసిన ksud బైనరీని /data/adb/ksudకు సింక్ చేయండి.</string>
 
     <string name="su_request_desc">ఒక యాప్ సూపర్‌యూజర్ (su) యాక్సెస్‌ను అభ్యర్థిస్తోంది.</string>
     <string name="su_request_allow_forever">ఎల్లప్పుడూ అనుమతించండి</string>

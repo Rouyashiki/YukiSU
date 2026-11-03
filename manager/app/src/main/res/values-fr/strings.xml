@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Paramètre enregistré, redémarrez pour appliquer</string>
     <string name="setting_change_failed">Échec du paramètre</string>
     <string name="settings_auto_update_ksud">Mise à jour automatique du démon ksud</string>
-    <string name="settings_auto_update_ksud_summary">Synchroniser le binaire ksud fourni vers /data/adb/ksud au démarrage à froid de l\'application. Désactivé par défaut ; sinon, utilisez le bouton manuel sur la page d\'accueil.</string>
+    <string name="settings_auto_update_ksud_summary">Synchroniser le binaire ksud fourni vers /data/adb/ksud au démarrage à froid de l\'application.</string>
 
     <string name="su_request_desc">Une application demande un accès superutilisateur (su).</string>
     <string name="su_request_allow_forever">Toujours autoriser</string>

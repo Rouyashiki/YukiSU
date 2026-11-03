@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">설정이 저장되었습니다. 적용하려면 재부팅하세요</string>
     <string name="setting_change_failed">설정 실패</string>
     <string name="settings_auto_update_ksud">ksud 데몬 자동 업데이트</string>
-    <string name="settings_auto_update_ksud_summary">앱 콜드 스타트 시 번들 ksud 바이너리를 /data/adb/ksud에 동기화합니다. 기본값은 꺼짐입니다. 그렇지 않으면 홈 화면의 수동 버튼을 사용하세요.</string>
+    <string name="settings_auto_update_ksud_summary">앱 콜드 스타트 시 번들 ksud 바이너리를 /data/adb/ksud에 동기화합니다.</string>
 
     <string name="su_request_desc">앱이 슈퍼유저(su) 접근을 요청하고 있습니다.</string>
     <string name="su_request_allow_forever">항상 허용</string>

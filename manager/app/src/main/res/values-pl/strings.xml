@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Ustawienie zapisane, uruchom ponownie, aby zastosować</string>
     <string name="setting_change_failed">Ustawienie nie powiodło się</string>
     <string name="settings_auto_update_ksud">Automatycznie aktualizuj demona ksud</string>
-    <string name="settings_auto_update_ksud_summary">Synchronizuj dołączony plik binarny ksud do /data/adb/ksud przy zimnym starcie aplikacji. Domyślnie wyłączone; w przeciwnym razie użyj przycisku ręcznego na stronie głównej.</string>
+    <string name="settings_auto_update_ksud_summary">Synchronizuj dołączony plik binarny ksud do /data/adb/ksud przy zimnym starcie aplikacji.</string>
 
     <string name="su_request_desc">Aplikacja żąda dostępu superużytkownika (su).</string>
     <string name="su_request_allow_forever">Zezwalaj zawsze</string>

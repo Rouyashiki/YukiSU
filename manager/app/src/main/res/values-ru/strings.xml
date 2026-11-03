@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Настройка сохранена, перезагрузите для применения</string>
     <string name="setting_change_failed">Не удалось применить настройку</string>
     <string name="settings_auto_update_ksud">Автообновление демона ksud</string>
-    <string name="settings_auto_update_ksud_summary">Синхронизировать встроенный бинарный файл ksud в /data/adb/ksud при холодном запуске приложения. По умолчанию отключено; иначе используйте кнопку ручного обновления на главной странице.</string>
+    <string name="settings_auto_update_ksud_summary">Синхронизировать встроенный бинарный файл ksud в /data/adb/ksud при холодном запуске приложения.</string>
 
     <string name="su_request_desc">Приложение запрашивает права суперпользователя (su).</string>
     <string name="su_request_allow_forever">Разрешить всегда</string>

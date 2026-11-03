@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Postavka spremljena, ponovno pokrenite za primjenu</string>
     <string name="setting_change_failed">Postavka nije uspjela</string>
     <string name="settings_auto_update_ksud">Automatski ažuriraj daemon ksud</string>
-    <string name="settings_auto_update_ksud_summary">Sinkroniziraj priloženu ksud binarnu datoteku u /data/adb/ksud pri hladnom pokretanju aplikacije. Zadano isključeno; u suprotnom koristite ručni gumb na početnoj stranici.</string>
+    <string name="settings_auto_update_ksud_summary">Sinkroniziraj priloženu ksud binarnu datoteku u /data/adb/ksud pri hladnom pokretanju aplikacije.</string>
 
     <string name="su_request_desc">Aplikacija zahtijeva pristup superkorisnika (su).</string>
     <string name="su_request_allow_forever">Uvijek dopusti</string>

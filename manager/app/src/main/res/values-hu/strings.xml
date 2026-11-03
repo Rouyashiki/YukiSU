@@ -484,7 +484,7 @@ A</string>
     <string name="setting_change_saved_reboot">Beállítás mentve, indítsa újra az alkalmazáshoz</string>
     <string name="setting_change_failed">A beállítás sikertelen</string>
     <string name="settings_auto_update_ksud">ksud démon automatikus frissítése</string>
-    <string name="settings_auto_update_ksud_summary">A csomagolt ksud bináris szinkronizálása a /data/adb/ksud helyre az alkalmazás hidegindításakor. Alapértelmezetten kikapcsolva; egyébként használja a kézi gombot a kezdőlapon.</string>
+    <string name="settings_auto_update_ksud_summary">A csomagolt ksud bináris szinkronizálása a /data/adb/ksud helyre az alkalmazás hidegindításakor.</string>
 
     <string name="su_request_desc">Egy alkalmazás rendszergazdai (su) hozzáférést kér.</string>
     <string name="su_request_allow_forever">Mindig engedélyezés</string>

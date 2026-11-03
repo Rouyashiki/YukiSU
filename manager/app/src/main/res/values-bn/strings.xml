@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">সেটিং সংরক্ষিত, কার্যকর হতে রিবুট করুন</string>
     <string name="setting_change_failed">সেটিং ব্যর্থ</string>
     <string name="settings_auto_update_ksud">ksud daemon স্বয়ংক্রিয়-আপডেট করুন</string>
-    <string name="settings_auto_update_ksud_summary">অ্যাপ কোল্ড-স্টার্টে বান্ডিল করা ksud বাইনারি /data/adb/ksud এ সিঙ্ক করুন। ডিফল্টরূপে বন্ধ; অন্যথায় হোম পৃষ্ঠায় ম্যানুয়াল বোতাম ব্যবহার করুন।</string>
+    <string name="settings_auto_update_ksud_summary">অ্যাপ কোল্ড-স্টার্টে বান্ডিল করা ksud বাইনারি /data/adb/ksud এ সিঙ্ক করুন।</string>
 
     <string name="su_request_desc">একটি অ্যাপ সুপারইউজার (su) অ্যাক্সেস অনুরোধ করছে।</string>
     <string name="su_request_allow_forever">সর্বদা অনুমতি দিন</string>

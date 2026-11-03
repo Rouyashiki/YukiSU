@@ -832,7 +832,7 @@
     <string name="setting_change_saved_reboot">设置成功，重启生效</string>
     <string name="setting_change_failed">设置失败</string>
     <string name="settings_auto_update_ksud">自动更新 ksud</string>
-    <string name="settings_auto_update_ksud_summary">应用冷启动时自动将内置的 ksud 同步到 /data/adb/ksud。默认关闭，需要时去主页手动同步。</string>
+    <string name="settings_auto_update_ksud_summary">应用冷启动时自动将内置的 ksud 同步到 /data/adb/ksud。</string>
     <string name="su_request_desc">一个应用正在请求超级用户（su）权限。</string>
     <string name="su_request_allow_forever">允许并记住</string>
     <string name="su_request_allow_once">仅允许一次</string>

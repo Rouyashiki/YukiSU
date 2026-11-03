@@ -483,7 +483,7 @@
     <string name="setting_change_saved_reboot">Ayar yadda saxlanıldı, qüvvəyə minməsi üçün yenidən başladın</string>
     <string name="setting_change_failed">Ayar alınmadı</string>
     <string name="settings_auto_update_ksud">ksud demonunu avtomatik yenilə</string>
-    <string name="settings_auto_update_ksud_summary">Tətbiqin soyuq başlanğıcında birlikdə gələn ksud icra faylını /data/adb/ksud ünvanına sinxronlaşdır. Standart olaraq deaktiv; əks halda ana səhifədəki əllə düyməsini istifadə edin.</string>
+    <string name="settings_auto_update_ksud_summary">Tətbiqin soyuq başlanğıcında birlikdə gələn ksud icra faylını /data/adb/ksud ünvanına sinxronlaşdır.</string>
 
     <string name="su_request_desc">Bir tətbiq superistifadəçi (su) girişi tələb edir.</string>
     <string name="su_request_allow_forever">Həmişə icazə ver</string>

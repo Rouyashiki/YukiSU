@@ -835,7 +835,7 @@
     <string name="setting_change_saved_reboot">Setting saved, reboot to take effect</string>
     <string name="setting_change_failed">Setting failed</string>
     <string name="settings_auto_update_ksud">Auto-update ksud daemon</string>
-    <string name="settings_auto_update_ksud_summary">Sync the bundled ksud binary to /data/adb/ksud on app cold-start. Off by default; otherwise use the manual button on the home page.</string>
+    <string name="settings_auto_update_ksud_summary">Sync the bundled ksud binary to /data/adb/ksud on app cold-start.</string>
 
     <string name="su_request_desc">An app is requesting superuser (su) access.</string>
     <string name="su_request_allow_forever">Allow always</string>

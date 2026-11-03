@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">تم حفظ الإعداد، أعد التشغيل للتطبيق</string>
     <string name="setting_change_failed">فشل الإعداد</string>
     <string name="settings_auto_update_ksud">تحديث خدمة ksud تلقائياً</string>
-    <string name="settings_auto_update_ksud_summary">مزامنة ملف ksud الثنائي المرفق إلى /data/adb/ksud عند بدء التشغيل البارد للتطبيق. معطّل افتراضياً؛ وإلا استخدم الزر اليدوي في الصفحة الرئيسية.</string>
+    <string name="settings_auto_update_ksud_summary">مزامنة ملف ksud الثنائي المرفق إلى /data/adb/ksud عند بدء التشغيل البارد للتطبيق.</string>
 
     <string name="su_request_desc">يطلب أحد التطبيقات وصول المستخدم الخارق (su).</string>
     <string name="su_request_allow_forever">السماح دائماً</string>

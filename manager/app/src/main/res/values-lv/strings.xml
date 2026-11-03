@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Iestatījums saglabāts, restartējiet, lai lietotu</string>
     <string name="setting_change_failed">Iestatījums neizdevās</string>
     <string name="settings_auto_update_ksud">Automātiski atjaunināt ksud dēmonu</string>
-    <string name="settings_auto_update_ksud_summary">Sinhronizēt komplektācijā iekļauto ksud bināro failu uz /data/adb/ksud lietotnes aukstajā startā. Pēc noklusējuma izslēgts; pretējā gadījumā izmantojiet manuālo pogu sākuma lapā.</string>
+    <string name="settings_auto_update_ksud_summary">Sinhronizēt komplektācijā iekļauto ksud bināro failu uz /data/adb/ksud lietotnes aukstajā startā.</string>
 
     <string name="su_request_desc">Lietotne pieprasa superlietotāja (su) piekļuvi.</string>
     <string name="su_request_allow_forever">Vienmēr atļaut</string>

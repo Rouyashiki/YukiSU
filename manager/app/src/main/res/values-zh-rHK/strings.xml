@@ -509,7 +509,7 @@
     <string name="setting_change_saved_reboot">設定成功，重新啟動生效</string>
     <string name="setting_change_failed">設定失敗</string>
     <string name="settings_auto_update_ksud">自動更新 ksud</string>
-    <string name="settings_auto_update_ksud_summary">應用冷啟動時自動將內建的 ksud 同步到 /data/adb/ksud。默認關閉，需要時去主頁手動同步。</string>
+    <string name="settings_auto_update_ksud_summary">應用冷啟動時自動將內建的 ksud 同步到 /data/adb/ksud。</string>
 
     <string name="su_request_desc">一個應用程式正在請求超級使用者（su）權限。</string>
     <string name="su_request_allow_forever">允許並記住</string>

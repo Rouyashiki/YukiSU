@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">บันทึกการตั้งค่าแล้ว รีบูตเพื่อใช้งาน</string>
     <string name="setting_change_failed">ตั้งค่าไม่สำเร็จ</string>
     <string name="settings_auto_update_ksud">อัปเดตเดมอน ksud อัตโนมัติ</string>
-    <string name="settings_auto_update_ksud_summary">ซิงค์ไฟล์ไบนารี ksud ที่มาพร้อมไปยัง /data/adb/ksud เมื่อแอปเริ่มทำงานแบบเย็น ปิดตามค่าเริ่มต้น มิฉะนั้นใช้ปุ่มด้วยตนเองในหน้าหลัก</string>
+    <string name="settings_auto_update_ksud_summary">ซิงค์ไฟล์ไบนารี ksud ที่มาพร้อมไปยัง /data/adb/ksud เมื่อแอปเริ่มทำงานแบบเย็น</string>
 
     <string name="su_request_desc">แอปกำลังขอสิทธิ์การเข้าถึงซูเปอร์ยูเซอร์ (su)</string>
     <string name="su_request_allow_forever">อนุญาตเสมอ</string>

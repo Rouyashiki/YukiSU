@@ -485,7 +485,7 @@
     <string name="setting_change_saved_reboot">Pengaturan disimpan, mulai ulang untuk menerapkan</string>
     <string name="setting_change_failed">Pengaturan gagal</string>
     <string name="settings_auto_update_ksud">Otomatis perbarui daemon ksud</string>
-    <string name="settings_auto_update_ksud_summary">Sinkronkan biner ksud bawaan ke /data/adb/ksud saat aplikasi mulai dingin. Nonaktif secara bawaan; jika tidak, gunakan tombol manual di halaman utama.</string>
+    <string name="settings_auto_update_ksud_summary">Sinkronkan biner ksud bawaan ke /data/adb/ksud saat aplikasi mulai dingin.</string>
 
     <string name="su_request_desc">Sebuah aplikasi meminta akses superuser (su).</string>
     <string name="su_request_allow_forever">Selalu izinkan</string>
