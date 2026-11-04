@@ -52,6 +52,8 @@
     <string name="plugin_config_load_failed">插件配置加载失败</string>
     <string name="plugin_config_saved">配置已保存</string>
     <string name="plugin_config_save_failed">配置保存失败</string>
+    <string name="plugin_config_restore_default">恢复默认</string>
+    <string name="plugin_config_failed_keys">失败项：%1$s</string>
     <string name="plugin_save">保存</string>
     <string name="plugin_log_title">%1$s 日志</string>
     <string name="plugin_log_view">查看日志</string>

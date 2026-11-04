@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anatdx.yukisu.ui.util.PluginCommandResult
 import com.anatdx.yukisu.ui.util.clearPluginLog
+import com.anatdx.yukisu.ui.util.deletePluginConfig
 import com.anatdx.yukisu.ui.util.getPluginLog
 import com.anatdx.yukisu.ui.util.installPluginZip
 import com.anatdx.yukisu.ui.util.listPluginConfig
@@ -53,6 +54,8 @@ data class PluginInfo(
     val enabled: Boolean,
     val hasManifest: Boolean,
     val hasAction: Boolean,
+    val actionUnknown: Boolean,
+    val callbacks: List<String>,
     val quickAction: PluginQuickAction?,
     val config: List<PluginConfigField>,
     val depends: List<String>,
@@ -165,26 +168,27 @@ class PluginViewModel : ViewModel() {
             val savedValues = runCatching {
                 JSONObject(result.stdout.ifBlank { "{}" })
             }.getOrNull() ?: return@withContext null
-            plugin.config.associate { field ->
-                field.key to if (savedValues.has(field.key) && !savedValues.isNull(field.key)) {
-                    savedValues.optString(field.key, "")
-                } else {
-                    field.default
-                }
+            plugin.config.filter { savedValues.has(it.key) }.associate { field ->
+                field.key to if (savedValues.isNull(field.key)) "" else savedValues.optString(field.key, "")
             }
         }
 
-    suspend fun saveConfigValues(id: String, values: Map<String, String>): Boolean =
+    suspend fun saveConfigValues(plugin: PluginInfo, changes: PluginConfigChanges): PluginConfigSaveResult =
         configSaveMutex.withLock {
-            withContext(Dispatchers.IO) {
-                for ((key, value) in values) {
-                    if (!savePluginConfig(id, key, value)) return@withContext false
-                }
-                true
+            withContext(NonCancellable + Dispatchers.IO) {
+                val failed = applyPluginConfigChanges(
+                    changes,
+                    delete = { deletePluginConfig(plugin.id, it) },
+                    write = { key, value -> savePluginConfig(plugin.id, key, value) },
+                )
+                PluginConfigSaveResult(
+                    failedKeys = failed,
+                    reloadedValues = if (failed.isEmpty()) null else loadConfigValues(plugin),
+                )
             }
         }
 
-    private fun parsePlugins(raw: String): List<PluginInfo> {
+    internal fun parsePlugins(raw: String): List<PluginInfo> {
         val array = JSONArray(raw)
         return buildList {
             for (index in 0 until array.length()) {
@@ -204,6 +208,8 @@ class PluginViewModel : ViewModel() {
                         enabled = item.optBoolean("enabled", true),
                         hasManifest = item.optBoolean("has_manifest", false),
                         hasAction = item.optBoolean("has_action", false),
+                        actionUnknown = item.optBoolean("action_unknown", false),
+                        callbacks = parseStringArray(item.optJSONArray("callbacks")),
                         quickAction = parseQuickAction(item.opt("quick_action")),
                         config = parseConfig(item.optJSONArray("config")),
                         depends = parseStringArray(item.optJSONArray("depends")),
@@ -236,8 +242,9 @@ class PluginViewModel : ViewModel() {
         return buildList {
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue
-                val key = item.optString("key", "").trim()
-                if (key.isEmpty()) continue
+                val key = item.optString("key", "")
+                if (key.isEmpty() || key.toByteArray(Charsets.UTF_8).size > 64 ||
+                    '/' in key || '\\' in key) continue
                 val rawDefault = item.opt("default")
                 add(
                     PluginConfigField(

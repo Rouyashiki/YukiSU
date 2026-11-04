@@ -60,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -94,6 +95,8 @@ import com.anatdx.yukisu.ui.theme.CardStyleProvider.getElevatedCardElevation
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
 import com.anatdx.yukisu.ui.util.PluginCommandResult
 import com.anatdx.yukisu.ui.util.copyPluginPackageTo
+import com.anatdx.yukisu.ui.viewmodel.PluginConfigChanges
+import com.anatdx.yukisu.ui.viewmodel.pluginConfigChanges
 import com.anatdx.yukisu.ui.viewmodel.PluginConfigField
 import com.anatdx.yukisu.ui.viewmodel.PluginInfo
 import com.anatdx.yukisu.ui.viewmodel.PluginQuickAction
@@ -138,6 +141,7 @@ fun PluginScreen(navigator: DestinationsNavigator) {
     var isSavingConfig by remember { mutableStateOf(false) }
     var configPlugin by remember { mutableStateOf<PluginInfo?>(null) }
     var configValues by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var configRevision by remember { mutableIntStateOf(0) }
     var logState by remember { mutableStateOf<PluginLogState?>(null) }
     var isClearingLog by remember { mutableStateOf(false) }
 
@@ -353,7 +357,7 @@ fun PluginScreen(navigator: DestinationsNavigator) {
                                     }
                                 },
                                 onAction = {
-                                    val canRun = plugin.hasAction && plugin.enabled &&
+                                    val canRun = (plugin.hasAction || plugin.actionUnknown) && plugin.enabled &&
                                         plugin.hasManifest && plugin.error.isBlank()
                                     if (canRun && beginPluginOperation(plugin.id)) {
                                         scope.launch {
@@ -509,6 +513,7 @@ fun PluginScreen(navigator: DestinationsNavigator) {
         PluginConfigDialog(
             plugin = plugin,
             initial = configValues,
+            revision = configRevision,
             locale = locale,
             isSaving = isSavingConfig,
             onDismiss = {
@@ -517,25 +522,30 @@ fun PluginScreen(navigator: DestinationsNavigator) {
                     configValues = emptyMap()
                 }
             },
-            onSave = { values ->
+            onSave = { changes ->
                 if (!isSavingConfig) {
                     isSavingConfig = true
                     scope.launch {
                         try {
-                            val success = viewModel.saveConfigValues(plugin.id, values)
-                            if (success) {
+                            val result = viewModel.saveConfigValues(plugin, changes)
+                            if (result.isSuccess || result.reloadedValues == null) {
                                 configPlugin = null
                                 configValues = emptyMap()
+                            } else {
+                                configValues = result.reloadedValues
+                                configRevision++
                             }
-                            postSnackbar(
-                                resources.getString(
-                                    if (success) {
-                                        R.string.plugin_config_saved
-                                    } else {
-                                        R.string.plugin_config_save_failed
-                                    }
-                                )
-                            )
+                            val message = if (result.isSuccess) {
+                                resources.getString(R.string.plugin_config_saved)
+                            } else {
+                                resources.getString(R.string.plugin_config_save_failed) + "\n" + resources.getString(
+                                    R.string.plugin_config_failed_keys,
+                                    result.failedKeys.joinToString(", "),
+                                ) + if (result.reloadedValues == null) {
+                                    "\n" + resources.getString(R.string.plugin_config_load_failed)
+                                } else ""
+                            }
+                            postSnackbar(message)
                         } finally {
                             isSavingConfig = false
                         }
@@ -651,7 +661,7 @@ private fun PluginCard(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
                     ) {
-                        if (plugin.hasAction) {
+                        if (plugin.hasAction || plugin.actionUnknown) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.plugin_action)) },
                                 leadingIcon = {
@@ -828,17 +838,19 @@ private fun PluginEmptyState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PluginConfigDialog(
+internal fun PluginConfigDialog(
     plugin: PluginInfo,
     initial: Map<String, String>,
+    revision: Int,
     locale: Locale,
     isSaving: Boolean,
     onDismiss: () -> Unit,
-    onSave: (Map<String, String>) -> Unit,
+    onSave: (PluginConfigChanges) -> Unit,
 ) {
-    val values = remember(plugin.id, initial) {
+    val values = remember(plugin.id, initial, revision) {
         mutableStateMapOf<String, String>().apply { putAll(initial) }
     }
+    val resets = remember(plugin.id, initial, revision) { mutableStateMapOf<String, Boolean>() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -872,6 +884,7 @@ private fun PluginConfigDialog(
                                 YukiSwitch(
                                     checked = (values[field.key] ?: field.default) == "true",
                                     onCheckedChange = {
+                                        resets.remove(field.key)
                                         values[field.key] = if (it) "true" else "false"
                                     },
                                     enabled = !isSaving,
@@ -911,6 +924,7 @@ private fun PluginConfigDialog(
                                         DropdownMenuItem(
                                             text = { Text(option) },
                                             onClick = {
+                                                resets.remove(field.key)
                                                 values[field.key] = option
                                                 expanded = false
                                             },
@@ -927,7 +941,10 @@ private fun PluginConfigDialog(
                             )
                             OutlinedTextField(
                                 value = values[field.key] ?: field.default,
-                                onValueChange = { values[field.key] = it },
+                                onValueChange = {
+                                    resets.remove(field.key)
+                                    values[field.key] = it
+                                },
                                 enabled = !isSaving,
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
@@ -939,6 +956,18 @@ private fun PluginConfigDialog(
                             )
                         }
                     }
+                    TextButton(
+                        enabled = !isSaving,
+                        modifier = Modifier.semantics {
+                            contentDescription = configFieldLabel(field, locale)
+                        },
+                        onClick = {
+                            values.remove(field.key)
+                            resets[field.key] = true
+                        },
+                    ) {
+                        Text(stringResource(R.string.plugin_config_restore_default))
+                    }
                 }
             }
         },
@@ -946,11 +975,7 @@ private fun PluginConfigDialog(
             TextButton(
                 enabled = !isSaving,
                 onClick = {
-                    onSave(
-                        plugin.config.associate { field ->
-                            field.key to (values[field.key] ?: field.default)
-                        }
-                    )
+                    onSave(pluginConfigChanges(initial, values, resets.keys))
                 },
             ) {
                 Text(stringResource(R.string.plugin_save))

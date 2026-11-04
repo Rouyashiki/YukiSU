@@ -2236,7 +2236,7 @@ fun uninstallPlugin(id: String): Boolean =
 
 fun runPluginCallback(id: String, function: String): PluginCommandResult =
     runPluginCommand(
-        "plugin run ${shellArg(id)} ${shellArg(function)}",
+        "plugin run -- ${shellArg(id)} ${shellArg(function)}",
         newShell = true,
     )
 

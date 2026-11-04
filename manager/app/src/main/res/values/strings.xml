@@ -53,6 +53,8 @@
     <string name="plugin_config_load_failed" tools:ignore="MissingTranslation">Failed to load plugin configuration</string>
     <string name="plugin_config_saved" tools:ignore="MissingTranslation">Configuration saved</string>
     <string name="plugin_config_save_failed" tools:ignore="MissingTranslation">Failed to save configuration</string>
+    <string name="plugin_config_restore_default" tools:ignore="MissingTranslation">Restore default</string>
+    <string name="plugin_config_failed_keys" tools:ignore="MissingTranslation">Failed items: %1$s</string>
     <string name="plugin_save" tools:ignore="MissingTranslation">Save</string>
     <string name="plugin_log_title" tools:ignore="MissingTranslation">%1$s log</string>
     <string name="plugin_log_view" tools:ignore="MissingTranslation">View log</string>
