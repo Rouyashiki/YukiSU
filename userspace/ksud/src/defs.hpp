@@ -41,7 +41,11 @@ constexpr const char* PROFILE_TEMPLATE_DIR = "/data/adb/ksu/profile/templates/";
 
 constexpr const char* FEATURE_CONFIG_PATH = "/data/adb/ksu/.ksurc";
 constexpr const char* SHELL_RC_PATH = "/data/adb/ksu/bin/shellrc.sh";
+#if defined(KSUD_PLUGIN_TEST_ROOT) && !defined(__ANDROID__)
+constexpr const char* DAEMON_PATH = KSUD_PLUGIN_TEST_ROOT "/ksud";
+#else
 constexpr const char* DAEMON_PATH = "/data/adb/ksud";
+#endif
 constexpr const char* MAGISKBOOT_PATH = "/data/adb/ksu/bin/magiskboot";
 constexpr const char* LIBADBROOT_PATH = "/data/adb/ksu/lib/libadbroot.so";
 
@@ -116,9 +120,15 @@ constexpr const char* METAMODULE_METAINSTALL_SCRIPT = "metainstall.sh";
 constexpr const char* METAMODULE_METAUNINSTALL_SCRIPT = "metauninstall.sh";
 
 // Plugin system
+#if defined(KSUD_PLUGIN_TEST_ROOT) && !defined(__ANDROID__)
+constexpr const char* PLUGIN_DIR = KSUD_PLUGIN_TEST_ROOT "/plugins/";
+constexpr const char* PLUGIN_STAGE_DIR = KSUD_PLUGIN_TEST_ROOT "/stage/";
+constexpr const char* PLUGIN_LOCK_DIR = KSUD_PLUGIN_TEST_ROOT "/locks/";
+#else
 constexpr const char* PLUGIN_DIR = "/data/adb/plugins/";
 constexpr const char* PLUGIN_STAGE_DIR = "/data/adb/ksu/plugin_stage/";
 constexpr const char* PLUGIN_LOCK_DIR = "/data/adb/ksu/plugin_locks/";
+#endif
 constexpr const char* PLUGIN_MANIFEST = "plugin.json";
 constexpr const char* PLUGIN_ENTRY = "main.lua";
 constexpr const char* PLUGIN_OUTPUT_LOG = "last_output.log";

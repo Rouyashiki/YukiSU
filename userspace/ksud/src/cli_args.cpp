@@ -1,5 +1,6 @@
 #include "cli_args.hpp"
 #include "../kagami/include/kagami/config.hpp"
+#include "plugin/plugin.hpp"
 #include "terminal.hpp"
 
 #include <algorithm>
@@ -710,8 +711,9 @@ std::string suggestion(std::string_view word, const std::vector<std::string_view
         if (score < best) {
             best = score;
             result = candidate;
-        } else if (score == best && result != candidate)
+        } else if (score == best && result != candidate) {
             result.clear();
+        }
     }
     return result.empty() ? "" : "; did you mean '" + result + "'?";
 }
@@ -740,8 +742,9 @@ bool unsigned_value(std::string_view value, uint64_t maximum, bool auto_base = f
     if (auto_base && value.size() > 2 && value[0] == '0' && (value[1] == 'x' || value[1] == 'X')) {
         base = 16;
         value.remove_prefix(2);
-    } else if (auto_base && value.size() > 1 && value[0] == '0')
+    } else if (auto_base && value.size() > 1 && value[0] == '0') {
         base = 8;
+    }
     uint64_t number = 0;
     const auto [end, error] =
         std::from_chars(value.data(), value.data() + value.size(), number, base);
@@ -776,8 +779,9 @@ int read_option(const Command& command, const std::vector<std::string>& input, s
             name = argument.substr(0, 2);
             attached = argument.substr(2);
             has_attached = true;
-        } else
+        } else {
             option = nullptr;
+        }
     }
     if (!option) {
         std::vector<std::string_view> names;
@@ -794,14 +798,16 @@ int read_option(const Command& command, const std::vector<std::string>& input, s
     if (option->value.empty()) {
         if (has_attached)
             return fail(command, "option '" + name + "' does not take a value");
-    } else if (has_attached)
+    } else if (has_attached) {
         value = attached;
-    else if (index + 1 < input.size() && (input[index + 1].empty() || input[index + 1][0] != '-'))
+    } else if (index + 1 < input.size() &&
+               (input[index + 1].empty() || input[index + 1][0] != '-')) {
         value = input[++index];
-    else if (!option->default_value.empty())
+    } else if (!option->default_value.empty()) {
         value = option->default_value;
-    else
+    } else {
         return fail(command, "option '" + name + "' requires <" + std::string(option->value) + ">");
+    }
     if (!option->value.empty() && value.empty() && !option->allow_empty)
         return fail(command, "option '" + name + "' requires a non-empty value");
     if (option->value.find('|') != std::string_view::npos && !one_of(value, option->value))
@@ -878,15 +884,16 @@ int validate(const Command& command, const std::vector<std::string>& operands,
             return bad("--id <ID> is required");
         if (id.size() > 64 || !identifier(id))
             return bad("invalid plugin ID '" + id + "'");
-        if (!operands.empty() && (operands[0].size() > 64 || !identifier(operands[0])))
+        if (!operands.empty() && !plugin_config_key_is_valid(operands[0]))
             return bad("invalid configuration key '" + operands[0] + "'");
     }
     if (path == "plugin daemon") {
-        if (!parsed.has("--ready-fd"))
-            return bad("--ready-fd <FD> is required");
-        if (!numeric(2, INT32_MAX) || operands[2].find_first_not_of('0') == std::string::npos)
-            return bad("invalid interval; expected 1 through 2147483647");
-        if (unsigned_value(parsed.value("--ready-fd"), 2))
+        int64_t interval = 0;
+        const auto& text = operands[2];
+        const auto converted = std::from_chars(text.data(), text.data() + text.size(), interval);
+        if (converted.ec != std::errc() || converted.ptr != text.data() + text.size())
+            return bad("invalid interval; expected a signed 64-bit integer");
+        if (parsed.has("--ready-fd") && unsigned_value(parsed.value("--ready-fd"), 2))
             return bad("readiness descriptor must be greater than 2");
     }
     if (path == "uts-view set-global" || path == "uts-view set-deny") {
@@ -984,8 +991,9 @@ int parse_input(const std::vector<std::string>& input, CliArguments& parsed, uns
                 name = "version";
             else if (name == "yukizygisk")
                 name = "yzctl";
-        } else if (current->path == "kagami" && name == "--version")
+        } else if (current->path == "kagami" && name == "--version") {
             name = "version";
+        }
         const auto candidates = children(current->path);
         const std::string path =
             current->path.empty() ? name : std::string(current->path) + " " + name;
@@ -1084,7 +1092,18 @@ std::string CliArguments::value(const std::string& name) const {
 int parse_cli(const std::vector<std::string>& input, CliArguments& parsed) {
     parsed = {};
     (void)terminal::set_color("auto");
-    return parse_input(input, parsed, 0);
+    const int result = parse_input(input, parsed, 0);
+    if (result >= 0)
+        return result;
+    if (parsed.path == "plugin daemon" && parsed.has("--ready-fd")) {
+        parsed.args.emplace_back("--ready-fd");
+        parsed.args.push_back(parsed.value("--ready-fd"));
+    }
+    if (parsed.path.rfind("plugin config ", 0) == 0) {
+        parsed.args.insert(parsed.args.begin() + 1, {"--id", parsed.value("--id")});
+        parsed.forward_options = false;
+    }
+    return -1;
 }
 
 }  // namespace ksud

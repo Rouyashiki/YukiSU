@@ -1,0 +1,14 @@
+{
+  "id": "hello_plugin",
+  "name": "Hello Plugin",
+  "author": "Example",
+  "version": "1.0.0",
+  "description": "Writes a greeting after the service stage.",
+  "license": "MIT",
+  "entry": "main.lua",
+  "callbacks": ["service", "action"],
+  "quick_action": {
+    "function": "action",
+    "label": "Write greeting"
+  }
+}

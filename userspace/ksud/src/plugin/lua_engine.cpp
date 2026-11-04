@@ -26,6 +26,7 @@ extern "C" {
 #include <cerrno>
 #include <chrono>
 #include <climits>
+#include <cmath>
 #include <csignal>
 #include <cstdarg>
 #include <cstdint>
@@ -113,6 +114,7 @@ struct CapturedCommand {
     std::string standard_error;
     bool stdout_truncated = false;
     bool stderr_truncated = false;
+    std::string error;
 };
 
 struct JsonEncodeContext {
@@ -169,7 +171,7 @@ PluginApiContext* api_context(lua_State* state) {
 }
 
 bool require_string(lua_State* state, int index) {
-    return lua_type(state, index) == LUA_TSTRING;
+    return lua_isstring(state, index) != 0;
 }
 
 bool copy_lua_string(lua_State* state, int index, size_t maximum, std::string* output) {
@@ -256,7 +258,7 @@ bool create_internal_pipe(int descriptors[2]) {
 }
 
 void mark_nonstandard_fds_cloexec() {
-#if defined(SYS_close_range)
+#ifdef SYS_close_range
     if (syscall(SYS_close_range, static_cast<unsigned int>(STDERR_FILENO + 1),
                 std::numeric_limits<unsigned int>::max(), CLOSE_RANGE_CLOEXEC) == 0) {
         return;
@@ -400,8 +402,63 @@ bool daemon_lock_belongs_to(const std::string& filename, const std::string& plug
     }
     const std::string_view identity(filename.data(), filename.size() - suffix.size());
     const size_t separator = identity.rfind('.');
-    return separator != std::string_view::npos && identity.substr(0, separator) == plugin_id &&
-           plugin_callback_is_valid(std::string(identity.substr(separator + 1)));
+    if (separator == std::string_view::npos || identity.substr(0, separator) != plugin_id)
+        return false;
+    const auto callback = identity.substr(separator + 1);
+    return !callback.empty() && callback.size() <= kMaxCallbackBytes &&
+           std::all_of(callback.begin(), callback.end(), [](char c) {
+               return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                      c == '_';
+           });
+}
+
+std::string encode_lock_component(const std::string& value) {
+    constexpr char digits[] = "0123456789abcdef";
+    std::string encoded;
+    encoded.reserve(value.size() * 2);
+    for (const unsigned char c : value) {
+        encoded.push_back(digits[c >> 4U]);
+        encoded.push_back(digits[c & 15U]);
+    }
+    return encoded;
+}
+
+fs::path daemon_lock_directory(const std::string& id) {
+    return fs::path(PLUGIN_LOCK_DIR) / "daemons" / encode_lock_component(id);
+}
+
+class DaemonLock {
+public:
+    explicit DaemonLock(const fs::path& path)
+        : fd_(open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600)) {
+        if (fd_ >= 0) {
+            owned_ = flock(fd_, LOCK_EX | LOCK_NB) == 0;
+            const int error = errno;
+            ready_ =
+                !owned_ && (error == EWOULDBLOCK || error == EAGAIN) && daemon_marker_is_ready(fd_);
+        }
+    }
+    ~DaemonLock() {
+        if (fd_ >= 0)
+            close(fd_);
+    }
+    DaemonLock(const DaemonLock&) = delete;
+    DaemonLock& operator=(const DaemonLock&) = delete;
+    DaemonLock(DaemonLock&&) = delete;
+    DaemonLock& operator=(DaemonLock&&) = delete;
+    [[nodiscard]] int fd() const { return fd_; }
+    [[nodiscard]] bool owned() const { return owned_; }
+    [[nodiscard]] bool ready() const { return ready_; }
+
+private:
+    int fd_ = -1;
+    bool owned_ = false;
+    bool ready_ = false;
+};
+
+bool publish_daemon_state(int fd, int legacy_fd, bool ready) {
+    return write_daemon_marker(fd, ready) &&
+           (legacy_fd < 0 || write_daemon_marker(legacy_fd, ready));
 }
 
 bool wait_for_pidfd(int descriptor, int timeout_milliseconds) {
@@ -566,9 +623,9 @@ void append_capped(std::string* output, const char* data, size_t size, bool* tru
         *truncated = true;
 }
 
-void drain_pipe(int* fd, std::string* output, bool* truncated) {
+int drain_pipe(int* fd, std::string* output, bool* truncated) {
     std::array<char, 4096> buffer{};
-    while (*fd >= 0) {
+    for (int batch = 0; batch < 32 && *fd >= 0; ++batch) {
         const ssize_t count = read(*fd, buffer.data(), buffer.size());
         if (count > 0) {
             append_capped(output, buffer.data(), static_cast<size_t>(count), truncated);
@@ -577,21 +634,20 @@ void drain_pipe(int* fd, std::string* output, bool* truncated) {
         if (count == 0) {
             close(*fd);
             *fd = -1;
-            return;
+            return 0;
         }
         if (errno == EINTR)
             continue;
         if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
+            return 0;
+        const int error = errno;
         close(*fd);
         *fd = -1;
-        return;
+        return error;
     }
+    return 0;
 }
 
-// resetprop is welded into ksud as a multi-call entry, so a plugin setprop needs
-// no child process. Matches how core/hide_bootloader, init_event and magica
-// already reach it.
 CapturedCommand run_command(const std::vector<std::string>& arguments);
 
 bool set_prop_builtin(const std::string& name, const std::string& value) {
@@ -609,24 +665,79 @@ bool set_prop_builtin(const std::string& name, const std::string& value) {
 #endif  // #if defined(RESETPROP_ALONE_AVAILABLE) ...
 }
 
-CapturedCommand run_command(const std::vector<std::string>& arguments) {
-    CapturedCommand result;
-    if (arguments.empty())
-        return result;
+class CommandPipes {
+public:
+    CommandPipes() = default;
+    CommandPipes(const CommandPipes&) = delete;
+    CommandPipes& operator=(const CommandPipes&) = delete;
+    CommandPipes(CommandPipes&&) = delete;
+    CommandPipes& operator=(CommandPipes&&) = delete;
+    std::array<int, 2>& output() { return output_; }
+    std::array<int, 2>& error() { return error_; }
+    std::array<int, 2>& status() { return status_; }
 
-    std::array<int, 2> stdout_pipe{-1, -1};
-    std::array<int, 2> stderr_pipe{-1, -1};
-    if (!create_internal_pipe(stdout_pipe.data()) || !create_internal_pipe(stderr_pipe.data())) {
-        if (stdout_pipe[0] >= 0) {
-            close(stdout_pipe[0]);
-            close(stdout_pipe[1]);
+    static void close_fd(int& fd) {
+        if (fd >= 0)
+            close(fd);
+        fd = -1;
+    }
+
+    ~CommandPipes() {
+        for (auto* pipe : {&output_, &error_, &status_}) {
+            for (auto& fd : *pipe)
+                close_fd(fd);
         }
-        if (stderr_pipe[0] >= 0) {
-            close(stderr_pipe[0]);
-            close(stderr_pipe[1]);
+    }
+
+private:
+    std::array<int, 2> output_{-1, -1};
+    std::array<int, 2> error_{-1, -1};
+    std::array<int, 2> status_{-1, -1};
+};
+
+class CommandChild {
+public:
+    explicit CommandChild(pid_t pid) : pid_(pid) {}
+    ~CommandChild() {
+        if (pid_ > 0) {
+            (void)kill(pid_, SIGKILL);
+            int status = 0;
+            while (waitpid(pid_, &status, 0) < 0 && errno == EINTR) {
+            }
         }
+    }
+    CommandChild(const CommandChild&) = delete;
+    CommandChild& operator=(const CommandChild&) = delete;
+    CommandChild(CommandChild&&) = delete;
+    CommandChild& operator=(CommandChild&&) = delete;
+
+    pid_t wait(int* status) {
+        pid_t result;
+        do {
+            result = waitpid(pid_, status, 0);
+        } while (result < 0 && errno == EINTR);
+        if (result > 0 || errno == ECHILD)
+            pid_ = -1;
         return result;
     }
+
+private:
+    pid_t pid_;
+};
+
+CapturedCommand run_command(const std::vector<std::string>& arguments) {
+    CapturedCommand result;
+    const auto fail = [&](const char* operation, int error) {
+        result.error = std::string(operation) + ": " + strerror(error);
+        return result;
+    };
+    if (arguments.empty())
+        return fail("missing program", EINVAL);
+
+    CommandPipes pipes;
+    if (!create_internal_pipe(pipes.output().data()) ||
+        !create_internal_pipe(pipes.error().data()) || !create_internal_pipe(pipes.status().data()))
+        return fail("create command pipe", errno);
 
     std::vector<char*> argv;
     argv.reserve(arguments.size() + 1U);
@@ -635,65 +746,89 @@ CapturedCommand run_command(const std::vector<std::string>& arguments) {
     argv.push_back(nullptr);
 
     const pid_t child = fork();
-    if (child < 0) {
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
-        return result;
-    }
+    if (child < 0)
+        return fail("fork command", errno);
     if (child == 0) {
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
-        if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0 || dup2(stderr_pipe[1], STDERR_FILENO) < 0) {
-            _exit(126);
-        }
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
+        CommandPipes::close_fd(pipes.output()[0]);
+        CommandPipes::close_fd(pipes.error()[0]);
+        CommandPipes::close_fd(pipes.status()[0]);
+        const auto reject = [&](int error) {
+            report_start_status(pipes.status()[1], error);
+            _exit(127);
+        };
+        const int input = open("/dev/null", O_RDONLY | O_CLOEXEC);
+        if (input < 0)
+            reject(errno);
+        if (dup2(input, STDIN_FILENO) < 0 || fcntl(STDIN_FILENO, F_SETFD, 0) < 0 ||
+            dup2(pipes.output()[1], STDOUT_FILENO) < 0 || dup2(pipes.error()[1], STDERR_FILENO) < 0)
+            reject(errno);
+        if (input > STDERR_FILENO)
+            close(input);
+        CommandPipes::close_fd(pipes.output()[1]);
+        CommandPipes::close_fd(pipes.error()[1]);
         mark_nonstandard_fds_cloexec();
         execvp(argv[0], argv.data());
-        _exit(127);
+        reject(errno);
     }
 
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
-    int stdout_fd = stdout_pipe[0];
-    int stderr_fd = stderr_pipe[0];
-    (void)fcntl(stdout_fd, F_SETFL, fcntl(stdout_fd, F_GETFL) | O_NONBLOCK);
-    (void)fcntl(stderr_fd, F_SETFL, fcntl(stderr_fd, F_GETFL) | O_NONBLOCK);
+    CommandChild owned_child(child);
+    CommandPipes::close_fd(pipes.output()[1]);
+    CommandPipes::close_fd(pipes.error()[1]);
+    CommandPipes::close_fd(pipes.status()[1]);
+    int child_error = 0;
+    size_t received = 0;
+    while (received < sizeof(child_error)) {
+        const ssize_t count =
+            read(pipes.status()[0], reinterpret_cast<char*>(&child_error) + received,
+                 sizeof(child_error) - received);
+        if (count > 0)
+            received += static_cast<size_t>(count);
+        else if (count == 0)
+            break;
+        else if (errno != EINTR)
+            return fail("read command exec status", errno);
+    }
+    CommandPipes::close_fd(pipes.status()[0]);
+    if (received != 0)
+        return fail("start command", received == sizeof(child_error) ? child_error : EIO);
 
-    while (stdout_fd >= 0 || stderr_fd >= 0) {
+    for (const int fd : {pipes.output()[0], pipes.error()[0]}) {
+        const int flags = fcntl(fd, F_GETFL);
+        if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+            return fail("configure command output", errno);
+    }
+    while (pipes.output()[0] >= 0 || pipes.error()[0] >= 0) {
         std::array<pollfd, 2> descriptors{{
-            {stdout_fd, static_cast<short>(POLLIN | POLLHUP | POLLERR), 0},
-            {stderr_fd, static_cast<short>(POLLIN | POLLHUP | POLLERR), 0},
+            {pipes.output()[0], static_cast<short>(POLLIN | POLLHUP | POLLERR), 0},
+            {pipes.error()[0], static_cast<short>(POLLIN | POLLHUP | POLLERR), 0},
         }};
         int polled;
         do {
             polled = poll(descriptors.data(), descriptors.size(), -1);
         } while (polled < 0 && errno == EINTR);
         if (polled < 0)
-            break;
-        if (stdout_fd >= 0 && descriptors[0].revents != 0)
-            drain_pipe(&stdout_fd, &result.standard_output, &result.stdout_truncated);
-        if (stderr_fd >= 0 && descriptors[1].revents != 0)
-            drain_pipe(&stderr_fd, &result.standard_error, &result.stderr_truncated);
+            return fail("poll command output", errno);
+        for (size_t index = 0; index < descriptors.size(); ++index) {
+            if ((descriptors[index].revents & POLLNVAL) != 0)
+                return fail("invalid command output descriptor", EBADF);
+            if (descriptors[index].fd < 0 || descriptors[index].revents == 0)
+                continue;
+            const int error = index == 0
+                                  ? drain_pipe(pipes.output().data(), &result.standard_output,
+                                               &result.stdout_truncated)
+                                  : drain_pipe(pipes.error().data(), &result.standard_error,
+                                               &result.stderr_truncated);
+            if (error != 0)
+                return fail("read command output", error);
+        }
     }
-    if (stdout_fd >= 0)
-        close(stdout_fd);
-    if (stderr_fd >= 0)
-        close(stderr_fd);
-
     int status = 0;
-    pid_t waited;
-    do {
-        waited = waitpid(child, &status, 0);
-    } while (waited < 0 && errno == EINTR);
-    if (waited > 0) {
-        if (WIFEXITED(status))
-            result.exit_code = WEXITSTATUS(status);
-        else if (WIFSIGNALED(status))
-            result.exit_code = 128 + WTERMSIG(status);
-    }
+    if (owned_child.wait(&status) < 0)
+        return fail("wait for command", errno);
+    if (WIFEXITED(status))
+        result.exit_code = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status))
+        result.exit_code = 128 + WTERMSIG(status);
     if (result.stdout_truncated)
         result.standard_output += "\n[output truncated]\n";
     if (result.stderr_truncated)
@@ -982,7 +1117,7 @@ void json_to_lua(lua_State* state, const plugin_json::Value& value) {
 }
 
 bool spawn_daemon_process(PluginApiContext* context, const std::string& callback,
-                          int interval_seconds) {
+                          int64_t interval_seconds) {
     if (!plugin_callback_is_valid(callback) || interval_seconds < 1)
         return false;
     if (!pidfd_lifecycle_supported()) {
@@ -1026,8 +1161,8 @@ bool spawn_daemon_process(PluginApiContext* context, const std::string& callback
             report_start_status(status_pipe[1], errno);
             _exit(1);
         }
-        execl(DAEMON_PATH, "ksud", "plugin", "daemon", context->id.c_str(), callback.c_str(),
-              interval.c_str(), "--ready-fd", ready_descriptor.c_str(), nullptr);
+        execl(DAEMON_PATH, "ksud", "plugin", "daemon", "--ready-fd", ready_descriptor.c_str(), "--",
+              context->id.c_str(), callback.c_str(), interval.c_str(), nullptr);
         report_start_status(status_pipe[1], errno);
         _exit(127);
     }
@@ -1155,6 +1290,8 @@ int lua_api_exec(lua_State* state) {
         arguments.emplace_back(argument, size);
     }
     const CapturedCommand result = run_command(arguments);
+    if (!result.error.empty())
+        return luaL_error(state, "exec failed: %s", result.error.c_str());
     lua_createtable(state, 0, 4);
     lua_pushboolean(state, result.exit_code == 0);
     lua_setfield(state, -2, "ok");
@@ -1237,9 +1374,15 @@ int lua_api_chmod(lua_State* state) {
         if (integer < 0 || integer > 07777)
             return luaL_error(state, "chmod numeric mode is out of range");
         mode = static_cast<mode_t>(integer);
-    } else if (require_string(state, 2)) {
+    } else if (lua_type(state, 2) == LUA_TSTRING) {
         std::string text;
-        if (!copy_lua_string(state, 2, 16, &text))
+        if (!copy_lua_string(state, 2, kMaxPathBytes, &text))
+            return luaL_error(state, "chmod mode must be an octal string");
+        const auto first = text.find_first_not_of(" \t\r\n\f\v");
+        const auto last = text.find_last_not_of(" \t\r\n\f\v");
+        text = first == std::string::npos ? std::string() : text.substr(first, last - first + 1);
+        if (text.empty() || text.size() > 16 ||
+            !std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '7'; }))
             return luaL_error(state, "chmod mode must be an octal string");
         char* end = nullptr;
         errno = 0;
@@ -1255,8 +1398,6 @@ int lua_api_chmod(lua_State* state) {
 }
 
 int lua_api_mkdir(lua_State* state) {
-    if (!require_string(state, 1) || lua_type(state, 2) != LUA_TBOOLEAN)
-        return luaL_error(state, "mkdir expects a path string and recursive boolean");
     std::string path_string;
     if (!copy_lua_string(state, 1, kMaxPathBytes, &path_string))
         return luaL_error(state, "mkdir expects a valid path string");
@@ -1346,6 +1487,10 @@ int lua_api_set_config(lua_State* state) {
     const char* value = lua_tolstring(state, 2, &value_size);
     if (key_size > 64 || value_size > kMaxJsonInput)
         return luaL_error(state, "set_config key or value exceeds the size limit");
+    if (!plugin_config_key_is_valid(std::string(key, key_size)))
+        return luaL_error(state, "set_config key is invalid");
+    if (!plugin_json::is_valid_utf8(std::string(value, value_size)))
+        return luaL_error(state, "set_config value must be valid UTF-8");
     std::string error;
     const bool success = plugin_set_config_value(api_context(state)->id, std::string(key, key_size),
                                                  std::string(value, value_size), &error);
@@ -1389,16 +1534,23 @@ int lua_api_json_encode(lua_State* state) {
 }
 
 int lua_api_start_daemon(lua_State* state) {
-    if (!require_string(state, 1) || !lua_isinteger(state, 2))
-        return luaL_error(state, "start_daemon expects a callback string and integer interval");
-    const lua_Integer interval = lua_tointeger(state, 2);
-    if (interval < 1 || interval > INT_MAX)
-        return luaL_error(state, "start_daemon interval is out of range");
+    int converted = 0;
+    const lua_Integer integer = lua_tointegerx(state, 2, &converted);
+    int64_t interval = 0;
+    if (converted) {
+        interval = static_cast<int64_t>(integer);
+    } else {
+        const lua_Number number = lua_tonumberx(state, 2, &converted);
+        if (!converted || !std::isfinite(number) || number < -0x1p63 || number >= 0x1p63)
+            return luaL_error(state, "start_daemon interval is out of range");
+        interval = static_cast<int64_t>(number);
+    }
+    interval = std::max<int64_t>(1, interval);
     std::string callback;
-    if (!copy_lua_string(state, 1, kMaxCallbackBytes, &callback))
+    if (!copy_lua_string(state, 1, kMaxCallbackBytes, &callback) ||
+        !plugin_callback_is_valid(callback))
         return luaL_error(state, "start_daemon callback is invalid or too long");
-    const bool success =
-        spawn_daemon_process(api_context(state), callback, static_cast<int>(interval));
+    const bool success = spawn_daemon_process(api_context(state), callback, interval);
     lua_pushboolean(state, success);
     return 1;
 }
@@ -1547,7 +1699,8 @@ std::optional<PluginRecord> load_plugin_record(const std::string& id, bool requi
 
 PluginRunResult call_plugin(const PluginRecord& plugin, const std::string& callback,
                             bool callback_optional, bool auto_start_main, int ready_fd = -1,
-                            bool* callback_ready = nullptr, int ready_marker_fd = -1) {
+                            bool* callback_ready = nullptr, int ready_marker_fd = -1,
+                            int legacy_marker_fd = -1) {
     if (callback_ready)
         *callback_ready = false;
     const std::string& code_directory =
@@ -1612,7 +1765,8 @@ PluginRunResult call_plugin(const PluginRecord& plugin, const std::string& callb
         log_line(&context, "W", "callback '" + callback + "' is not a function");
         result = PluginRunResult::Failed;
     } else {
-        if (ready_marker_fd >= 0 && !write_daemon_marker(ready_marker_fd, true)) {
+        if (ready_marker_fd >= 0 &&
+            !publish_daemon_state(ready_marker_fd, legacy_marker_fd, true)) {
             report_daemon_ready(&ready_fd, false);
             lua_pop(state.get(), 1);
             log_line(&context, "W", "cannot publish daemon readiness");
@@ -1779,7 +1933,11 @@ bool exec_plugin_stage(const std::string& stage, bool block) {
             continue;
         }
         const auto& plugin = *loaded_plugin;
-        const bool auto_start_main = callback == "service";
+        const bool auto_start_main =
+            callback == "service" &&
+            (!plugin.manifest.callbacks ||
+             std::find(plugin.manifest.callbacks->begin(), plugin.manifest.callbacks->end(),
+                       "main") != plugin.manifest.callbacks->end());
         if (block) {
             const PluginRunResult result = run_blocking_worker(
                 plugin, callback, true, auto_start_main, kStageCallbackTimeoutSeconds);
@@ -1800,42 +1958,58 @@ bool stop_plugin_daemons(const std::string& plugin_id, std::string* error) {
         *error = "Invalid plugin id";
         return false;
     }
-    std::error_code iterator_error;
-    const fs::directory_iterator iterator(PLUGIN_LOCK_DIR, iterator_error);
-    if (iterator_error == std::errc::no_such_file_or_directory)
-        return true;
-    if (iterator_error) {
-        *error = "Cannot enumerate plugin daemons: " + iterator_error.message();
-        return false;
-    }
     bool success = true;
-    std::string first_error;
-    for (auto it = iterator; it != fs::directory_iterator() && !iterator_error;
-         it.increment(iterator_error)) {
-        const auto& entry = *it;
-        const std::string filename = entry.path().filename().string();
-        if (!daemon_lock_belongs_to(filename, plugin_id))
+    for (const auto& directory : {fs::path(PLUGIN_LOCK_DIR), daemon_lock_directory(plugin_id)}) {
+        const bool legacy = directory == fs::path(PLUGIN_LOCK_DIR);
+        std::error_code iterator_error;
+        fs::directory_iterator it(directory, iterator_error);
+        if (iterator_error == std::errc::no_such_file_or_directory)
             continue;
-
-        std::string stop_error;
-        if (!stop_daemon_from_lock(entry.path(), &stop_error)) {
+        for (; !iterator_error && it != fs::directory_iterator(); it.increment(iterator_error)) {
+            const std::string name = it->path().filename().string();
+            bool matches = daemon_lock_belongs_to(name, plugin_id);
+            if (!legacy) {
+                constexpr std::string_view suffix = ".lock";
+                const size_t length = name.size() > suffix.size() ? name.size() - suffix.size() : 0;
+                matches =
+                    length > 0 && length <= kMaxCallbackBytes * 2 && length % 2 == 0 &&
+                    name.substr(length) == suffix &&
+                    std::all_of(
+                        name.begin(), name.begin() + static_cast<std::ptrdiff_t>(length),
+                        [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+            }
+            if (!matches)
+                continue;
+            std::string stop_error;
+            if (!stop_daemon_from_lock(it->path(), &stop_error)) {
+                success = false;
+                if (error->empty())
+                    *error = std::move(stop_error);
+            }
+        }
+        if (iterator_error) {
             success = false;
-            if (first_error.empty())
-                first_error = std::move(stop_error);
+            if (error->empty())
+                *error = "Cannot enumerate plugin daemons: " + iterator_error.message();
         }
     }
-    if (iterator_error) {
-        success = false;
-        if (first_error.empty())
-            first_error = "Cannot enumerate plugin daemons: " + iterator_error.message();
-    }
-    if (!success)
-        *error = std::move(first_error);
     return success;
 }
 
+bool launch_plugin_daemon(const std::string& plugin_id, const std::string& callback,
+                          int64_t interval_seconds) {
+    std::string error;
+    const auto plugin = load_plugin_record(plugin_id, true, &error);
+    if (!plugin) {
+        print_error("%s\n", error.c_str());
+        return false;
+    }
+    PluginApiContext context{plugin->id, plugin->directory};
+    return spawn_daemon_process(&context, callback, std::max<int64_t>(1, interval_seconds));
+}
+
 bool start_plugin_daemon(const std::string& plugin_id, const std::string& callback,
-                         int interval_seconds, int ready_fd) {
+                         int64_t interval_seconds, int ready_fd) {
     if (!plugin_id_is_valid(plugin_id) || !plugin_callback_is_valid(callback) ||
         interval_seconds < 1 || ready_fd <= STDERR_FILENO) {
         report_daemon_ready(&ready_fd, false);
@@ -1863,48 +2037,40 @@ bool start_plugin_daemon(const std::string& plugin_id, const std::string& callba
     switch_cgroups();
 
     std::error_code directory_error;
-    fs::create_directories(PLUGIN_LOCK_DIR, directory_error);
+    fs::create_directories(daemon_lock_directory(plugin_id), directory_error);
     if (directory_error) {
         report_daemon_ready(&ready_fd, false);
         print_error("Cannot create plugin lock directory: %s\n", directory_error.message().c_str());
         return false;
     }
-    const fs::path lock_path =
-        fs::path(PLUGIN_LOCK_DIR) / (plugin_id + "." + callback + ".daemon.lock");
-    const int lock_fd = open(lock_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
-    if (lock_fd < 0) {
-        report_daemon_ready(&ready_fd, false);
-        print_error("Cannot open daemon lock: %s\n", strerror(errno));
-        return false;
+    const DaemonLock lock(daemon_lock_directory(plugin_id) /
+                          (encode_lock_component(callback) + ".lock"));
+    if (!lock.owned()) {
+        report_daemon_ready(&ready_fd, lock.ready());
+        return lock.ready();
     }
-    if (flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
-        const int lock_errno = errno;
-        if (lock_errno == EWOULDBLOCK || lock_errno == EAGAIN) {
-            const bool ready = daemon_marker_is_ready(lock_fd);
-            close(lock_fd);
-            report_daemon_ready(&ready_fd, ready);
-            if (ready)
-                LOGI("plugin daemon %s::%s is already running", plugin_id.c_str(),
-                     callback.c_str());
-            return ready;
+    const int lock_fd = lock.fd();
+    std::unique_ptr<DaemonLock> legacy_lock;
+    const std::string legacy_name = plugin_id + "." + callback + ".daemon.lock";
+    if (daemon_lock_belongs_to(legacy_name, plugin_id)) {
+        legacy_lock = std::make_unique<DaemonLock>(fs::path(PLUGIN_LOCK_DIR) / legacy_name);
+        if (!legacy_lock->owned()) {
+            report_daemon_ready(&ready_fd, legacy_lock->ready());
+            return legacy_lock->ready();
         }
-        close(lock_fd);
-        report_daemon_ready(&ready_fd, false);
-        print_error("Cannot lock plugin daemon: %s\n", strerror(lock_errno));
-        return false;
     }
-    if (!write_daemon_marker(lock_fd, false)) {
+    const int legacy_fd = legacy_lock ? legacy_lock->fd() : -1;
+    if (!publish_daemon_state(lock_fd, legacy_fd, false)) {
         report_daemon_ready(&ready_fd, false);
         print_error("Cannot initialize daemon readiness: %s\n", strerror(errno));
-        close(lock_fd);
         return false;
     }
 
-    LOGI("plugin daemon %s::%s started with interval %d", plugin_id.c_str(), callback.c_str(),
-         interval_seconds);
+    LOGI("plugin daemon %s::%s started with interval %s", plugin_id.c_str(), callback.c_str(),
+         std::to_string(interval_seconds).c_str());
     bool success = true;
     while (true) {
-        if (!write_daemon_marker(lock_fd, false)) {
+        if (!publish_daemon_state(lock_fd, legacy_fd, false)) {
             report_daemon_ready(&ready_fd, false);
             success = false;
             break;
@@ -1921,8 +2087,8 @@ bool start_plugin_daemon(const std::string& plugin_id, const std::string& callba
             }
             const bool awaiting_ready = ready_fd >= 0;
             bool callback_ready = false;
-            const PluginRunResult result =
-                call_plugin(*plugin, callback, false, false, ready_fd, &callback_ready, lock_fd);
+            const PluginRunResult result = call_plugin(*plugin, callback, false, false, ready_fd,
+                                                       &callback_ready, lock_fd, legacy_fd);
             ready_fd = -1;
             if (awaiting_ready && !callback_ready) {
                 success = false;
@@ -1937,12 +2103,22 @@ bool start_plugin_daemon(const std::string& plugin_id, const std::string& callba
             if (result == PluginRunResult::Failed)
                 success = false;
         }
-        unsigned int remaining = static_cast<unsigned int>(interval_seconds);
-        while (remaining != 0)
-            remaining = sleep(remaining);
+        int64_t remaining = interval_seconds;
+        while (remaining > 0) {
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+            while (std::chrono::steady_clock::now() < deadline)
+                (void)poll(nullptr, 0, 100);
+            --remaining;
+            std::error_code error;
+            const fs::path directory = fs::path(PLUGIN_DIR) / plugin_id;
+            if (!fs::is_directory(directory, error) || error ||
+                fs::exists(directory / DISABLE_FILE_NAME, error) || error) {
+                (void)publish_daemon_state(lock_fd, legacy_fd, false);
+                return success;
+            }
+        }
     }
-    (void)write_daemon_marker(lock_fd, false);
-    close(lock_fd);
+    (void)publish_daemon_state(lock_fd, legacy_fd, false);
     return success;
 }
 

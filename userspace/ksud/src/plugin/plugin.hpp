@@ -34,10 +34,12 @@ struct PluginManifest {
     std::string license;
     std::string entry;
     std::vector<std::string> depends;
+    std::optional<std::vector<std::string>> callbacks;
     plugin_json::Value descriptions = plugin_json::Value::object();
     plugin_json::Value config = plugin_json::Value::array();
     plugin_json::Value quick_action;
     bool has_action = false;
+    bool action_unknown = false;
     uint32_t min_version = 0;
 };
 

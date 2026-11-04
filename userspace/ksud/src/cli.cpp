@@ -660,10 +660,6 @@ int cli_run(int argc, char** argv) {
         args.emplace_back("--json");
     if (cmd == "msud" && cli.has("--ready-fd"))
         args = {"--ready-fd", cli.value("--ready-fd")};
-    if (cli.path == "plugin daemon") {
-        args.emplace_back("--ready-fd");
-        args.push_back(cli.value("--ready-fd"));
-    }
     if (cli.path == "dynamic get-sign") {
         const std::string target = cli.has("--uid") ? cli.value("--uid") : args[1];
         args = {"get-sign"};
@@ -674,10 +670,6 @@ int cli_run(int argc, char** argv) {
     }
     if (cli.forward_options || cmd == "boot-patch-v2")
         args.insert(args.end(), cli.option_args.begin(), cli.option_args.end());
-    if (cli.path.rfind("plugin config ", 0) == 0) {
-        args.resize(args.size() - cli.option_args.size());
-        args.insert(args.begin() + 1, {"--id", cli.value("--id")});
-    }
 
     const bool plugin_command = cmd == "plugin";
     const bool plugin_callback_command =

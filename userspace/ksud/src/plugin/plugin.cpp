@@ -901,6 +901,10 @@ int plugin_install(const std::string& zip_path) {
                         id.c_str());
             return 1;
         }
+        if (!stop_plugin_daemons(id, &error)) {
+            print_error("Cannot stop running plugin before update: %s\n", error.c_str());
+            return 1;
+        }
 #if defined(SYS_renameat2) && defined(RENAME_EXCHANGE)
         if (syscall(SYS_renameat2, AT_FDCWD, stage.c_str(), AT_FDCWD, target.c_str(),
                     RENAME_EXCHANGE) != 0) {
@@ -1099,6 +1103,14 @@ int plugin_list() {
         item["enabled"] = plugin_json::Value(plugin.enabled);
         item["has_manifest"] = plugin_json::Value(plugin.manifest_valid);
         item["has_action"] = plugin_json::Value(plugin.manifest.has_action);
+        item["action_unknown"] = plugin_json::Value(plugin.manifest.action_unknown);
+        item["min_version"] = plugin_json::Value(static_cast<int64_t>(plugin.manifest.min_version));
+        plugin_json::Array callbacks;
+        if (plugin.manifest.callbacks) {
+            for (const auto& callback : *plugin.manifest.callbacks)
+                callbacks.emplace_back(callback);
+        }
+        item["callbacks"] = plugin_json::Value(std::move(callbacks));
         item["quick_action"] = plugin.manifest.quick_action;
         item["config"] = plugin.manifest.config;
         plugin_json::Array dependencies;
@@ -1228,14 +1240,13 @@ int plugin_config_handle(const std::string& id, const std::vector<std::string>& 
     return 1;
 }
 
-bool parse_interval(const std::string& value, int* interval) {
-    long long parsed = 0;
+bool parse_interval(const std::string& value, int64_t* interval) {
+    int64_t parsed = 0;
     const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
-    if (result.ec != std::errc() || result.ptr != value.data() + value.size() || parsed < 1 ||
-        parsed > std::numeric_limits<int>::max()) {
+    if (result.ec != std::errc() || result.ptr != value.data() + value.size()) {
         return false;
     }
-    *interval = static_cast<int>(parsed);
+    *interval = std::max<int64_t>(1, parsed);
     return true;
 }
 
@@ -1259,6 +1270,7 @@ void print_usage() {
     print_output("  list                         List plugins as JSON\n");
     print_output("  run <ID> <FUNCTION>          Run a plugin callback\n");
     print_output("  action <ID>                  Run the action callback\n");
+    print_output("  daemon <ID> <FUNCTION> <SECONDS>  Start a callback daemon\n");
     print_output("  log <ID>                     Show a plugin log\n");
     print_output("  clear-log <ID|all>           Clear plugin logs\n");
     print_output("  config --id <ID> <get|set|delete|list> [KEY] [VALUE]\n");
@@ -1271,16 +1283,18 @@ bool plugin_id_is_valid(const std::string& id) {
 }
 
 bool plugin_callback_is_valid(const std::string& callback) {
-    if (callback.empty() || callback.size() > kMaxCallbackLength ||
-        (!ascii_alnum(callback.front()) && callback.front() != '_')) {
+    if (callback.empty() || callback.size() > kMaxCallbackLength) {
         return false;
     }
-    return std::all_of(callback.begin(), callback.end(),
-                       [](char character) { return ascii_alnum(character) || character == '_'; });
+    return std::all_of(callback.begin(), callback.end(), [](char character) {
+        return ascii_alnum(character) || character == '_' || character == '-' || character == '.' ||
+               character == ':';
+    });
 }
 
 bool plugin_config_key_is_valid(const std::string& key) {
-    return identifier_chars_are_valid(key, kMaxConfigKeyLength);
+    return !key.empty() && key.size() <= kMaxConfigKeyLength &&
+           key.find_first_of("/\\") == std::string::npos && plugin_json::is_valid_utf8(key);
 }
 
 std::optional<PluginManifest> plugin_read_manifest(const std::string& directory,
@@ -1327,10 +1341,13 @@ std::optional<PluginManifest> plugin_read_manifest(const std::string& directory,
         !read_optional_string(root->o, "version", &manifest.version, error) ||
         !read_optional_string(root->o, "author", &manifest.author, error) ||
         !read_optional_string(root->o, "description", &manifest.description, error) ||
-        !read_optional_string(root->o, "license", &manifest.license, error) ||
-        !read_optional_string(root->o, "entry", &manifest.entry, error)) {
+        !read_optional_string(root->o, "license", &manifest.license, error)) {
         return std::nullopt;
     }
+    const auto entry = root->o.find("entry");
+    if (entry != root->o.end() && entry->second.type != plugin_json::Type::Null &&
+        !read_optional_string(root->o, "entry", &manifest.entry, error))
+        return std::nullopt;
     if (!identifier_chars_are_valid(manifest.entry, 128)) {
         if (error)
             *error = "Manifest entry must be a safe file name";
@@ -1345,7 +1362,7 @@ std::optional<PluginManifest> plugin_read_manifest(const std::string& directory,
     }
 
     const auto minimum = root->o.find("min_version");
-    if (minimum != root->o.end()) {
+    if (minimum != root->o.end() && minimum->second.type != plugin_json::Type::Null) {
         if (minimum->second.type != plugin_json::Type::Integer || minimum->second.i < 0 ||
             static_cast<uint64_t>(minimum->second.i) > std::numeric_limits<uint32_t>::max()) {
             if (error)
@@ -1353,16 +1370,6 @@ std::optional<PluginManifest> plugin_read_manifest(const std::string& directory,
             return std::nullopt;
         }
         manifest.min_version = static_cast<uint32_t>(minimum->second.i);
-        uint32_t current = 0;
-        const char* version_end = VERSION_CODE + std::strlen(VERSION_CODE);
-        const auto parsed = std::from_chars(VERSION_CODE, version_end, current);
-        if (parsed.ec != std::errc() || parsed.ptr != version_end ||
-            current < manifest.min_version) {
-            if (error)
-                *error =
-                    "Plugin requires ksud version code " + std::to_string(manifest.min_version);
-            return std::nullopt;
-        }
     }
 
     const auto dependencies = root->o.find("depends");
@@ -1453,6 +1460,7 @@ std::optional<PluginManifest> plugin_read_manifest(const std::string& directory,
                 *error = "callbacks must be an array";
             return std::nullopt;
         }
+        manifest.callbacks.emplace();
         for (const auto& callback : callbacks->second.a) {
             if (callback.type != plugin_json::Type::String ||
                 !plugin_callback_is_valid(callback.s)) {
@@ -1462,8 +1470,13 @@ std::optional<PluginManifest> plugin_read_manifest(const std::string& directory,
             }
             if (callback.s == "action")
                 manifest.has_action = true;
+            if (std::find(manifest.callbacks->begin(), manifest.callbacks->end(), callback.s) ==
+                manifest.callbacks->end())
+                manifest.callbacks->push_back(callback.s);
         }
     }
+    manifest.action_unknown = declared_action == root->o.end() && !manifest.callbacks &&
+                              manifest.quick_action.type == plugin_json::Type::Null;
     return manifest;
 }
 
@@ -1768,12 +1781,14 @@ int plugin_handle(const std::vector<std::string>& args) {
         return plugin_run(args[1], args[2]);
     if (command == "action" && args.size() == 2)
         return plugin_run(args[1], "action");
-    if (command == "daemon" && args.size() == 6) {
-        int interval = 0;
+    if (command == "daemon" && (args.size() == 4 || args.size() == 6)) {
+        int64_t interval = 0;
         if (!parse_interval(args[3], &interval)) {
             print_error("Invalid daemon interval\n");
             return 1;
         }
+        if (args.size() == 4)
+            return launch_plugin_daemon(args[1], args[2], interval) ? 0 : 1;
         int ready_fd = -1;
         if (args[4] != "--ready-fd" || !parse_descriptor(args[5], &ready_fd)) {
             print_error("Invalid daemon readiness descriptor\n");
