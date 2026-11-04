@@ -8,43 +8,65 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 CLANG_FORMAT_BIN="${CLANG_FORMAT_BIN:-clang-format}"
 ENDIF_SCRIPT="$REPO_ROOT/scripts/githooks/fix_endif_comments.py"
 
-STAGED_FILES=$(
-  git diff --cached --name-only --diff-filter=ACM |
-    grep -E '\.(c|cc|cpp|cxx|h|hh|hpp)$' || true
-)
+cd "$REPO_ROOT"
+STAGED_LIST=$(mktemp)
+trap 'rm -f -- "$STAGED_LIST"' EXIT
+git diff --cached --name-only --diff-filter=ACMR -z -- \
+  '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' \
+  ':!:kernel/preinit/runner/nolibc/**' ':!:**/third_party/**' \
+  ':!:**/external/**' ':!:**/generated/**' > "$STAGED_LIST"
 
-if [ -z "${STAGED_FILES}" ]; then
+STAGED_FILES=()
+while IFS= read -r -d '' file; do
+  case "$(git --literal-pathspecs ls-files --stage -- "$file")" in
+    '100644 '*|'100755 '*) STAGED_FILES+=("$file") ;;
+  esac
+done < "$STAGED_LIST"
+
+if [ "${#STAGED_FILES[@]}" -eq 0 ]; then
   echo "[pre-commit] No staged C/C++ files, nothing to do."
   exit 0
 fi
 
-echo "[pre-commit] Processing staged C/C++ files..."
-
-if [ -f "$ENDIF_SCRIPT" ]; then
-  echo "[pre-commit] Adding/updating #endif comments..."
-  for file in ${STAGED_FILES}; do
-    if [ -f "$REPO_ROOT/$file" ]; then
-      python3 "$ENDIF_SCRIPT" "$REPO_ROOT/$file"
-    fi
-  done
-fi
-
-if command -v "${CLANG_FORMAT_BIN}" >/dev/null 2>&1; then
-  echo "[pre-commit] Running ${CLANG_FORMAT_BIN}..."
-  for file in ${STAGED_FILES}; do
-    if [ -f "$REPO_ROOT/$file" ]; then
-      "${CLANG_FORMAT_BIN}" -i "$REPO_ROOT/$file"
-    fi
-  done
-else
-  echo "[pre-commit] ${CLANG_FORMAT_BIN} not found, skipping formatting." >&2
-fi
-
-for file in ${STAGED_FILES}; do
-  if [ -f "$REPO_ROOT/$file" ]; then
-    git add "$REPO_ROOT/$file"
+# Reject partial staging before modifying any files.
+for file in "${STAGED_FILES[@]}"; do
+  if [ ! -f "$file" ] || [ -L "$file" ] ||
+    ! git --literal-pathspecs diff --quiet -- "$file"; then
+    echo "[pre-commit] $file has unstaged changes; stage or stash them before retrying." >&2
+    exit 1
   fi
 done
+
+if [ ! -f "$ENDIF_SCRIPT" ]; then
+  echo "[pre-commit] Missing helper: $ENDIF_SCRIPT" >&2
+  exit 1
+fi
+if ! command -v "$CLANG_FORMAT_BIN" >/dev/null 2>&1; then
+  echo "[pre-commit] $CLANG_FORMAT_BIN not found." >&2
+  exit 1
+fi
+
+if [ -z "${PYTHON_BIN:-}" ]; then
+  for candidate in python3 python; do
+    if "$candidate" -c 'import sys; sys.exit(sys.version_info.major != 3)' >/dev/null 2>&1; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "${PYTHON_BIN:-}" ] ||
+  ! "$PYTHON_BIN" -c 'import sys; sys.exit(sys.version_info.major != 3)' >/dev/null 2>&1; then
+  echo "[pre-commit] Python 3 not found; set PYTHON_BIN to its executable." >&2
+  exit 1
+fi
+
+echo "[pre-commit] Adding #endif comments and running $CLANG_FORMAT_BIN..."
+for file in "${STAGED_FILES[@]}"; do
+  "$PYTHON_BIN" "$ENDIF_SCRIPT" "$REPO_ROOT/$file"
+  "$CLANG_FORMAT_BIN" -i -- "$REPO_ROOT/$file"
+done
+
+git --literal-pathspecs add -- "${STAGED_FILES[@]}"
 
 echo "[pre-commit] Done."
 exit 0

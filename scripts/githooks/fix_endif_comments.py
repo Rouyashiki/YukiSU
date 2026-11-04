@@ -4,7 +4,7 @@ import sys
 import os
 
 def fix_endif_comments(filepath):
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8', newline='') as f:
         lines = f.readlines()
     
     if_stack = []
@@ -53,7 +53,8 @@ def fix_endif_comments(filepath):
                         condition_short = condition[:35] + "..."
                         full_comment = f"#{directive} {condition_short}"
                     
-                    new_line = f"{indent_str}#endif // {full_comment}\n"
+                    newline = '\r\n' if line.endswith('\r\n') else '\n'
+                    new_line = f"{indent_str}#endif // {full_comment}{newline}"
                     if new_line != line:
                         modified = True
                     new_lines.append(new_line)
@@ -66,7 +67,7 @@ def fix_endif_comments(filepath):
         new_lines.append(line)
     
     if modified:
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding='utf-8', newline='') as f:
             f.writelines(new_lines)
         return True
     return False
