@@ -68,19 +68,22 @@ fun softRebootBlockedMessage(context: Context = ksuApp): String = when {
     else -> context.getString(R.string.soft_reboot_unavailable)
 }
 
-fun softRebootResultMessage(context: Context = ksuApp): String? = when {
-    softRebootStatus.running -> context.getString(R.string.soft_reboot_accepted)
-    softRebootStatus.result == "completed" -> context.getString(R.string.soft_reboot_completed)
-    softRebootStatus.result == "completed_pending" ->
+fun softRebootResultMessage(
+    context: Context = ksuApp,
+    status: SoftRebootStatus = softRebootStatus,
+): String? = when {
+    status.running -> context.getString(R.string.soft_reboot_accepted)
+    status.result == "completed" -> context.getString(R.string.soft_reboot_completed)
+    status.result == "completed_pending" ->
         context.resources.getQuantityString(
-            R.plurals.soft_reboot_pending, softRebootStatus.pending, softRebootStatus.pending,
+            R.plurals.soft_reboot_pending, status.pending, status.pending,
         )
-    softRebootStatus.result == "failed" -> buildString {
-        append(context.getString(R.string.soft_reboot_failed, softRebootStatus.error))
-        if (softRebootStatus.pending > 0) {
+    status.result == "failed" -> buildString {
+        append(context.getString(R.string.soft_reboot_failed, status.error))
+        if (status.pending > 0) {
             append('\n')
             append(context.resources.getQuantityString(
-                R.plurals.soft_reboot_pending, softRebootStatus.pending, softRebootStatus.pending,
+                R.plurals.soft_reboot_pending, status.pending, status.pending,
             ))
         }
     }

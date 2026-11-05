@@ -86,6 +86,7 @@ import com.anatdx.yukisu.ui.theme.CardConfig.cardElevation
 import com.anatdx.yukisu.ui.theme.getCardColors
 import com.anatdx.yukisu.ui.theme.getCardElevation
 import com.anatdx.yukisu.ui.util.LocalSnackbarHost
+import com.anatdx.yukisu.ui.util.SoftRebootStatus
 import com.anatdx.yukisu.ui.util.checkNewVersion
 import com.anatdx.yukisu.ui.util.isSoftRebootBlockedByKasumi
 import com.anatdx.yukisu.ui.util.refreshSoftRebootStatus
@@ -107,6 +108,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SOFT_REBOOT_COMPLETED_NOTICE = "soft_reboot_completed_notice"
+private const val SOFT_REBOOT_FAILED_NOTICE = "soft_reboot_failed_notice"
 
 /**
  * @author ShirkNeko
@@ -885,30 +887,43 @@ private fun StatusCard(
 }
 
 @Composable
-private fun SoftRebootStatusCard() {
+internal fun SoftRebootStatusCard(status: SoftRebootStatus = softRebootStatus) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val preferences = remember(context) {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     }
-    var dismissedId by remember(preferences) {
-        mutableStateOf(preferences.getString(SOFT_REBOOT_COMPLETED_NOTICE, null))
+    val noticePreference = if (status.result == "failed") {
+        SOFT_REBOOT_FAILED_NOTICE
+    } else {
+        SOFT_REBOOT_COMPLETED_NOTICE
     }
-    val status = softRebootStatus
-    val message = softRebootResultMessage(context)
-    val completedId = status.rebootId.takeIf { !status.running && status.result == "completed" }
-    val visible = message != null && (completedId == null || completedId != dismissedId)
+    var dismissedId by remember(preferences, noticePreference) {
+        mutableStateOf(preferences.getString(noticePreference, null))
+    }
+    val message = softRebootResultMessage(context, status)
+    val resultId = status.rebootId.takeIf {
+        !status.running && (status.result == "completed" || status.result == "failed")
+    }
+    val visible = message != null && (resultId == null || resultId != dismissedId)
+    val onDismiss = resultId?.let { id ->
+        {
+            preferences.edit { putString(noticePreference, id) }
+            dismissedId = id
+        }
+    }
+    val defaultTimeout = if (status.result == "failed") 10_000L else 5_000L
     val timeout = LocalAccessibilityManager.current?.calculateRecommendedTimeoutMillis(
-        originalTimeoutMillis = 5_000L,
+        originalTimeoutMillis = defaultTimeout,
         containsText = true,
-    ) ?: 5_000L
+        containsControls = true,
+    ) ?: defaultTimeout
 
-    LaunchedEffect(completedId, visible, timeout, lifecycleOwner) {
-        if (completedId != null && visible) {
+    LaunchedEffect(resultId, noticePreference, visible, timeout, lifecycleOwner) {
+        if (onDismiss != null && visible) {
             lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 delay(timeout)
-                preferences.edit { putString(SOFT_REBOOT_COMPLETED_NOTICE, completedId) }
-                dismissedId = completedId
+                onDismiss()
             }
         }
     }
@@ -925,7 +940,11 @@ private fun SoftRebootStatusCard() {
 
     YukiExpandableContent(visible = visible) {
         message?.let {
-            WarningCard(it, color = MaterialTheme.colorScheme.secondaryContainer)
+            WarningCard(
+                message = it,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                onDismiss = onDismiss,
+            )
         }
     }
 }
@@ -934,7 +953,8 @@ private fun SoftRebootStatusCard() {
 fun WarningCard(
     message: String,
     color: Color = MaterialTheme.colorScheme.error,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
     ElevatedCard(
         colors = getCardColors(color),
@@ -950,7 +970,13 @@ fun WarningCard(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
             )
+            if (onDismiss != null) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close))
+                }
+            }
         }
     }
 }
