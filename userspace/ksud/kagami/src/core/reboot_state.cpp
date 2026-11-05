@@ -107,7 +107,11 @@ bool cycle_number(unsigned int& number) {
 }  // namespace
 
 JsonValue state() {
-    return read_json(state_file());
+    auto saved = read_json(state_file());
+    const auto boot = runtime_boot_id();
+    if (boot.empty() || saved.at("boot_id").string_or("") != boot)
+        return JsonValue::object();
+    return saved;
 }
 
 bool recover_abandoned(

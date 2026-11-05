@@ -220,6 +220,17 @@ int main() {
         return false;
     }));
     assert(reboot::state().at("error").s.find("service exec failed") != std::string::npos);
+    const auto saved = reboot::state();
+    boot.clear();
+    assert(reboot::state().o.empty());
+    boot = "next-boot";
+    assert(reboot::state().o.empty());
+    boot = "test-boot";
+    assert(stringify_json(reboot::state()) == stringify_json(saved));
+    auto legacy = saved;
+    legacy.o.erase("boot_id");
+    assert(ksud::write_file_atomic(root / "run" / "soft_reboot.json", stringify_json(legacy)));
+    assert(reboot::state().o.empty());
     boot = "next-boot";
     assert(reboot::cycle_id() == boot);
     assert(!reboot::marker_matches_cycle(marker));
