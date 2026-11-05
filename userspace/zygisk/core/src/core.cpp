@@ -82,7 +82,6 @@ struct Module {
   int id = -1; // zygiskd module index
   long version = 0;
   void *handle = nullptr;
-  uintptr_t linker_anchor = 0;
   bool yuki_loaded = false;
   std::vector<ModulePltRequest> plt_pending;
   std::vector<std::unique_ptr<ModulePltGroup>> plt_groups;
@@ -854,7 +853,6 @@ void load_modules_impl(JNIEnv *env) {
     Module &m = g_modules.emplace_back();
     m.id = static_cast<int>(i);
     m.handle = handle;
-    m.linker_anchor = yuki_loaded ? 0 : reinterpret_cast<uintptr_t>(entry);
     m.yuki_loaded = yuki_loaded;
     m.api.impl = nullptr; // api callbacks resolve the module via g_cur
     m.api.registerModule = RegisterModuleImpl;
@@ -925,6 +923,7 @@ void *app_args_for(const Module &m, zygisk::AppSpecializeArgs *v5,
   return m.version <= 2 ? static_cast<void *>(v1) : static_cast<void *>(v5);
 }
 
+// Resident modules retain their linker registration for TLS and live callbacks.
 void unload_requested_modules(JNIEnv *env) {
   yukizygisk::plt_lifecycle::ExternalScope external;
   if (!external) {
@@ -982,23 +981,6 @@ void run_app_pre_impl(zygisk::AppSpecializeArgs *args) {
   zd_restore_module_load_policy();
 }
 
-/* Hide injected linker entries. */
-void hide_injection() {
-  yukizygisk::plt_lifecycle::ExternalScope external;
-  if (!external) {
-    LOGE("module concealment barrier: errno=%d", external.error());
-    return;
-  }
-  yuki::solist::hide_from_solist("libyukilinker"); // split-out loader .so
-  for (auto &m : g_modules) {
-    if (m.handle != nullptr && !m.yuki_loaded && m.linker_anchor != 0) {
-      yuki::solist::drop_lib_containing(m.linker_anchor,
-                                        /*keep_mapped=*/true);
-      m.linker_anchor = 0;
-    }
-  }
-}
-
 void run_app_post_impl(JNIEnv *env, const zygisk::AppSpecializeArgs *args) {
   yukizygisk::plt_lifecycle::ExternalScope external;
   if (!external) {
@@ -1021,7 +1003,6 @@ void run_app_post_impl(JNIEnv *env, const zygisk::AppSpecializeArgs *args) {
   if (!yukizygisk::plt_lifecycle::dispatch_allowed())
     return;
   unload_requested_modules(env);
-  hide_injection();
   if (yukizygisk::plt_lifecycle::dispatch_allowed())
     yz_drop_runtime_header_pages();
 }
@@ -1073,7 +1054,6 @@ void run_server_post_impl(JNIEnv *env,
   if (!yukizygisk::plt_lifecycle::dispatch_allowed())
     return;
   unload_requested_modules(env);
-  hide_injection();
 }
 
 } // namespace
@@ -1143,8 +1123,6 @@ static void core_start(const char *self_path) {
   g_monitor_zygote_pid = static_cast<uint32_t>(getpid());
   g_monitor_zygote_generation = runtime_generation;
   LOGI("core start, self=%s", self_path ? self_path : "(null)");
-  if (!yuki::solist::prepare_linker())
-    LOGE("linker internals unavailable; solist cleanup disabled");
   if (zygisk_hook_bootstrap(self_path))
     zd_report_zygote(runtime_generation);
   zd_restore_load_policy();
