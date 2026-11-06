@@ -17,6 +17,7 @@ struct IntegrationControl {
   unsigned thread_destructors;
   unsigned native_policy;
   unsigned native_ifunc;
+  int (*exercise_exit_lifecycle)(const char *);
   uintptr_t base;
   uintptr_t caller_bridge;
   size_t span;

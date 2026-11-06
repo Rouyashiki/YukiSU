@@ -61,7 +61,7 @@ foreach(kind private private_ifunc emutls missing invalid null_entry)
 endforeach()
 
 get_target_property(ordinary_sources zygisk SOURCES)
-set(driver_sources ordinary_core.cpp ordinary_hooks.cpp)
+set(driver_sources ordinary_core.cpp ordinary_hooks.cpp exit_cleanup_bionic.cpp)
 foreach(source IN LISTS ordinary_sources)
     if(source STREQUAL "src/core.cpp" OR source STREQUAL "src/hook.cpp" OR source MATCHES "/yukilinker/")
         continue()
@@ -77,6 +77,7 @@ target_compile_options(integration_ordinary_core PRIVATE -UNDEBUG -fexceptions -
 target_link_libraries(integration_ordinary_core PRIVATE YukiPLT::yukiplt dl)
 yukilinker_add_runtime_sources(integration_ordinary_core)
 target_link_options(integration_ordinary_core PRIVATE -Wl,-Bsymbolic-functions
+    -Wl,--wrap=yz_patch_text_checked
     -Wl,--wrap=yz_log
     -Wl,--exclude-libs,ALL -Wl,-z,now -Wl,-z,defs -Wl,-z,max-page-size=16384
     -Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=fork

@@ -53,7 +53,7 @@ target_compile_options(yukiplt PRIVATE -fexceptions -fno-stack-protector
     -fno-c++-static-destructors -ffunction-sections -fdata-sections)
 set_source_files_properties(src/core.cpp src/hook.cpp src/hyos_runtime.cpp
     src/yukizncore.cpp src/process_maps.cpp src/linker_runtime.cpp
-    src/native_bionic.cpp PROPERTIES COMPILE_OPTIONS "-fexceptions")
+    src/native_bionic.cpp src/exit_cleanup.cpp PROPERTIES COMPILE_OPTIONS "-fexceptions")
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 # Resolves libc++abi's __cxa_demangle reference locally so the real demangler and
@@ -64,6 +64,7 @@ set(CXX_SLIM_SOURCE ${REPO_ROOT}/userspace/common/cxx_slim.cpp)
 add_library(zygisk SHARED
     ../endpoint.cpp
     src/core.cpp
+    src/exit_cleanup.cpp
     src/core_bindings.cpp
     src/plt_lifecycle.cpp
     src/process_maps.cpp

@@ -89,6 +89,19 @@ local report. The Core/YukiPLT coordinated fork cases are tested separately.
 
 ## Focused Bionic helpers
 
+The ordinary Core fixture uses the production exit-registration policy.
+Its exit-cleanup cases use a test-only, mutex-protected observer of Bionic's
+symbol-resolved table. They verify three cleared slots, varying table sizes and
+page boundaries, repeated cleanup, unchanged active callback tuples and order,
+reverse exactly-once execution, partial registration failure, concurrent
+registration/finalization and normal process exit. Batch arithmetic covers both
+4 KB and 16 KB pages with 32-bit and 64-bit pointers. No observer is linked into
+production. A completed batch is not a device detector result. It
+checks repeated short-lived image destruction, foreign libc registrations and
+a thread that starts before post-specialize cleanup. No libc text patch may occur,
+and the foreign and PRIVATE finalizers must still run. The surrounding fixture
+also verifies Core and caller-bridge unmapping with an unrelated host thread.
+
 The caller-anchor and soinfo runners retain their host and Android modes.
 These focused runners require separate output directories outside the checkout.
 

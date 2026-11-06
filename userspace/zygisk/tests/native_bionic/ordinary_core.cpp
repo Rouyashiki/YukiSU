@@ -7,6 +7,16 @@
 #include <cstdlib>
 #include <sched.h>
 
+namespace {
+unsigned patch_number;
+} // namespace
+
+extern "C" uint8_t __wrap_yz_patch_text_checked(uintptr_t, const void *,
+                                                const void *, unsigned) {
+  ++patch_number;
+  return 0;
+}
+
 extern "C" void yz_jni_entry_0();
 extern "C" void *g_yz_jni_targets[];
 extern "C" pid_t __real_fork();
@@ -14,6 +24,7 @@ void fixture_quiesce_unused_hooks();
 void fixture_snapshot_fds();
 int fixture_dependency_directory(const char *path);
 void fixture_sanitize_fds(bool app);
+void exercise_exit_cleanup();
 
 extern "C" void __wrap_yz_log(uint8_t, const char *format, ...) {
   va_list args;
@@ -25,6 +36,73 @@ extern "C" void __wrap_yz_log(uint8_t, const char *format, ...) {
 
 namespace {
 IntegrationControl *control;
+extern "C" int __cxa_atexit(void (*)(void *), void *, void *);
+
+void foreign_exit_count(void *count) { ++*static_cast<unsigned *>(count); }
+int exercise_exit_lifecycle(const char *directory) {
+  using namespace yukizygisk;
+  exercise_exit_cleanup();
+  char path[4096];
+  snprintf(path, sizeof(path), "%s/libintegration_missing.so", directory);
+  const auto constructors = control->module_constructors;
+  const auto finalizers = control->module_finalizers;
+  const auto patches = patch_number;
+  const auto *registration = reinterpret_cast<const void *>(
+      reinterpret_cast<uintptr_t>(__cxa_atexit) & ~uintptr_t{1});
+  const auto *finalization = reinterpret_cast<const void *>(
+      reinterpret_cast<uintptr_t>(__cxa_finalize) & ~uintptr_t{1});
+  uint8_t saved_register[16], saved_finalize[16];
+  memcpy(saved_register, registration, sizeof(saved_register));
+  memcpy(saved_finalize, finalization, sizeof(saved_finalize));
+  const auto load = [&] {
+    linker::Library library;
+    const int fd = open(path, O_RDONLY | O_CLOEXEC);
+    assert(fd >= 0 && library.open(fd, path, -1, true, false, false));
+    close(fd);
+    return library;
+  };
+  for (int repeat = 0; repeat != 3; ++repeat) {
+    auto library = load();
+    assert(library.close());
+  }
+  assert(control->module_constructors == constructors + 3 &&
+         control->module_finalizers == finalizers + 3);
+  assert(exit_cleanup::compact().status == exit_cleanup::Status::Complete);
+
+  auto library = load();
+  unsigned foreign = 0;
+  assert(__cxa_atexit(foreign_exit_count, &foreign, &foreign) == 0);
+  int channels[2];
+  assert(pipe(channels) == 0);
+  pthread_t thread;
+  assert(pthread_create(
+             &thread, nullptr,
+             [](void *opaque) -> void * {
+               char byte;
+               assert(read(*static_cast<int *>(opaque), &byte, 1) == 1);
+               return nullptr;
+             },
+             &channels[0]) == 0);
+  // Specialization can start a thread before post callbacks. Closing its last
+  // image and compacting exit entries must remain safe with that thread alive.
+  assert(library.retained());
+  assert(library.close());
+  assert(exit_cleanup::compact().status == exit_cleanup::Status::Complete);
+  assert(control->module_constructors == constructors + 4 &&
+         control->module_finalizers == finalizers + 4);
+  __cxa_finalize(&foreign);
+  assert(foreign == 1 && patch_number == patches);
+  assert(memcmp(saved_register, registration, sizeof(saved_register)) == 0 &&
+         memcmp(saved_finalize, finalization, sizeof(saved_finalize)) == 0);
+  assert(write(channels[1], "x", 1) == 1 && pthread_join(thread, nullptr) == 0);
+  close(channels[0]);
+  close(channels[1]);
+  control->module_constructors = constructors;
+  control->module_finalizers = finalizers;
+  puts("PASS production exit lifecycle: foreign registration, live thread, "
+       "finalizers and no libc entry patches");
+  return 0;
+}
 yukiplt::OriginalSlot<int (*)()> original;
 int replacement() { return original.load()() + 7; }
 int fork_fixture() {
@@ -268,6 +346,7 @@ __attribute__((constructor)) void initialize_fixture() {
   control = reinterpret_cast<IntegrationControl *>(
       strtoull(getenv("YUKISU_INTEGRATION_CONTROL"), nullptr, 16));
   control->exercise = exercise;
+  control->exercise_exit_lifecycle = exercise_exit_lifecycle;
   control->fork_process = fork_fixture;
 }
 } // namespace

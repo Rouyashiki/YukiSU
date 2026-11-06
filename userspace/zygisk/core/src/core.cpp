@@ -4,6 +4,7 @@
 #include <yukiplt.hpp>
 
 #include "core_bindings.hpp"
+#include "exit_cleanup.hpp"
 #include "hook.hpp"
 #include "linker_runtime.hpp"
 #include "load_config.hpp"
@@ -911,6 +912,7 @@ void unload_requested_modules(JNIEnv *env) {
     LOGE("module unload barrier: errno=%d", external.error());
     return;
   }
+  size_t unloaded = 0;
   for (auto it = g_modules.rbegin(); it != g_modules.rend(); ++it) {
     if (!yukizygisk::plt_lifecycle::dispatch_allowed())
       return;
@@ -927,7 +929,20 @@ void unload_requested_modules(JNIEnv *env) {
       LOGI("module %d retirement deferred", m.id);
       continue;
     }
+    ++unloaded;
     LOGI("module %d DLCLOSE'd after post-specialize", m.id);
+  }
+  if (unloaded && yukizygisk::plt_lifecycle::dispatch_allowed()) {
+    const auto result = yukizygisk::exit_cleanup::compact();
+    const char *status = "registration-failed";
+    if (result.status == yukizygisk::exit_cleanup::Status::Complete)
+      status = "completed";
+    else if (result.status == yukizygisk::exit_cleanup::Status::Unavailable)
+      status = "skipped";
+    LOGI("exit cleanup: modules=%zu registered=%zu/%zu status=%s errno=%d "
+         "duration_us=%llu",
+         unloaded, result.registered, result.requested, status, result.error,
+         static_cast<unsigned long long>(result.elapsed_us));
   }
 }
 

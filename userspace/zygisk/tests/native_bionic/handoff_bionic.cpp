@@ -370,6 +370,8 @@ void run(const char *directory, const char *core_name, bool native,
     }
   }
   if (control.exercise) {
+    assert(control.exercise_exit_lifecycle &&
+           control.exercise_exit_lifecycle(directory) == 0);
     unrelated.start();
     assert(control.exercise(directory) == 0);
     const uintptr_t base = control.base;
