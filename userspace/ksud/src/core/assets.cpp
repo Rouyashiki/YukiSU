@@ -19,14 +19,16 @@ int ensure_yukizygisk(bool ignore_if_exist) {
         const char* dest;
     };
     static const Payload payload[] = {
-        {"libzygisk64.so", ZCORE64_PATH},           {"libzygisk32.so", ZCORE32_PATH},
-        {"libyukizncore64.so", ZNCORE64_PATH},      {"libyukizncore32.so", ZNCORE32_PATH},
-        {"libyukilinker64.so", ZYUKILINKER64_PATH}, {"libyukilinker32.so", ZYUKILINKER32_PATH},
+        {"libzygisk64.so", ZCORE64_PATH},      {"libzygisk32.so", ZCORE32_PATH},
+        {"libyukizncore64.so", ZNCORE64_PATH}, {"libyukizncore32.so", ZNCORE32_PATH},
+        {"libyloader64.so", ZYLOADER64_PATH},  {"libyloader32.so", ZYLOADER32_PATH},
     };
     static constexpr const char* legacy_payload[] = {
         "/data/adb/ksu/lib/yukizygisk/libzygisk.so",
         "/data/adb/ksu/lib/yukizygisk/libyukizncore.so",
         "/data/adb/ksu/lib/yukizygisk/libyukilinker.so",
+        "/data/adb/ksu/lib/yukizygisk/libyukilinker32.so",
+        "/data/adb/ksu/lib/yukizygisk/libyukilinker64.so",
     };
 
     bool embedded = false;

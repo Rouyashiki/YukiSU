@@ -37,3 +37,6 @@
 [submodule "userspace/zygisk/third_party/yukiplt"]
 	path = userspace/zygisk/third_party/yukiplt
 	url = https://github.com/Rouyashiki/YukiPLT.git
+[submodule "userspace/zygisk/third_party/yukilinker"]
+	path = userspace/zygisk/third_party/yukilinker
+	url = https://github.com/Rouyashiki/YukiLinker.git

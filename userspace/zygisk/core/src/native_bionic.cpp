@@ -280,7 +280,9 @@ bool validate_context(const CallerContext &context, const Maps &maps,
   for (const uintptr_t entry :
        {reinterpret_cast<uintptr_t>(context.api.open),
         reinterpret_cast<uintptr_t>(context.api.iterate),
-        reinterpret_cast<uintptr_t>(context.api.address_info)}) {
+        reinterpret_cast<uintptr_t>(context.api.address_info),
+        reinterpret_cast<uintptr_t>(context.api.lookup),
+        reinterpret_cast<uintptr_t>(context.api.lookup_version)}) {
     if (!mapped_range(maps, code_address(entry), instruction_size(entry),
                       PROT_EXEC, &context.api.linker.identity,
                       &context.api.file_offsets[index++]))
@@ -296,18 +298,20 @@ bool validate_context(const CallerContext &context, const Maps &maps,
   return true;
 }
 
+bool prepare_caller(CallerContext &context, Failure &failure) {
+  const auto maps = read_maps();
+  if (maps.empty())
+    return fail(failure, Error::MapsUnavailable);
+  LoaderApi api;
+  return resolve_loader(maps, api, failure) &&
+         find_caller(api, maps, reinterpret_cast<const void *>(getpid), context,
+                     failure) &&
+         validate_context(context, read_maps(), failure);
+}
+
 LoadResult load(const char *path, int flags, const android_dlextinfo &ext) {
   LoadResult result;
-  const auto maps = read_maps();
-  if (maps.empty()) {
-    fail(result.failure, Error::MapsUnavailable);
-    return result;
-  }
-  LoaderApi api;
-  if (!resolve_loader(maps, api, result.failure) ||
-      !find_caller(api, maps, reinterpret_cast<const void *>(getpid),
-                   result.context, result.failure) ||
-      !validate_context(result.context, read_maps(), result.failure))
+  if (!prepare_caller(result.context, result.failure))
     return result;
   result.failure.stage = Stage::Load;
   dlerror();

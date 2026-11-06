@@ -1,6 +1,7 @@
 #include "core_bindings.hpp"
 #include "hyos_runtime.hpp"
 #include "inline_hook.hpp"
+#include "linker_runtime.hpp"
 #include "load_config.hpp"
 #include "loader_handoff.hpp"
 #include "log.hpp"
@@ -9,7 +10,6 @@
 #include "plt_lifecycle.hpp"
 #include "solist.hpp"
 #include "userspace/zygisk/endpoint.hpp"
-#include "yukilinker.hpp"
 #include "zygiskd.hpp"
 #include <yukiplt.hpp>
 
@@ -93,13 +93,14 @@ using ZdRequest = zygiskd::Request;
 struct ModuleHandle {
   uint32_t magic = kHandleMagic;
   yukizygisk::NativeModuleBinding binding;
-  void *so = nullptr;
+  yukizygisk::linker::Library library;
   uint64_t device = 0;
   uint64_t inode = 0;
   std::string module_id;
   bool early = false;
   bool reported = false;
   bool hyos_registered = false;
+  bool initialized = false;
 };
 
 struct InlineHookRecord {
@@ -494,7 +495,7 @@ ModuleHandle *find_loaded_module(std::string_view module_id) {
 
 bool has_pending_early_report() {
   for (auto *h : g_loaded_modules) {
-    if (h != nullptr && h->early && !h->reported &&
+    if (h != nullptr && h->initialized && h->early && !h->reported &&
         (!yukizygisk::hyos::available() || h->hyos_registered))
       return true;
   }
@@ -769,6 +770,7 @@ bool load_symbols(ZnSymbolResolver *r, const std::string &file_path) {
 
 struct NativePltBinding {
   yukiplt::NamedImage image;
+  std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
   std::string symbol;
   void *replacement = nullptr;
   void *original = nullptr;
@@ -790,7 +792,14 @@ bool same_native_image(const yukiplt::NamedImage &left,
          left.path == right.path;
 }
 
-yukiplt::Result<yukiplt::NamedImage> native_plt_image(void *address) {
+yukiplt::Result<yukiplt::NamedImage>
+native_plt_image(void *address,
+                 std::shared_ptr<yukizygisk::linker::PrivateImage> &pin) {
+  if (address) {
+    pin = yukizygisk::linker::private_image(address);
+    if (pin)
+      return pin->named;
+  }
   if (address != nullptr) {
     auto containing = yukiplt::find_image_containing(address);
     if (containing ||
@@ -817,7 +826,8 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
        reinterpret_cast<uintptr_t>(original) % alignof(void *) != 0))
     return kFailed;
   try {
-    auto image = native_plt_image(base_addr);
+    std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
+    auto image = native_plt_image(base_addr, pin);
     if (!image) {
       LOGE("PLT discovery: %s errno=%d",
            yukiplt::error_name(image.error().code), image.error().sys_errno);
@@ -881,6 +891,7 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
     }
     auto binding = std::make_unique<NativePltBinding>();
     binding->image = std::move(image.value());
+    binding->pin = std::move(pin);
     binding->symbol = symbol;
     binding->replacement = hook_handler;
     if (original != nullptr)
@@ -889,7 +900,7 @@ int api_plt_hook(void *base_addr, const char *symbol, void *hook_handler,
     const yukiplt::HookRequest request{
         binding->symbol.c_str(), hook_handler,
         original != nullptr ? original : &binding->original};
-    auto result = yukiplt::hook_batch_nonnull_named_cached(
+    auto result = yukizygisk::linker::hook_batch(
         yukizygisk::plt_lifecycle::maps_cache(), binding->image, &request, 1,
         &binding->slot, &binding->install);
     binding->handle = std::move(result.handle);
@@ -1155,8 +1166,17 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
       close(lib_fd);
     return false;
   }
-  std::string module_id = module_id_of(info);
-  std::string lib_path = bounded_cstr(info.lib_path, sizeof(info.lib_path));
+  std::string module_id;
+  std::string lib_path;
+  try {
+    module_id = module_id_of(info);
+    lib_path = bounded_cstr(info.lib_path, sizeof(info.lib_path));
+  } catch (...) {
+    if (lib_fd >= 0)
+      close(lib_fd);
+    LOGE("native core: module identity allocation failed idx=%u", idx);
+    return false;
+  }
   if (module_id.empty() || lib_path.empty()) {
     if (lib_fd >= 0)
       close(lib_fd);
@@ -1165,11 +1185,12 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
     return false;
   }
 
-  if (find_loaded_module(module_id) != nullptr) {
+  if (const auto *existing = find_loaded_module(module_id)) {
     if (lib_fd >= 0)
       close(lib_fd);
-    LOGI("native core: already initialized id=%s", module_id.c_str());
-    return true;
+    LOGI("native core: retained id=%s initialized=%u", module_id.c_str(),
+         existing->initialized);
+    return existing->initialized;
   }
   if (lib_fd < 0) {
     LOGE("native core: invalid library fd id=%s idx=%u", module_id.c_str(),
@@ -1195,73 +1216,45 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
     }
   }
 
-  // Use the full path and fd identity; FORCE_LOAD would bypass Bionic reuse.
-  android_dlextinfo ext{};
-  ext.flags = ANDROID_DLEXT_USE_LIBRARY_FD;
-  ext.library_fd = lib_fd;
-  const auto load = yukizygisk::native_bionic::load(lib_path.c_str(),
-                                                    RTLD_NOW | RTLD_LOCAL, ext);
-  const auto &context = load.context;
-  LOGI("native caller: id=%s pid=%d early=%u stage=%s "
-       "reason=%s errno=%d linker=%s bias=%p libc=%s bias=%p "
-       "libc_dev=%llu libc_ino=%llu anchor=%p end=%p",
-       module_id.c_str(), getpid(), early ? 1U : 0U,
-       yukizygisk::native_bionic::stage_name(load.failure.stage),
-       yukizygisk::native_bionic::error_name(load.failure.error),
-       load.failure.system_error, context.api.linker.path.c_str(),
-       reinterpret_cast<void *>(context.api.linker.bias),
-       context.libc.path.c_str(), reinterpret_cast<void *>(context.libc.bias),
-       static_cast<unsigned long long>(context.libc.identity.device),
-       static_cast<unsigned long long>(context.libc.identity.inode),
-       reinterpret_cast<void *>(context.anchor),
-       reinterpret_cast<void *>(context.segment_end));
-  void *so = load.handle;
-  if (so == nullptr) {
-    LOGE("native core: Bionic load failed id=%s idx=%u path=%s early=%u: %s",
-         module_id.c_str(), idx, lib_path.c_str(), early ? 1U : 0U,
-         load.loader_error.empty()
-             ? yukizygisk::native_bionic::error_name(load.failure.error)
-             : load.loader_error.c_str());
+  std::unique_ptr<ModuleHandle> pending(new (std::nothrow) ModuleHandle());
+  if (!pending) {
     close(lib_fd);
     return false;
   }
-  close(lib_fd);
-  const auto retain = [&] {
-    auto *handle = new ModuleHandle();
-    handle->binding.publish(idx, info.has_companion != 0);
-    handle->so = so;
-    handle->device = identity.st_dev;
-    handle->inode = identity.st_ino;
-    handle->module_id = module_id;
-    handle->early = early;
-    g_loaded_modules.push_back(handle);
-    return handle;
-  };
-  if (!yukizygisk::plt_lifecycle::dispatch_allowed()) {
-    (void)retain();
+  try {
+    pending->binding.publish(idx, info.has_companion != 0);
+    pending->device = identity.st_dev;
+    pending->inode = identity.st_ino;
+    pending->module_id = module_id;
+    pending->early = early;
+    g_loaded_modules.push_back(pending.get());
+  } catch (...) {
+    close(lib_fd);
+    LOGE("native core: ownership allocation failed id=%s", module_id.c_str());
     return false;
   }
-  for (const auto *loaded : g_loaded_modules) {
-    if (loaded->so == so) {
-      LOGE("native core: library already initialized by id=%s, rejecting id=%s",
-           loaded->module_id.c_str(), module_id.c_str());
-      dlclose(so);
-      return false;
+  auto *handle = pending.release();
+  const bool loaded =
+      handle->library.open(lib_fd, lib_path.c_str(), -1, false, true, false);
+  close(lib_fd);
+  const auto retire_failed = [&] {
+    if (handle->library.close()) {
+      g_loaded_modules.pop_back();
+      delete handle;
     }
+  };
+  if (!loaded) {
+    LOGE("native core: module load failed id=%s idx=%u", module_id.c_str(),
+         idx);
+    retire_failed();
+    return false;
   }
-  LOGI("native core: Bionic loaded id=%s idx=%u path=%s early=%u "
-       "caller=libc mappings=bionic",
-       module_id.c_str(), idx, lib_path.c_str(), early ? 1U : 0U);
-  // Native modules retain Bionic mappings and identity independently of Core
-  // anonymity.
-
-  dlerror();
-  auto *mod = reinterpret_cast<ZygiskNextModule *>(dlsym(so, "zn_module"));
-  if (mod == nullptr) {
-    const char *error = dlerror();
-    LOGE("native core: zn_module lookup failed id=%s idx=%u: %s",
-         module_id.c_str(), idx, error != nullptr ? error : "null entry");
-    dlclose(so);
+  if (!yukizygisk::plt_lifecycle::dispatch_allowed())
+    return false;
+  auto *mod =
+      reinterpret_cast<ZygiskNextModule *>(handle->library.symbol("zn_module"));
+  if (!mod) {
+    retire_failed();
     return false;
   }
   if ((mod->target_api_version != kApiVersion3 &&
@@ -1269,27 +1262,36 @@ bool load_native_module_from_fd(const zygiskd::NativeModuleInfo &info,
       mod->onModuleLoaded == nullptr) {
     LOGE("native core: unsupported module id=%s idx=%u api=%d entry=%p",
          module_id.c_str(), idx, mod->target_api_version, mod->onModuleLoaded);
-    dlclose(so);
+    retire_failed();
     return false;
   }
 
-  auto *handle = retain();
   if (!yukizygisk::plt_lifecycle::dispatch_allowed())
     return false;
   LOGI("native module onModuleLoaded: %s early=%u", module_id.c_str(),
        early ? 1U : 0U);
   const size_t registrations_before =
       yukizygisk::hyos::registered_module_count();
-  yukizygisk::hyos::begin_module_registration(&handle->binding);
-  mod->onModuleLoaded(handle, &g_api);
+  yukizygisk::hyos::begin_module_registration(&handle->binding,
+                                              &handle->library);
+  {
+    yukizygisk::linker::Execution execution(handle->library);
+    if (!execution) {
+      yukizygisk::hyos::end_module_registration();
+      return false;
+    }
+    mod->onModuleLoaded(handle, &g_api);
+  }
   recover_native_plt();
   yukizygisk::hyos::end_module_registration();
   if (!yukizygisk::plt_lifecycle::dispatch_allowed())
     return false;
   handle->hyos_registered =
       yukizygisk::hyos::registered_module_count() > registrations_before;
-  // Keep the handle for process lifetime: callbacks can still use libdl.
-  LOGI("native module Bionic handle retained: %s", module_id.c_str());
+  handle->initialized = true;
+  // Callback and companion registrations retain their library and Core.
+  LOGI("native module handle retained: %s backend=%s", module_id.c_str(),
+       handle->library.is_private() ? "PRIVATE" : "SYSTEM");
   LOGI("native module loaded: %s early=%u", module_id.c_str(), early ? 1U : 0U);
   if (!early && !yukizygisk::hyos::available())
     handle->reported = report_native_injection(idx);
@@ -1396,6 +1398,11 @@ void load_matching_modules() {
 
     std::string module_id = module_id_of(info);
     if (auto *loaded = find_loaded_module(module_id)) {
+      if (!loaded->initialized) {
+        LOGE("native core: incomplete module retained id=%s",
+             module_id.c_str());
+        continue;
+      }
       loaded->binding.publish(i, info.has_companion != 0);
       LOGI("native core: duplicate skipped id=%s idx=%u early=%u",
            module_id.c_str(), i, loaded->early ? 1U : 0U);
@@ -1425,7 +1432,7 @@ bool sync_early_native_reports_once() {
 
   bool all_reported = true;
   for (auto *h : g_loaded_modules) {
-    if (h == nullptr || !h->early || h->reported)
+    if (h == nullptr || !h->initialized || !h->early || h->reported)
       continue;
     if (yukizygisk::hyos::available() && !h->hyos_registered)
       continue;
@@ -1503,7 +1510,22 @@ void run_ctors_once() {
 
 void core_start() {
   run_ctors_once();
-  g_inline_hooks.reserve(YZ_NATIVE_TARGET_MAX);
+  if (!yukizygisk::linker::initialize()) {
+    LOGE("native Core linker runtime initialization failed");
+    yukizygisk::endpoint::close_packet(g_early_packet_fd, false);
+    g_early_packet_fd = -1;
+    restore_native_load_policy();
+    return;
+  }
+  try {
+    g_inline_hooks.reserve(YZ_NATIVE_TARGET_MAX);
+  } catch (...) {
+    LOGE("native Core hook ownership allocation failed");
+    yukizygisk::endpoint::close_packet(g_early_packet_fd, false);
+    g_early_packet_fd = -1;
+    restore_native_load_policy();
+    return;
+  }
   g_runtime_generation = request_runtime_generation();
   load_config();
   (void)yukizygisk::hyos::initialize(open_hyos_control_session,
@@ -1519,7 +1541,6 @@ void core_start() {
     restore_native_load_policy();
     return;
   }
-  maybe_start_deferred_native_sync();
   restore_native_load_policy();
 }
 
@@ -1632,6 +1653,11 @@ zygisk_set_load_config(const yz_config *config) {
     g_yz_config = *config;
 }
 
+extern "C" [[gnu::visibility("default")]] bool
+zygisk_bootstrap_bind_native_v1(const yukilinker_c_native_services *services) {
+  return yukizygisk::linker::bind_native(services);
+}
+
 extern "C" [[gnu::visibility("default")]] void
 zygisk_core_entry(const char * /*self_path*/, void *loader_self,
                   void *core_base, void *core_size, int early_packet_fd_plus1) {
@@ -1640,12 +1666,24 @@ zygisk_core_entry(const char * /*self_path*/, void *loader_self,
   g_self_size = reinterpret_cast<size_t>(core_size);
   g_early_packet_fd =
       early_packet_fd_plus1 > 0 ? early_packet_fd_plus1 - 1 : -1;
-  if (!yukizygisk::endpoint::initialize(g_early_packet_fd, true)) {
-    yukizygisk::endpoint::close_packet(g_early_packet_fd, false);
+  if (!yukizygisk::linker::native_window_open()) {
+    LOGE("native bootstrap capability mismatch: libc-loader binding v1 "
+         "required");
+    yukizygisk::endpoint::close_packet(g_early_packet_fd);
     g_early_packet_fd = -1;
     return;
   }
+  if (!yukizygisk::endpoint::initialize(g_early_packet_fd, true)) {
+    yukizygisk::endpoint::close_packet(g_early_packet_fd, false);
+    g_early_packet_fd = -1;
+    yukizygisk::linker::revoke_native();
+    return;
+  }
   core_start();
+  if (!yukizygisk::linker::revoke_native()) {
+    LOGE("native bootstrap service did not drain; retaining loader");
+    return;
+  }
   const auto result =
       g_self_base == 0
           ? yukizygisk::handoff::verify_loaded(
@@ -1656,6 +1694,7 @@ zygisk_core_entry(const char * /*self_path*/, void *loader_self,
     LOGE("native loader verification failed: %s", result.reason);
   g_loader_unmap_safe =
       result.complete &&
+      yukizygisk::linker::handoff_ready(g_self_base, g_self_size) &&
       yukizygisk::handoff::anonymous_image_matches(g_self_base, g_self_size) &&
       core_runtime_profile_ready(g_self_base, g_self_size);
   LOGI("native loader handoff: %s; slot=%p target=%p; retain=%d", result.reason,
@@ -1674,20 +1713,78 @@ zygisk_bootstrap_handoff_complete() {
          yukizygisk::handoff::retirement_ready();
 }
 
-extern "C" [[gnu::visibility("default")]] void zygisk_finalize_loader(int,
-                                                                      int) {
-  yukizygisk::plt_lifecycle::ExternalScope external;
-  if (!external) {
-    LOGE("native loader retirement barrier: errno=%d", external.error());
-    return;
-  }
-  if (!zygisk_bootstrap_handoff_complete()) {
-    LOGI("loader retirement not authorized; retaining loader and dependencies");
-    return;
-  }
+extern "C" [[noreturn]] void yz_self_unmap_tail(void *, size_t,
+                                                CoreUnmapFunction);
 
-  const bool released = yukizygisk::handoff::close_loader_reference();
-  LOGI("native finalize_loader: bootstrap reference released=%d", released);
-  if (released)
-    g_loader_base = 0;
+namespace {
+void retire_idle_native_core() {
+#if defined(__aarch64__)
+  const uintptr_t resume = g_yz_ret_ctx[11];
+  const uintptr_t stack = g_yz_ret_ctx[12];
+#else
+  const uintptr_t resume = g_yz_ret_ctx[8];
+  const uintptr_t stack = g_yz_ret_ctx[9];
+#endif
+  if (!resume || !stack || !g_self_base || !g_self_size || g_loader_base ||
+      (resume >= g_self_base && resume - g_self_base < g_self_size) ||
+      !yukizygisk::plt_lifecycle::retirement_window_ready(false))
+    return;
+  if (!core_runtime_closed()) {
+    yukizygisk::plt_lifecycle::Operation operation(
+        yukizygisk::plt_lifecycle::Access::Retire);
+    if (!operation || !g_loaded_modules.empty() || !g_native_plt.empty() ||
+        !g_inline_hooks.empty() || !yukizygisk::hyos::release_idle_storage() ||
+        !yukizygisk::plt_lifecycle::shutdown())
+      return;
+    operation.seal();
+    if (!yukizygisk::linker::shutdown())
+      return;
+    if (!yukizygisk::plt_lifecycle::retirement_window_ready(
+            core_private_tsd_used())) {
+      LOGI("native core retirement deferred by remaining thread state");
+      return;
+    }
+    std::vector<ModuleHandle *>().swap(g_loaded_modules);
+    std::vector<InlineHookRecord>().swap(g_inline_hooks);
+    std::vector<std::unique_ptr<NativePltBinding>>().swap(g_native_plt);
+    if (yukiplt_c_trim_idle_storage().code != YUKIPLT_C_SUCCESS)
+      return;
+    yukizygisk::endpoint::release();
+  }
+  const auto unmap = core_retirement_unmap();
+  const int status = core_finish_runtime_retirement();
+  if (core_runtime_closed())
+    yz_self_unmap_tail(reinterpret_cast<void *>(g_self_base), g_self_size,
+                       status == 0 ? unmap : nullptr);
+}
+} // namespace
+
+extern "C" [[gnu::visibility("hidden")]] void yz_finalize_native_loader(int,
+                                                                        int) {
+  if (g_loader_base == 0) {
+    retire_idle_native_core();
+    return;
+  }
+  {
+    yukizygisk::plt_lifecycle::ExternalScope external;
+    if (!external) {
+      LOGE("native loader retirement barrier: errno=%d", external.error());
+      return;
+    }
+    if (!zygisk_bootstrap_handoff_complete()) {
+      LOGI("loader retirement not authorized; retaining loader and "
+           "dependencies");
+      return;
+    }
+
+    const bool released = yukizygisk::handoff::close_loader_reference();
+    LOGI("native finalize_loader: bootstrap reference released=%d", released);
+    if (released)
+      g_loader_base = 0;
+  }
+  retire_idle_native_core();
+  // A sync worker may enter the same admission barrier as the finalizer. Start
+  // it only after stage-one ownership and loader retirement have completed.
+  if (g_loader_base == 0 && !yukizygisk::hyos::available())
+    maybe_start_deferred_native_sync();
 }

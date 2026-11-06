@@ -72,6 +72,7 @@ void child_atfork() {
 #include "module_plt_types.inc"
 struct Module {
   int id = 0;
+  yukizygisk::linker::Library library;
   std::vector<ModulePltRequest> plt_pending;
   std::vector<std::unique_ptr<ModulePltGroup>> plt_groups;
   bool plt_registration_failed = false;
@@ -348,6 +349,9 @@ extern "C" int __wrap_open(const char *path, int flags, ...) {
   }
   return __real_open(path, flags, 0);
 }
+extern "C" int __wrap_open64(const char *path, int flags, ...) {
+  return __wrap_open(path, flags);
+}
 
 extern "C" int __real_pthread_mutex_lock(pthread_mutex_t *);
 extern "C" int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex) {
@@ -358,6 +362,10 @@ extern "C" int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex) {
   return __real_pthread_mutex_lock(mutex);
 }
 
+#if defined(__USE_TIME_BITS64)
+#define __real_clock_gettime __real___clock_gettime64
+#define __wrap_clock_gettime __wrap___clock_gettime64
+#endif
 extern "C" int __real_clock_gettime(clockid_t, timespec *);
 extern "C" int __wrap_clock_gettime(clockid_t clock, timespec *now) {
   if (clock == CLOCK_MONOTONIC && watch_drain.exchange(false))

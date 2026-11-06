@@ -1164,9 +1164,19 @@ bool resolve_loader(const Maps &maps, LoaderApi &api, Failure &failure) {
       symbols.find_exact("__loader_dladdr", api.file_offsets[2]);
   if (address_info == 0)
     return false;
+  const uintptr_t lookup =
+      symbols.find_exact("__loader_dlsym", api.file_offsets[3]);
+  if (lookup == 0)
+    return false;
+  const uintptr_t lookup_version =
+      symbols.find_exact("__loader_dlvsym", api.file_offsets[4]);
+  if (lookup_version == 0)
+    return false;
   api.open = reinterpret_cast<OpenExt>(open);
   api.iterate = reinterpret_cast<Iterate>(iterate);
   api.address_info = reinterpret_cast<AddressInfo>(address_info);
+  api.lookup = reinterpret_cast<Lookup>(lookup);
+  api.lookup_version = reinterpret_cast<LookupVersion>(lookup_version);
   api.linker = symbols.runtime_object();
   failure = {Stage::Linker, Error::None, 0};
   return true;

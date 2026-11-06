@@ -99,7 +99,7 @@ jobs:
             targets: ksuinit
           - name: yukizygisk
             source: userspace/zygisk/core
-            targets: zygisk yukizncore yukilinker
+            targets: zygisk yukizncore yukilinker_bootstrap
     steps:
       - uses: actions/checkout@v7
         with:

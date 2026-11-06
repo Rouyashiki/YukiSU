@@ -73,6 +73,7 @@ jobs:
       - name: Build YukiZygisk payload
         run: |
           set -euo pipefail
+          python3 userspace/zygisk/inject/generate.py --ndk "$ANDROID_NDK_HOME"
           core_dir="$PWD/userspace/zygisk/core"
           daemon_dir="$PWD/userspace/zygisk/daemon"
           TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
@@ -115,14 +116,14 @@ jobs:
           cp "$daemon_dir"/build/zygiskd64 \
             "$daemon_dir"/build-armv7/zygiskd32 \
             "$core_dir"/build/libzygisk64.so \
-            "$core_dir"/build/libyukilinker64.so \
+            "$core_dir"/build/libyloader64.so \
             "$core_dir"/build/libyukizncore64.so \
             "$core_dir"/build-armv7/libzygisk32.so \
-            "$core_dir"/build-armv7/libyukilinker32.so \
+            "$core_dir"/build-armv7/libyloader32.so \
             "$core_dir"/build-armv7/libyukizncore32.so "$dist/"
           for asset in zygiskd64 zygiskd32 \
             libzygisk64.so libzygisk32.so \
-            libyukilinker64.so libyukilinker32.so \
+            libyloader64.so libyloader32.so \
             libyukizncore64.so libyukizncore32.so; do
             test -s "$dist/$asset"
           done

@@ -22,7 +22,25 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  verify-native-stub:
+    if: inputs.yukizygisk
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: recursive
+    - uses: android-actions/setup-android@v4
+      with:
+        packages: ndk;30.0.16248370
+    - name: Verify generated native injection images
+      run: |
+        set -euo pipefail
+        sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+        python3 userspace/zygisk/inject/generate.py --ndk "$sdk_root/ndk/30.0.16248370"
+
   build-kernelsu-ko:
+    needs: verify-native-stub
+    if: ${{ !cancelled() && (needs.verify-native-stub.result == 'success' || needs.verify-native-stub.result == 'skipped') }}
     name: Build kernelsu.ko for ${{ inputs.kmi }}
     runs-on: ubuntu-latest
     container:

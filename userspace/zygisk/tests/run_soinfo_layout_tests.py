@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from run_native_bionic_tests import function, generate_linker, run
+from run_caller_anchor_tests import function, generate_linker, run
 
 
 def generate(root, build):

@@ -40,8 +40,8 @@ using yukizygisk::native::NativeModule;
 constexpr const char* kSnapshotDirName = "yukizygisk";
 constexpr const char* kManifestName = "native_snapshot.bin";
 constexpr const char* kModulesDirName = "modules";
-constexpr const char* kLoader64Name = "libyukilinker64.so";
-constexpr const char* kLoader32Name = "libyukilinker32.so";
+constexpr const char* kLoader64Name = "libyloader64.so";
+constexpr const char* kLoader32Name = "libyloader32.so";
 constexpr const char* kNativeCore64Name = "libyukizncore64.so";
 constexpr const char* kNativeCore32Name = "libyukizncore32.so";
 constexpr const char* kSystemLinker64 = "/system/bin/linker64";
@@ -413,6 +413,13 @@ int refresh_yukizygisk_early_snapshot() {
         return 0;
     }
 
+    yz_runtime_query_cmd capabilities{};
+    if (ksuctl(KSU_IOCTL_YZ_GET_RUNTIME, &capabilities) != 0 ||
+        !(capabilities.capabilities & YZ_RUNTIME_CAP_NATIVE_LIBC_BOOTSTRAP_V1)) {
+        LOGW("yukizygisk early: running LKM lacks native libc bootstrap v1; "
+             "staged snapshot requires the matching LKM on next boot");
+    }
+
     const fs::path preinit_dir = preinit_ksu_dir();
     const fs::path snapshot_dir = preinit_dir / kSnapshotDirName;
     const fs::path module_dir = snapshot_dir / kModulesDirName;
@@ -437,8 +444,8 @@ int refresh_yukizygisk_early_snapshot() {
     const fs::path loader32_path = snapshot_dir / kLoader32Name;
     const fs::path native_core_path = snapshot_dir / kNativeCore64Name;
     const fs::path native_core32_path = snapshot_dir / kNativeCore32Name;
-    if (!stage_asset_or_file(kLoader64Name, ZYUKILINKER64_PATH, loader_path) ||
-        !stage_asset_or_file(kLoader32Name, ZYUKILINKER32_PATH, loader32_path) ||
+    if (!stage_asset_or_file(kLoader64Name, ZYLOADER64_PATH, loader_path) ||
+        !stage_asset_or_file(kLoader32Name, ZYLOADER32_PATH, loader32_path) ||
         !stage_asset_or_file(kNativeCore64Name, ZNCORE64_PATH, native_core_path) ||
         !stage_asset_or_file(kNativeCore32Name, ZNCORE32_PATH, native_core32_path)) {
         clear_yukizygisk_early_snapshot();
@@ -446,7 +453,8 @@ int refresh_yukizygisk_early_snapshot() {
         return 1;
     }
 
-    for (const char* legacy_name : {"libyukilinker.so", "libyukizncore.so"}) {
+    for (const char* legacy_name :
+         {"libyukilinker.so", "libyukilinker32.so", "libyukilinker64.so", "libyukizncore.so"}) {
         const fs::path legacy_path = snapshot_dir / legacy_name;
         if (!fs::remove(legacy_path, ec) && ec) {
             LOGW("yukizygisk early: failed to remove legacy payload %s: %s", legacy_path.c_str(),

@@ -225,10 +225,9 @@ namespace {
 struct RuntimeRetirement {
   uintptr_t base = 0;
   size_t span = 0;
-  void (*early)() = nullptr;
-  void (*late)() = nullptr;
+  const uintptr_t *finalizers = nullptr;
+  size_t remaining = 0;
   CoreUnmapFunction unmap = nullptr;
-  bool early_done = false;
   bool closed = false;
   bool busy = false;
   Key final_key{};
@@ -386,7 +385,9 @@ bool core_prepare_runtime_retirement(uintptr_t base, size_t span) noexcept {
   }
   // NOLINTEND(cppcoreguidelines-pro-type-union-access)
   if (!terminated || !have_array || !have_size ||
-      array_bytes != 2 * sizeof(uintptr_t) ||
+      array_bytes < 2 * sizeof(uintptr_t) ||
+      array_bytes > 64 * sizeof(uintptr_t) ||
+      array_bytes % sizeof(uintptr_t) != 0 ||
       !own_range(info, array, array_bytes, PF_R) || !have_strings ||
       !have_string_size || !own_range(info, strings, string_bytes, PF_R))
     return false;
@@ -399,13 +400,13 @@ bool core_prepare_runtime_retirement(uintptr_t base, size_t span) noexcept {
          strcmp(name, "libm.so") != 0))
       return false;
   }
-  uintptr_t fini[2]{};
-  memcpy(fini, reinterpret_cast<void *>(array), sizeof(fini));
-  for (uintptr_t address : fini)
+  const auto *fini = reinterpret_cast<const uintptr_t *>(array);
+  const size_t fini_count = array_bytes / sizeof(uintptr_t);
+  for (size_t i = 0; i < fini_count; ++i) {
+    const uintptr_t address = fini[i];
     if (!own_range(info, address & ~uintptr_t{1}, 1, PF_X))
       return false;
-  if (fini[0] == fini[1])
-    return false;
+  }
   // Anonymous callers have no bionic local group for RTLD_DEFAULT lookup.
   // Use the import already resolved against this image's dependencies.
   CoreUnmapFunction unmap = munmap;
@@ -419,15 +420,9 @@ bool core_prepare_runtime_retirement(uintptr_t base, size_t span) noexcept {
   name = name == nullptr ? provider.dli_fname : name + 1;
   if (strcmp(name, "libc.so") != 0)
     return false;
-  // The final ELF check binds these two entries to the NDK's two CRT stubs.
-  retirement = {base,
-                span,
-                reinterpret_cast<void (*)()>(fini[1]),
-                reinterpret_cast<void (*)()>(fini[0]),
-                unmap,
-                false,
-                false,
-                false};
+  // The first entry is the NDK CRT terminator. SDK/user finalizers precede it
+  // in reverse ELF order while the Core's C++ runtime is still callable.
+  retirement = {base, span, fini, fini_count, unmap, false, false};
   return true;
 }
 
@@ -446,8 +441,12 @@ int core_finish_runtime_retirement() noexcept {
     return EINVAL;
   if (retirement.busy)
     return EBUSY;
-  if (retirement.closed)
-    return finish_closed_key();
+  if (retirement.closed) {
+    const int status = finish_closed_key();
+    return status != 0
+               ? status
+               : (yukizygisk::handoff::release_dependencies() ? 0 : EBUSY);
+  }
   const int thread_state = runtime_thread_state();
   if (thread_state < 0)
     return -thread_state;
@@ -457,9 +456,9 @@ int core_finish_runtime_retirement() noexcept {
       (std::uncaught_exceptions() != 0 || std::current_exception()))
     return EBUSY;
   retirement.busy = true;
-  if (!retirement.early_done) {
-    retirement.early_done = true;
-    retirement.early();
+  while (retirement.remaining > 1) {
+    const uintptr_t function = retirement.finalizers[--retirement.remaining];
+    reinterpret_cast<void (*)()>(function)();
   }
   const int drained = core_drain_current_thread_tsd();
   const int remaining = runtime_thread_state(&retirement.final_key);
@@ -470,9 +469,12 @@ int core_finish_runtime_retirement() noexcept {
     return remaining < 0 ? -remaining : EBUSY;
   }
   retirement.closed = true;
-  retirement.late();
+  retirement.remaining = 0;
+  reinterpret_cast<void (*)()>(retirement.finalizers[0])();
   retirement.busy = false;
-  return core_private_tsd_used() ? EBUSY : 0;
+  if (core_private_tsd_used())
+    return EBUSY;
+  return yukizygisk::handoff::release_dependencies() ? 0 : EBUSY;
 }
 
 extern "C" __attribute__((visibility("default"))) bool
@@ -519,13 +521,5 @@ _Unwind_Ptr __wrap_dl_unwind_find_exidx(_Unwind_Ptr pc, int *count) {
   *count = static_cast<int>(exidx->p_memsz / 8);
   return info.dlpi_addr + exidx->p_vaddr;
 }
-#endif
-#if defined(__ANDROID__)
-// Host statics are released explicitly before returning outside the DSO.
-extern "C" __attribute__((visibility("hidden"))) int
-__cxa_atexit(void (*)(void *), void *, void *) {
-  return 0;
-}
-extern "C" __attribute__((visibility("hidden"))) void __cxa_finalize(void *) {}
 #endif
 #endif

@@ -1,5 +1,6 @@
 #include "plt_lifecycle.hpp"
 #include "core_bindings.hpp"
+#include "linker_runtime.hpp"
 
 #include <atomic>
 #include <cerrno>
@@ -258,6 +259,8 @@ void invalidate_fork_cache() noexcept { close_cache_window(); }
 
 yukiplt::Error unhook(yukiplt::HookHandle &handle, yukiplt::SlotReport *slots,
                       size_t count, yukiplt::OperationDiagnostic *diagnostic) {
+  if (linker::mapping_changed())
+    invalidate_fork_cache();
   if ((cache_window.load(std::memory_order_acquire) & 1) == 0)
     return yukiplt::unhook_diagnosed(handle, slots, count, diagnostic);
   const auto error =
@@ -302,8 +305,10 @@ pid_t fork_process(pid_t (*original)()) noexcept {
     return -1;
   }
   const auto fork_thread = static_cast<uint64_t>(gettid());
+  linker::prepare_fork();
   const pid_t result = original();
   const int saved_errno = errno;
+  linker::after_fork(result == 0);
   if (result == 0) {
     core_after_fork_child();
     callbacks.child(callbacks.context);
@@ -333,3 +338,10 @@ pid_t fork_process(pid_t (*original)()) noexcept {
   return result;
 }
 } // namespace yukizygisk::plt_lifecycle
+
+extern "C" pid_t __real_fork();
+// The SDK's module fork bridge reaches the same dispatcher as Zygote and HyOS.
+// Refused admission returns EBUSY before entering Bionic or cloning locks.
+extern "C" __attribute__((visibility("hidden"))) pid_t __wrap_fork() {
+  return yukizygisk::plt_lifecycle::fork_process(__real_fork);
+}

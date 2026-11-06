@@ -17,7 +17,8 @@ extern "C" int core_system_iterate_phdr(int (*)(dl_phdr_info *, size_t, void *),
                                         void *);
 
 using CoreUnmapFunction = int (*)(void *, size_t);
-// Fixed NDK CRT profile; callers must retain this image through termination.
+// Validate the Core/SDK finalizer sequence and retain the image through
+// termination.
 bool core_prepare_runtime_retirement(uintptr_t base, size_t span) noexcept;
 bool core_runtime_profile_ready(uintptr_t base, size_t span) noexcept;
 CoreUnmapFunction core_retirement_unmap() noexcept;

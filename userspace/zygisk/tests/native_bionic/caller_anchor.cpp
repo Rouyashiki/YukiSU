@@ -81,7 +81,7 @@ struct Image {
       auto *sh = reinterpret_cast<ElfW(Shdr) *>(base + eh->e_shoff);
       sh[1].sh_type = SHT_DYNSYM;
       sh[1].sh_offset = 1024;
-      sh[1].sh_size = 4 * sizeof(ElfW(Sym));
+      sh[1].sh_size = 6 * sizeof(ElfW(Sym));
       sh[1].sh_entsize = sizeof(ElfW(Sym));
       sh[1].sh_link = 2;
       sh[2].sh_type = SHT_STRTAB;
@@ -90,8 +90,9 @@ struct Image {
       auto *sym = reinterpret_cast<ElfW(Sym) *>(base + sh[1].sh_offset);
       size_t cursor = 1;
       const char *exports[] = {"__loader_android_dlopen_ext",
-                               "__loader_dl_iterate_phdr", "__loader_dladdr"};
-      for (size_t i = 0; i < 3; ++i) {
+                               "__loader_dl_iterate_phdr", "__loader_dladdr",
+                               "__loader_dlsym", "__loader_dlvsym"};
+      for (size_t i = 0; i < 5; ++i) {
         sym[i + 1].st_name = cursor;
         strcpy(names + cursor, exports[i]);
         cursor += strlen(exports[i]) + 1;
@@ -232,20 +233,29 @@ void *fixture_wrapper(const char *path, int flags,
   internal_calls = before;
   return result;
 }
+void *fixture_lookup(void *, const char *, const void *) { return nullptr; }
+void *fixture_lookup_version(void *, const char *, const char *, const void *) {
+  return nullptr;
+}
 LoaderApi mock_api() {
   LoaderApi api;
   api.open = fixture_open;
   api.iterate = fixture_iterate;
   api.address_info = fixture_dladdr;
+  api.lookup = fixture_lookup;
+  api.lookup_version = fixture_lookup_version;
   for (const auto &map : real_maps())
     if (map.start <= reinterpret_cast<uintptr_t>(fixture_open) &&
         map.end > reinterpret_cast<uintptr_t>(fixture_open))
       api.linker.identity = {static_cast<uint64_t>(map.dev),
                              static_cast<uint64_t>(map.inode)};
   size_t index = 0;
-  for (const auto entry : {reinterpret_cast<uintptr_t>(fixture_open),
-                           reinterpret_cast<uintptr_t>(fixture_iterate),
-                           reinterpret_cast<uintptr_t>(fixture_dladdr)}) {
+  for (const auto entry :
+       {reinterpret_cast<uintptr_t>(fixture_open),
+        reinterpret_cast<uintptr_t>(fixture_iterate),
+        reinterpret_cast<uintptr_t>(fixture_dladdr),
+        reinterpret_cast<uintptr_t>(fixture_lookup),
+        reinterpret_cast<uintptr_t>(fixture_lookup_version)}) {
     for (const auto &map : real_maps())
       if (map.start <= code_address(entry) && map.end > code_address(entry))
         api.file_offsets[index] = map.offset + code_address(entry) - map.start;
@@ -300,6 +310,12 @@ int main() {
         linker.base + sysconf(_SC_PAGESIZE));
   CHECK(api.linker.bias != api.linker.base);
   auto *symbols = reinterpret_cast<ElfW(Sym) *>(linker.base + 1024);
+  for (size_t i : {4U, 5U}) {
+    const auto symbol = symbols[i];
+    symbols[i].st_info = ELF64_ST_INFO(STB_GLOBAL, STT_GNU_IFUNC);
+    CHECK(!checked_resolve(maps, api, failure));
+    symbols[i] = symbol;
+  }
   const auto saved = symbols[1];
 #if defined(__arm__)
   symbols[1].st_value |= 1;

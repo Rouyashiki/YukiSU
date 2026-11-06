@@ -1,4 +1,7 @@
 #include <linux/auxvec.h>
+#include <linux/anon_inodes.h>
+#include <linux/file.h>
+#include <linux/pid.h>
 #include <linux/compat.h>
 #include <linux/elf.h>
 #include <linux/err.h>
@@ -16,6 +19,9 @@
 #include "infra/task_work.h"
 #include "internal.h"
 #include "tango.h"
+#include "native_stub.h"
+#include "native_blob64.h"
+#include "native_blob32.h"
 #include "selinux/selinux.h"
 #include "klog.h" // IWYU pragma: keep
 #include "uapi/yukizygisk.h"
@@ -159,6 +165,160 @@ static int yz_write_stack_at_entry(unsigned long addr, unsigned long value,
 	(void)compat;
 #endif
 	return put_user(value, (unsigned long __user *)addr);
+}
+
+struct yz_native_report_owner {
+	struct pid *process;
+	u32 generation;
+};
+
+static ssize_t yz_native_report_write(struct file *file,
+				      const char __user *buffer, size_t bytes,
+				      loff_t *position)
+{
+	struct yz_native_report_owner *owner = file->private_data;
+	struct {
+		s32 status;
+		u32 stage;
+		char message[256];
+	} report;
+
+	if (task_tgid(current) != owner->process || bytes != sizeof(report))
+		return -EINVAL;
+	if (copy_from_user(&report, buffer, sizeof(report)))
+		return -EFAULT;
+	report.message[sizeof(report.message) - 1] = 0;
+	if (report.status) {
+		pr_warn("yukizygisk: native bootstrap rejected pid=%d "
+			"generation=%u status=%d stage=%u %s\n",
+			current->tgid, owner->generation, report.status,
+			report.stage, report.message);
+		yz_runtime_set_state(current->tgid, owner->generation,
+				     YZ_RUNTIME_STATE_FAILED);
+		ksu_yukizygisk_restore_native_load_policy(current->tgid);
+	}
+	return sizeof(report);
+}
+
+static int yz_native_report_release(struct inode *inode, struct file *file)
+{
+	struct yz_native_report_owner *owner = file->private_data;
+
+	put_pid(owner->process);
+	kfree(owner);
+	return 0;
+}
+
+static const struct file_operations yz_native_report_operations = {
+    .owner = THIS_MODULE,
+    .write = yz_native_report_write,
+    .release = yz_native_report_release,
+};
+
+static int yz_native_report_fd(u32 generation)
+{
+	struct yz_native_report_owner *owner =
+	    kzalloc(sizeof(*owner), GFP_KERNEL);
+	int fd;
+
+	if (!owner)
+		return -ENOMEM;
+	owner->process = get_pid(task_tgid(current));
+	owner->generation = generation;
+	fd = anon_inode_getfd("yukizygisk-bootstrap",
+			      &yz_native_report_operations, owner,
+			      O_WRONLY | O_CLOEXEC);
+	if (fd < 0) {
+		put_pid(owner->process);
+		kfree(owner);
+	}
+	return fd;
+}
+
+static int yz_stage_native_stub(unsigned long entry_slot, unsigned long entry,
+				unsigned long linker, bool compat,
+				u32 generation, int loader_fd, int core_fd,
+				const struct yz_early_packet_state *packet)
+{
+	const unsigned char *resolver =
+	    compat ? yz_native_resolver32 : yz_native_resolver64;
+	const unsigned char *launch =
+	    compat ? yz_native_start32 : yz_native_start64;
+	size_t resolver_bytes = compat ? sizeof(yz_native_resolver32)
+				       : sizeof(yz_native_resolver64);
+	size_t launch_bytes =
+	    compat ? sizeof(yz_native_start32) : sizeof(yz_native_start64);
+	size_t length = PAGE_ALIGN(resolver_bytes);
+	unsigned long parser, stub;
+	struct yz_native_stub data = {0};
+	unsigned int i;
+	int error;
+
+	static_assert(offsetof(struct yz_native_stub, message) ==
+		      YZ_NS_MESSAGE);
+	static_assert(offsetof(struct yz_native_stub, cleanup_fds) ==
+		      YZ_NS_FDS);
+	static_assert(offsetof(struct yz_native_stub, report_fd) ==
+		      YZ_NS_REPORT_FD);
+	static_assert(sizeof(yz_native_start64) <= YZ_NATIVE_STUB_DATA);
+	static_assert(sizeof(yz_native_start32) <= YZ_NATIVE_STUB_DATA);
+	static_assert(YZ_NATIVE_STUB_DATA + sizeof(data) <= 4096);
+	parser = vm_mmap(NULL, 0, length, PROT_READ | PROT_WRITE | PROT_EXEC,
+			 MAP_PRIVATE | MAP_ANONYMOUS, 0);
+	if (IS_ERR_VALUE(parser))
+		return (int)parser;
+	stub = vm_mmap(NULL, 0, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+		       MAP_PRIVATE | MAP_ANONYMOUS, 0);
+	if (IS_ERR_VALUE(stub)) {
+		vm_munmap(parser, length);
+		return (int)stub;
+	}
+	data.report_fd = yz_native_report_fd(generation);
+	if (data.report_fd < 0) {
+		error = data.report_fd;
+		goto fail;
+	}
+	data.magic = YZ_NATIVE_STUB_MAGIC;
+	data.version = YZ_NATIVE_STUB_VERSION;
+	data.entry = entry;
+	data.linker = linker;
+	data.resolver = parser;
+	data.resolver_size = length;
+	data.process = current->tgid;
+	data.generation = generation;
+	data.loader_fd = loader_fd;
+	data.core_fd = core_fd;
+	data.packet_argument = packet->packet_fd + 1;
+	data.cleanup_fds[data.cleanup_count++] = core_fd;
+	data.cleanup_fds[data.cleanup_count++] = packet->packet_fd;
+	data.cleanup_fds[data.cleanup_count++] = packet->endpoint_fd;
+	for (i = 0; i < packet->module_fd_count; ++i)
+		data.cleanup_fds[data.cleanup_count++] = packet->module_fds[i];
+	if (copy_to_user((void __user *)parser, resolver, resolver_bytes) ||
+	    copy_to_user((void __user *)stub, launch, launch_bytes) ||
+	    copy_to_user((void __user *)(stub + YZ_NATIVE_STUB_DATA), &data,
+			 sizeof(data))) {
+		error = -EFAULT;
+		goto fail;
+	}
+	flush_icache_range(parser, parser + resolver_bytes);
+	flush_icache_range(stub, stub + launch_bytes);
+	/* Both generated launchers start in ARM mode; the saved entry keeps its
+	 * original Thumb bit. The large resolver is unmapped before Core entry.
+	 */
+	error = yz_write_stack_at_entry(entry_slot, stub, compat);
+	if (!error) {
+		pr_info("yukizygisk: native libc bootstrap v1 pid=%d "
+			"generation=%u stub=%lx resolver=%lx\n",
+			current->tgid, generation, stub, parser);
+		return 0;
+	}
+fail:
+	if (data.report_fd >= 0)
+		yz_close_current_fd(data.report_fd);
+	vm_munmap(stub, PAGE_SIZE);
+	vm_munmap(parser, length);
+	return error;
 }
 
 static int yz_read_stack_at_entry(unsigned long addr, unsigned long *value,
@@ -394,7 +554,7 @@ static void yz_inject_tw_func(struct callback_head *cb)
 		char loader_name[YZ_VMA_NAME_LEN], core_name[YZ_VMA_NAME_LEN];
 
 		yz_early_packet_state_init(&early_packet);
-		if (!at_base || !dlopen_off || !dlsym_off) {
+		if (!at_base || (!native && (!dlopen_off || !dlsym_off))) {
 			pr_info("yukizygisk: linker addresses unavailable "
 				"pid=%d target=%s; injection skipped\n",
 				current->pid, socket_name);
@@ -487,6 +647,26 @@ static void yz_inject_tw_func(struct callback_head *cb)
 				yz_restore_native_policy_state(native_policy);
 				goto out;
 			}
+		}
+
+		if (native) {
+			werr = yz_stage_native_stub(
+			    at_entry_uaddr, saved, at_base, compat,
+			    runtime_generation, loader_fd, core_fd,
+			    &early_packet);
+			if (werr) {
+				yz_close_current_fd(loader_fd);
+				yz_close_current_fd(core_fd);
+				yz_close_early_packet_state(&early_packet);
+				yz_restore_native_policy_state(native_policy);
+			} else {
+				runtime_redirected = true;
+				yz_runtime_set_state(
+				    current->tgid, runtime_generation,
+				    YZ_RUNTIME_STATE_REDIRECTED);
+				yz_publish_native_policy_state(native_policy);
+			}
+			goto out;
 		}
 
 		stub = vm_mmap(NULL, 0, PAGE_SIZE,

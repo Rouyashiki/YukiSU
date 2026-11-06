@@ -199,10 +199,17 @@ Result pointer(const Maps &maps, const Image &loader, const Map &identity,
                uintptr_t slot, uintptr_t target) {
   if (target == 0)
     return {true, "null weak pointer", slot, target};
-  if (target >= loader.bias && target < loader.end)
+  // Constructors can replace relocated data pointers with tagged Bionic
+  // allocations.
+#if defined(__aarch64__)
+  const uintptr_t address = target & UINT64_C(0x00ffffffffffffff);
+#else
+  const uintptr_t address = target;
+#endif
+  if (address >= loader.bias && address < loader.end)
     return {false, "reference into loader image", slot, target};
   for (const auto &map : maps) {
-    if (target >= map.begin && target < map.end) {
+    if (address >= map.begin && address < map.end) {
       if (same_file(map, identity))
         return {false, "reference into loader file", slot, target};
       return {true, "mapped pointer", slot, target};

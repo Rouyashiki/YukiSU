@@ -109,6 +109,15 @@ with tempfile.TemporaryDirectory(prefix='yz-host-tests-') as temporary:
     binary = build / 'netlink_test'
     run(compiler, *flags, str(source), '-o', str(binary))
     run(str(binary))
+    payload_assets = os.environ.get('YZ_PAYLOAD_ASSETS')
+    if payload_assets:
+        migration = build / 'payload_migration_test'
+        run(compiler, *flags, '-include', 'linux/types.h',
+            str(root / 'userspace/zygisk/tests/payload_migration_test.cpp'),
+            str(root / 'userspace/ksud/src/core/assets.cpp'),
+            str(root / 'userspace/ksud/src/yukizygisk_snapshot.cpp'),
+            '-o', str(migration))
+        run(str(migration), payload_assets)
     endpoint = root / 'userspace/zygisk/endpoint.cpp'
     binary = build / 'endpoint_test'
     run(compiler, *flags, '-pthread',

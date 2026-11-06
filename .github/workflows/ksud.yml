@@ -117,7 +117,7 @@ jobs:
         mkdir -p ./userspace/ksud/assets
         for asset in zygiskd64 zygiskd32 \
           libzygisk64.so libzygisk32.so \
-          libyukilinker64.so libyukilinker32.so \
+          libyloader64.so libyloader32.so \
           libyukizncore64.so libyukizncore32.so; do
           if [ ! -f "$artifact/$asset" ]; then
             echo "::error::YukiZygisk artifact missing: $artifact/$asset"
@@ -131,8 +131,8 @@ jobs:
           ./userspace/ksud/assets/zygiskd32 \
           ./userspace/ksud/assets/libzygisk64.so \
           ./userspace/ksud/assets/libzygisk32.so \
-          ./userspace/ksud/assets/libyukilinker64.so \
-          ./userspace/ksud/assets/libyukilinker32.so \
+          ./userspace/ksud/assets/libyloader64.so \
+          ./userspace/ksud/assets/libyloader32.so \
           ./userspace/ksud/assets/libyukizncore64.so \
           ./userspace/ksud/assets/libyukizncore32.so
 
@@ -178,7 +178,7 @@ jobs:
           echo "Embedded YukiZygisk payload assets:"
           for asset in zygiskd64 zygiskd32 \
             libzygisk64.so libzygisk32.so \
-            libyukilinker64.so libyukilinker32.so \
+            libyloader64.so libyloader32.so \
             libyukizncore64.so libyukizncore32.so; do
             if ! grep -F "{\"$asset\"" generated/assets_data.cpp >/dev/null; then
               echo "::error::Expected embedded YukiZygisk asset missing: $asset"

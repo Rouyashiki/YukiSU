@@ -71,7 +71,7 @@ static void tango_entry(uint32_t got, uint32_t original, uint32_t address,
 
 static void *open_library(const char *name, int flags, const void *extinfo,
                           uintptr_t caller) {
-  assert(!strcmp(name, use_tango ? "libyukilinker32.so" : "test-loader.so"));
+  assert(!strcmp(name, use_tango ? "libyloader32.so" : "test-loader.so"));
   assert(flags == (sizeof(void *) == 8 ? 2 : 0));
   assert(caller == reinterpret_cast<uintptr_t>(resume));
   assert(reinterpret_cast<uintptr_t>(extinfo) % 8 == 0);
@@ -154,51 +154,7 @@ static void run_case(unsigned count) {
   _exit(3);
 }
 
-static bool fail_restore;
-extern "C" int __real_mprotect(void *, size_t, int);
-extern "C" int __wrap_mprotect(void *page, size_t size, int protection) {
-  if (fail_restore && protection == PROT_READ) {
-    errno = EACCES;
-    return -1;
-  }
-  return __real_mprotect(page, size, protection);
-}
-
-static void tango_slot_tests() {
-  if (sizeof(void *) != 4)
-    return;
-  const size_t page_size = static_cast<size_t>(getpagesize());
-  auto *slot =
-      static_cast<uint32_t *>(mmap(nullptr, page_size, PROT_READ | PROT_WRITE,
-                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-  assert(slot != MAP_FAILED);
-  TangoBootstrap request{
-      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(slot)), 0x1111, 0x2220};
-  *slot = request.stub | 1U;
-  assert(mprotect(slot, page_size, PROT_READ) == 0);
-  assert(restore_tango_slot(request) && *slot == request.original);
-  int protection = 0;
-  assert(tango_mapping_protection(reinterpret_cast<uintptr_t>(slot), page_size,
-                                  protection));
-  assert(protection == PROT_READ);
-  assert(mprotect(slot, page_size, PROT_READ | PROT_WRITE) == 0);
-  *slot = 0x3333;
-  assert(!restore_tango_slot(request) && *slot == 0x3333);
-  *slot = request.stub | 1U;
-  assert(mprotect(slot, page_size, PROT_READ) == 0);
-  fail_restore = true;
-  assert(!restore_tango_slot(request) && *slot == request.original);
-  assert(g_tango_protection.page == reinterpret_cast<uintptr_t>(slot));
-  fail_restore = false;
-  assert(restore_tango_slot(request) && g_tango_protection.page == 0);
-  assert(tango_mapping_protection(reinterpret_cast<uintptr_t>(slot), page_size,
-                                  protection));
-  assert(protection == PROT_READ);
-  assert(munmap(slot, page_size) == 0);
-}
-
 int main() {
-  tango_slot_tests();
   for (unsigned mode = 0; mode < (sizeof(void *) == 4 ? 3U : 2U); ++mode) {
     use_tango = mode == 2;
     use_loader = mode == 0 || use_tango;

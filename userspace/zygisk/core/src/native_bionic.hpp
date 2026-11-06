@@ -26,6 +26,9 @@ using OpenExt = void *(*)(const char *, int, const android_dlextinfo *,
                           const void *);
 using Iterate = int (*)(int (*)(dl_phdr_info *, size_t, void *), void *);
 using AddressInfo = int (*)(const void *, Dl_info *);
+using Lookup = void *(*)(void *, const char *, const void *);
+using LookupVersion = void *(*)(void *, const char *, const char *,
+                                const void *);
 
 enum class Stage { Linker, Anchor, Revalidate, Load };
 enum class Error {
@@ -65,8 +68,10 @@ struct LoaderApi {
   OpenExt open = nullptr;
   Iterate iterate = nullptr;
   AddressInfo address_info = nullptr;
+  Lookup lookup = nullptr;
+  LookupVersion lookup_version = nullptr;
   Object linker;
-  std::array<uint64_t, 3> file_offsets{};
+  std::array<uint64_t, 5> file_offsets{};
 };
 
 struct CallerContext {
@@ -144,6 +149,7 @@ bool find_caller(const LoaderApi &api, const Maps &maps,
                  Failure &failure);
 bool validate_context(const CallerContext &context, const Maps &maps,
                       Failure &failure);
+bool prepare_caller(CallerContext &context, Failure &failure);
 LoadResult load(const char *path, int flags, const android_dlextinfo &ext);
 const char *stage_name(Stage stage);
 const char *error_name(Error error);

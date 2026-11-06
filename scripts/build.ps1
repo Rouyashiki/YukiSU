@@ -342,6 +342,8 @@ try {
     })
 
     if (-not $skipLkm) {
+        & $script:PythonExe (Join-Path $script:RepoRoot 'userspace/zygisk/inject/generate.py') --ndk $ndkRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Native injection images are stale or invalid.' }
         Write-Host '>>> [1/5] Build KernelSU LKMs (DDK) ...' -ForegroundColor Cyan
         $dockerCommand = Get-Command docker.exe -ErrorAction SilentlyContinue
         if ($dockerCommand) {
@@ -360,6 +362,20 @@ try {
         $kernelDirectory = Join-Path $script:RepoRoot 'kernel'
         $llvmStrip = Join-Path $ndkBin 'llvm-strip.exe'
 
+        # Windows worktree gitdir paths cannot be resolved inside Linux containers.
+        $commitCount = (& git -C $script:RepoRoot rev-list --count HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $commitCount -notmatch '^\d+$') { throw 'Cannot determine the LKM revision count.' }
+        $revision = (& git -C $script:RepoRoot rev-parse --short=8 HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[a-f0-9]{8,40}$') { throw 'Cannot determine the LKM revision.' }
+        $versionTag = (& git -C $script:RepoRoot describe --tags --always).Trim()
+        if ($LASTEXITCODE -ne 0 -or $versionTag -notmatch '^v?(\d+\.\d+\.\d+)') { throw 'Cannot determine the LKM version tag.' }
+        $versionApi = $Matches[1]
+        $kernelChanges = @(& git -C $script:RepoRoot -c core.autocrlf=true status --porcelain --untracked-files=normal -- kernel uapi)
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot determine the LKM source state.' }
+        $dirtySuffix = if ($kernelChanges.Count) { '-nc' } else { '' }
+        $lkmVersion = 10000 + [int]$commitCount - 3135
+        $lkmFullVersion = "v${versionApi}-${revision}${dirtySuffix}@YukiSU"
+
         foreach ($kmi in $kmiTargets) {
             Write-Host "    Building LKM: $kmi"
             if ($env:YUKISU_DDK_IMAGE) {
@@ -376,6 +392,12 @@ try {
                 'KCFLAGS=-I/build',
                 'CONFIG_KSU=m',
                 'CONFIG_KSU_SUPERKEY=y'
+                "KSU_VERSION=$lkmVersion"
+                "KSU_VERSION_API=$versionApi"
+                "KSU_VERSION_FULL=$lkmFullVersion"
+                "KSU_LOCAL_VERSION=$commitCount"
+                'KSU_GITHUB_VERSION='
+                "KSU_GIT_DIRTY_SUFFIX=$dirtySuffix"
             )
             if ($enableYukiZygisk) {
                 $makeArguments += 'CONFIG_KSU_YUKIZYGISK=y'
@@ -416,9 +438,10 @@ try {
     $generatedAssets = @(
         'ksuinit', 'su', 'zygiskd64', 'zygiskd32',
         'libzygisk64.so', 'libzygisk32.so',
-        'libyukilinker64.so', 'libyukilinker32.so',
+        'libyloader64.so', 'libyloader32.so',
         'libyukizncore64.so', 'libyukizncore32.so',
-        'libzygisk.so', 'libyukilinker.so', 'libyukizncore.so'
+        'libzygisk.so', 'libyukilinker.so', 'libyukilinker32.so',
+        'libyukilinker64.so', 'libyukizncore.so'
     )
     foreach ($generatedAsset in $generatedAssets) {
         $assetPath = Join-Path $assetsDirectory $generatedAsset
@@ -431,14 +454,14 @@ try {
 
     Build-CMakeProject -Name 'YukiZygisk payload' -SourceDirectory $zygiskDirectory
     Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build\libzygisk64.so') -Destination (Join-Path $assetsDirectory 'libzygisk64.so')
-    Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build\libyukilinker64.so') -Destination (Join-Path $assetsDirectory 'libyukilinker64.so')
+    Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build\libyloader64.so') -Destination (Join-Path $assetsDirectory 'libyloader64.so')
     Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build\libyukizncore64.so') -Destination (Join-Path $assetsDirectory 'libyukizncore64.so')
     Build-CMakeProject -Name 'zygiskd64' -SourceDirectory $zygiskDaemonDirectory -AndroidApi 31
     Copy-RequiredFile -Source (Join-Path $zygiskDaemonDirectory 'build\zygiskd64') -Destination (Join-Path $assetsDirectory 'zygiskd64')
     Build-CMakeProject -Name 'YukiZygisk armv7 core' -SourceDirectory $zygiskDirectory `
         -AndroidAbi 'armeabi-v7a' -BuildDirectoryName 'build-armv7'
     Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build-armv7\libzygisk32.so') -Destination (Join-Path $assetsDirectory 'libzygisk32.so')
-    Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build-armv7\libyukilinker32.so') -Destination (Join-Path $assetsDirectory 'libyukilinker32.so')
+    Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build-armv7\libyloader32.so') -Destination (Join-Path $assetsDirectory 'libyloader32.so')
     Copy-RequiredFile -Source (Join-Path $zygiskDirectory 'build-armv7\libyukizncore32.so') -Destination (Join-Path $assetsDirectory 'libyukizncore32.so')
     Build-CMakeProject -Name 'zygiskd32' -SourceDirectory $zygiskDaemonDirectory `
         -AndroidApi 31 -AndroidAbi 'armeabi-v7a' -BuildDirectoryName 'build-armv7'

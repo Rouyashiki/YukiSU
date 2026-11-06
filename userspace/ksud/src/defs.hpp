@@ -59,9 +59,9 @@ constexpr const char* ZCORE64_PATH = "/data/adb/ksu/lib/yukizygisk/libzygisk64.s
 constexpr const char* ZCORE32_PATH = "/data/adb/ksu/lib/yukizygisk/libzygisk32.so";
 constexpr const char* ZNCORE64_PATH = "/data/adb/ksu/lib/yukizygisk/libyukizncore64.so";
 constexpr const char* ZNCORE32_PATH = "/data/adb/ksu/lib/yukizygisk/libyukizncore32.so";
-// Split-out anonymous module loader; core dlopen's it (fd brokered by zygiskd).
-constexpr const char* ZYUKILINKER64_PATH = "/data/adb/ksu/lib/yukizygisk/libyukilinker64.so";
-constexpr const char* ZYUKILINKER32_PATH = "/data/adb/ksu/lib/yukizygisk/libyukilinker32.so";
+// Independent SDK bootstrap; each Core embeds its own private runtime.
+constexpr const char* ZYLOADER64_PATH = "/data/adb/ksu/lib/yukizygisk/libyloader64.so";
+constexpr const char* ZYLOADER32_PATH = "/data/adb/ksu/lib/yukizygisk/libyloader32.so";
 constexpr const char* ZYGISKD64_PATH = "/data/adb/ksu/bin/zygiskd64";
 constexpr const char* ZYGISKD32_PATH = "/data/adb/ksu/bin/zygiskd32";
 // Runtime state remains separate from deployed payloads so updates cannot

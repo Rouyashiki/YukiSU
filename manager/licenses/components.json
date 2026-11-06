@@ -849,6 +849,20 @@
     ]
   },
   {
+    "id": "yukilinker",
+    "name": "YukiLinker",
+    "license": "Apache-2.0 AND BSD-2-Clause",
+    "source": "https://github.com/Rouyashiki/YukiLinker/tree/{revision}",
+    "versionFrom": "userspace/zygisk/third_party/yukilinker",
+    "texts": [
+      "YukiLinker-NOTICE.txt"
+    ],
+    "evidence": "Pinned YukiLinker runtime sources are compiled into each Zygisk and native ZN Core. The SDK bootstrap is packaged independently as libyloader32.so and libyloader64.so. The ARM64 TLSDESC assembly retains the Android Open Source Project BSD-2-Clause notice.",
+    "sourceTexts": [
+      "userspace/zygisk/third_party/yukilinker/LICENSE"
+    ]
+  },
+  {
     "id": "lua",
     "name": "Lua",
     "license": "MIT",

@@ -2292,8 +2292,10 @@ int run_daemon() {
 
   yz_runtime_query_cmd capabilities{};
   if (ksud::ksuctl(KSU_IOCTL_YZ_GET_RUNTIME, &capabilities) != 0 ||
-      !(capabilities.capabilities & YZ_RUNTIME_CAP_ENDPOINT_STATE)) {
-    DLOGE("kernel/userspace version mismatch: endpoint handoff is required");
+      !(capabilities.capabilities & YZ_RUNTIME_CAP_ENDPOINT_STATE) ||
+      !(capabilities.capabilities & YZ_RUNTIME_CAP_NATIVE_LIBC_BOOTSTRAP_V1)) {
+    DLOGE("kernel/userspace version mismatch: endpoint and native libc "
+          "bootstrap v1 required; update LKM");
     notify_ready(ready_fd, false);
     return 1;
   }

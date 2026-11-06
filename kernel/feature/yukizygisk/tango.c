@@ -319,7 +319,7 @@ static void yz_tango_bootstrap(u8 *bytes, u32 got, u32 original, u32 stub,
 	memcpy(bytes + 92, data, sizeof(data));
 	memcpy(bytes + 136, &flags, sizeof(flags));
 	memcpy(bytes + 156, &fd, sizeof(fd));
-	memcpy(bytes + 176, "libyukilinker32.so", sizeof("libyukilinker32.so"));
+	memcpy(bytes + 176, "libyloader32.so", sizeof("libyloader32.so"));
 	memcpy(bytes + 196, "yuki_bootstrap_tango",
 	       sizeof("yuki_bootstrap_tango"));
 }

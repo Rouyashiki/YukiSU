@@ -48,6 +48,11 @@ int main(int argc, char **argv) {
   }
   CHECK(found);
   CHECK(validate_context(context, real_maps(), failure));
+  const void *caller = reinterpret_cast<const void *>(context.anchor);
+  CHECK(api.lookup(RTLD_DEFAULT, "getpid", caller) ==
+        reinterpret_cast<void *>(getpid));
+  CHECK(api.lookup_version(RTLD_DEFAULT, "getpid", "LIBC", caller) ==
+        reinterpret_cast<void *>(getpid));
   const int fd = open(argv[1], O_RDONLY | O_CLOEXEC);
   CHECK(fd >= 0);
   android_dlextinfo ext{};

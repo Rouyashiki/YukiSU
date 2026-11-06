@@ -5,12 +5,12 @@
 
 #include "core_bindings.hpp"
 #include "hook.hpp"
+#include "linker_runtime.hpp"
 #include "load_config.hpp"
 #include "loader_handoff.hpp"
 #include "log.hpp"
 #include "solist.hpp"
 #include "userspace/zygisk/daemon/zygiskd.hpp"
-#include "yukilinker.hpp"
 #include "zygisk.hpp"
 
 #include "uapi/supercall.h"
@@ -18,6 +18,7 @@
 
 #include <android/dlext.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <link.h>
 #include <regex.h>
 #include <sys/ioctl.h>
@@ -61,12 +62,14 @@ struct CoreApiTable {
 
 struct ModulePltRequest {
   yukiplt::NamedImage image;
+  std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
   std::string symbol;
   void *replacement = nullptr;
   void **original = nullptr;
 };
 struct ModulePltGroup {
   yukiplt::NamedImage image;
+  std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
   std::vector<ModulePltRequest> requests;
   std::vector<yukiplt::HookRequest> native;
   std::vector<yukiplt::SlotReport> slots;
@@ -81,8 +84,7 @@ struct Module {
   module_abi *abi = nullptr;
   int id = -1; // zygiskd module index
   long version = 0;
-  void *handle = nullptr;
-  bool yuki_loaded = false;
+  yukizygisk::linker::Library library;
   std::vector<ModulePltRequest> plt_pending;
   std::vector<std::unique_ptr<ModulePltGroup>> plt_groups;
   bool plt_registration_failed = false;
@@ -131,7 +133,15 @@ Module *plt_module() {
              : nullptr;
 }
 
-yukiplt::Result<yukiplt::NamedImage> module_plt_image(dev_t dev, ino_t inode) {
+yukiplt::Result<yukiplt::NamedImage>
+module_plt_image(dev_t dev, ino_t inode,
+                 std::shared_ptr<yukizygisk::linker::PrivateImage> &pin) {
+  bool ambiguous = false;
+  pin = yukizygisk::linker::private_image(dev, inode, &ambiguous);
+  if (ambiguous)
+    return yukiplt::Error::Make(yukiplt::ErrorCode::kAmbiguousImage);
+  if (pin)
+    return pin->named;
   int map_error = 0;
   const auto maps = yukizygisk::MapInfo::Scan(&map_error);
   if (map_error != 0)
@@ -171,7 +181,8 @@ void api_plt_hook_register(dev_t dev, ino_t inode, const char *symbol,
     return;
   }
   try {
-    auto image = module_plt_image(dev, inode);
+    std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
+    auto image = module_plt_image(dev, inode, pin);
     if (!image) {
       module->plt_registration_failed = true;
       LOGE("module %d PLT image: %s errno=%d", module->id,
@@ -179,7 +190,7 @@ void api_plt_hook_register(dev_t dev, ino_t inode, const char *symbol,
       return;
     }
     module->plt_pending.push_back(
-        {std::move(image.value()), symbol, new_func, old_func});
+        {std::move(image.value()), std::move(pin), symbol, new_func, old_func});
   } catch (...) {
     module->plt_registration_failed = true;
     LOGE("module %d PLT registration failed", module->id);
@@ -192,19 +203,43 @@ void api_plt_hook_register_byname(const char *path_regex, const char *symbol,
   if (module == nullptr)
     return;
   regex_t expression;
-  if (path_regex == nullptr || symbol == nullptr || new_func == nullptr ||
+  if (path_regex == nullptr || symbol == nullptr || *symbol == '\0' ||
+      new_func == nullptr ||
+      (old_func != nullptr &&
+       reinterpret_cast<uintptr_t>(old_func) % alignof(void *) != 0) ||
       regcomp(&expression, path_regex, REG_NOSUB) != 0) {
     module->plt_registration_failed = true;
     return;
   }
-  int error = 0;
-  const auto maps = yukizygisk::MapInfo::Scan(&error);
-  if (error != 0)
+  const size_t first_request = module->plt_pending.size();
+  try {
+    int error = 0;
+    const auto maps = yukizygisk::MapInfo::Scan(&error);
+    if (error != 0)
+      module->plt_registration_failed = true;
+    for (const auto &map : maps) {
+      if (map.offset == 0 && (map.perms & PROT_READ) && map.inode != 0 &&
+          regexec(&expression, map.path.c_str(), 0, nullptr, 0) == 0)
+        api_plt_hook_register(map.dev, map.inode, symbol, new_func, old_func);
+    }
+    yukizygisk::plt_lifecycle::Operation operation;
+    if (operation) {
+      for (auto &pin : yukizygisk::linker::private_images()) {
+        const bool already_selected =
+            std::any_of(module->plt_pending.begin() + first_request,
+                        module->plt_pending.end(), [&](const auto &request) {
+                          return same_module_image(request.image, pin->named);
+                        });
+        if (!already_selected &&
+            regexec(&expression, pin->named.path.c_str(), 0, nullptr, 0) == 0)
+          module->plt_pending.push_back(
+              {pin->named, pin, symbol, new_func, old_func});
+      }
+    } else {
+      module->plt_registration_failed = true;
+    }
+  } catch (...) {
     module->plt_registration_failed = true;
-  for (const auto &map : maps) {
-    if (map.offset == 0 && (map.perms & PROT_READ) && map.inode != 0 &&
-        regexec(&expression, map.path.c_str(), 0, nullptr, 0) == 0)
-      api_plt_hook_register(map.dev, map.inode, symbol, new_func, old_func);
   }
   regfree(&expression);
 }
@@ -256,6 +291,7 @@ bool api_plt_hook_commit() noexcept {
       if (group == nullptr) {
         auto prepared = std::make_unique<ModulePltGroup>();
         prepared->image = request.image;
+        prepared->pin = request.pin;
         group = prepared.get();
         groups.push_back(std::move(prepared));
       }
@@ -283,7 +319,7 @@ bool api_plt_hook_commit() noexcept {
     bool success = true;
     for (size_t i = first; i < module->plt_groups.size(); ++i) {
       auto &group = *module->plt_groups[i];
-      auto result = yukiplt::hook_batch_nonnull_named_cached(
+      auto result = yukizygisk::linker::hook_batch(
           yukizygisk::plt_lifecycle::maps_cache(), group.image,
           group.native.data(), group.native.size(), group.slots.data(),
           &group.install);
@@ -332,16 +368,22 @@ bool module_plt_can_unload(Module &module) {
   if (!operation)
     return false;
   module.plt_pending.clear();
-  return std::none_of(module.plt_groups.begin(), module.plt_groups.end(),
-                      [](const auto &group) {
-                        return group->handle.valid() || group->published;
-                      });
+  const bool unused =
+      std::none_of(module.plt_groups.begin(), module.plt_groups.end(),
+                   [](const auto &group) {
+                     return group->handle.valid() || group->published;
+                   });
+  if (unused)
+    module.plt_groups.clear();
+  return unused;
 }
 
 class ModuleCallbackScope {
 public:
-  explicit ModuleCallbackScope(Module &module) : module_(module) {
-    if (!external_) {
+  explicit ModuleCallbackScope(Module &module)
+      : module_(module),
+        execution_(module.library, static_cast<bool>(external_)) {
+    if (!external_ || !execution_) {
       LOGE("module %d callback barrier: errno=%d", module.id,
            external_.error());
       return;
@@ -350,7 +392,7 @@ public:
     g_plt_callback_tid.store(gettid(), std::memory_order_release);
   }
   ~ModuleCallbackScope() {
-    if (!external_)
+    if (!external_ || !execution_)
       return;
     g_plt_callback_tid.store(0, std::memory_order_release);
     g_cur = nullptr;
@@ -361,12 +403,13 @@ public:
   ModuleCallbackScope(ModuleCallbackScope &&) = delete;
   ModuleCallbackScope &operator=(ModuleCallbackScope &&) = delete;
   explicit operator bool() const noexcept {
-    return static_cast<bool>(external_);
+    return static_cast<bool>(external_) && static_cast<bool>(execution_);
   }
 
 private:
   Module &module_;
   yukizygisk::plt_lifecycle::ExternalScope external_;
+  yukizygisk::linker::Execution execution_;
 };
 
 bool api_exempt_fd(int fd) { return zygisk_exempt_fd(fd); }
@@ -521,25 +564,6 @@ uint32_t zd_get_flags(int uid) {
 using module_entry_fn = void (*)(api_table *, JNIEnv *);
 constexpr char kSystemModuleName[] = "libzygiskmodule.so";
 
-bool image_has_tls(int fd) {
-  ElfW(Ehdr) ehdr{};
-  if (fd < 0 || pread(fd, &ehdr, sizeof(ehdr), 0) != sizeof(ehdr) ||
-      memcmp(ehdr.e_ident, ELFMAG, SELFMAG) != 0 ||
-      ehdr.e_phentsize != sizeof(ElfW(Phdr)) || ehdr.e_phnum == PN_XNUM ||
-      ehdr.e_phnum == 0 || ehdr.e_phnum > 256)
-    return false;
-
-  std::vector<ElfW(Phdr)> phdrs(ehdr.e_phnum);
-  const size_t size = phdrs.size() * sizeof(phdrs[0]);
-  if (pread(fd, phdrs.data(), size, static_cast<off_t>(ehdr.e_phoff)) !=
-      static_cast<ssize_t>(size))
-    return false;
-  for (const auto &phdr : phdrs)
-    if (phdr.p_type == PT_TLS)
-      return true;
-  return false;
-}
-
 /* Copy a daemon-staged image into a zygote-owned executable memfd. */
 int make_app_memfd(int src_fd) {
   struct stat st{};
@@ -690,20 +714,6 @@ bool arm_module_load_policy(int id) {
   return true;
 }
 
-/* Built-in yukilinker symbols. */
-extern "C" {
-__attribute__((visibility("hidden"))) void *
-yuki_core_dlopen_memfd(int memfd, const char *vma_name, bool file_backed);
-__attribute__((visibility("hidden"))) void *yuki_core_dlsym(void *handle,
-                                                            const char *name);
-__attribute__((visibility("hidden"))) void yuki_core_dlclose(void *handle);
-}
-using yuki_dlopen_fn = void *(*)(int, const char *, bool);
-using yuki_dlsym_fn = void *(*)(void *, const char *);
-using yuki_dlclose_fn = void (*)(void *);
-yuki_dlopen_fn g_yuki_dlopen = nullptr;
-yuki_dlsym_fn g_yuki_dlsym = nullptr;
-yuki_dlclose_fn g_yuki_dlclose = nullptr;
 /* libzygisk mapping range from yukilinker. */
 uintptr_t g_self_base = 0;
 size_t g_self_size = 0;
@@ -731,19 +741,19 @@ void load_modules_impl(JNIEnv *env) {
   close(sock);
   LOGI("zygiskd reports %u module(s)", count);
 
-  // Must precede every emplace_back below: g_loading/g_cur hold Module* into
-  // this storage, so a reallocation mid-load would dangle them. The loop below
-  // emplaces at most once per iteration and runs `count` times, so reserving
-  // `count` is sufficient -- but `count` arrives over a socket, and reserving
-  // an absurd value here would abort inside Zygote (this target is built
-  // -fno-exceptions) and take the boot with it. The deque this replaced grew
-  // only as modules actually arrived, so it had no equivalent exposure.
+  // Reserve before publishing g_loading/g_cur pointers into this storage.
+  // The daemon count is bounded before allocating inside Zygote.
   constexpr uint32_t kMaxModules = 1024;
   if (count > kMaxModules) {
     LOGE("zygiskd reported %u modules, clamping to %u", count, kMaxModules);
     count = kMaxModules;
   }
-  g_modules.reserve(count);
+  try {
+    g_modules.reserve(count);
+  } catch (...) {
+    LOGE("module ownership allocation failed: count=%u", count);
+    return;
+  }
 
   // Arm the temporary module-load policy before receiving the first module
   // image. On policies without the memfd_file class, SCM_RIGHTS reception of
@@ -785,75 +795,48 @@ void load_modules_impl(JNIEnv *env) {
       continue;
     }
 
-    void *handle = nullptr;
-    module_entry_fn entry = nullptr;
-    bool yuki_loaded = false;
-    // zygiskd sends a sealed anonymous image. Copy it once more into a
-    // zygote-owned memfd so executable mappings use the local tmpfs label.
-    int mfd = make_app_memfd(lib_fd);
-    close(lib_fd);
-    if (mfd >= 0) {
-      const bool use_system_tls = image_has_tls(mfd);
-      if (g_yz_config.yukilinker && !use_system_tls &&
-          g_yuki_dlopen != nullptr && g_yuki_dlsym != nullptr &&
-          g_yuki_dlclose != nullptr) {
-        handle =
-            g_yuki_dlopen(mfd, "", !yukizygisk::config::anonymous(g_yz_config));
-        if (handle != nullptr) {
-          yuki_loaded = true;
-          if (yukizygisk::plt_lifecycle::dispatch_allowed())
-            entry = reinterpret_cast<module_entry_fn>(
-                g_yuki_dlsym(handle, "zygisk_module_entry"));
-        }
-      }
-      if (handle == nullptr && yukizygisk::plt_lifecycle::dispatch_allowed()) {
-        if (use_system_tls)
-          LOGI("module %u has PT_TLS; using system linker", i);
-        android_dlextinfo ext{};
-        ext.flags = ANDROID_DLEXT_USE_LIBRARY_FD | ANDROID_DLEXT_FORCE_LOAD;
-        ext.library_fd = mfd;
-        handle = android_dlopen_ext(kSystemModuleName, RTLD_NOW, &ext);
-        if (handle != nullptr &&
-            yukizygisk::plt_lifecycle::dispatch_allowed()) {
-          LOGI("module %u using system linker", i);
-          entry = reinterpret_cast<module_entry_fn>(
-              dlsym(handle, "zygisk_module_entry"));
-          if (entry != nullptr && yukizygisk::config::anonymous(g_yz_config)) {
-            int anonymized = yuki::solist::spoof_loaded_object_maps(
-                reinterpret_cast<uintptr_t>(entry), true);
-            LOGI("module %u system load anonymized %d segment(s)", i,
-                 anonymized);
-          }
-        }
-      }
-      close(mfd);
-    }
-    if (handle == nullptr) {
-      LOGE("dlopen module %u failed", i);
-      report_module(YZ_RUNTIME_STATE_FAILED);
-      continue;
-    }
-    if (!yukizygisk::plt_lifecycle::dispatch_allowed()) {
-      Module &retained = g_modules.emplace_back();
-      retained.id = static_cast<int>(i);
-      retained.handle = handle;
-      retained.yuki_loaded = yuki_loaded;
-      report_module(YZ_RUNTIME_STATE_FAILED);
-      return;
-    }
-    if (entry == nullptr) {
-      LOGE("module %u has no zygisk_module_entry", i);
-      if (yuki_loaded)
-        g_yuki_dlclose(handle);
-      else
-        dlclose(handle);
-      report_module(YZ_RUNTIME_STATE_FAILED);
-      continue;
-    }
     Module &m = g_modules.emplace_back();
     m.id = static_cast<int>(i);
-    m.handle = handle;
-    m.yuki_loaded = yuki_loaded;
+    int mfd = make_app_memfd(lib_fd);
+    close(lib_fd);
+    int directory = zd_module_dir(m.id);
+    int libraries = directory >= 0 ? openat(directory, "zygisk",
+                                            O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+                                   : -1;
+    if (directory >= 0)
+      close(directory);
+    if (!module_id[0])
+      (void)zd_get_module_info(m.id, module_id, sizeof(module_id));
+    char origin[PATH_MAX]{};
+    if (module_id[0])
+      (void)snprintf(origin, sizeof(origin),
+                     "/data/adb/modules/%s/zygisk/%s.so", module_id,
+                     sizeof(void *) == 8 ? "arm64-v8a" : "armeabi-v7a");
+    else
+      (void)snprintf(origin, sizeof(origin), "libzygiskmodule-%u.so", i);
+    const bool loaded =
+        mfd >= 0 &&
+        m.library.open(mfd, origin, libraries, g_yz_config.yukilinker,
+                       !yukizygisk::config::anonymous(g_yz_config), true);
+    if (mfd >= 0)
+      close(mfd);
+    if (libraries >= 0)
+      close(libraries);
+    module_entry_fn entry = nullptr;
+    if (loaded && yukizygisk::plt_lifecycle::dispatch_allowed())
+      entry = reinterpret_cast<module_entry_fn>(
+          m.library.symbol("zygisk_module_entry"));
+    if (!loaded || entry == nullptr) {
+      LOGE("module %u load or entry lookup failed", i);
+      m.option |= 1u << zygisk::DLCLOSE_MODULE_LIBRARY;
+      if (m.library.close())
+        g_modules.pop_back();
+      report_module(YZ_RUNTIME_STATE_FAILED);
+      continue;
+    }
+    if (!m.library.is_private() && yukizygisk::config::anonymous(g_yz_config))
+      (void)yuki::solist::spoof_loaded_object_maps(
+          reinterpret_cast<uintptr_t>(entry), true);
     m.api.impl = nullptr; // api callbacks resolve the module via g_cur
     m.api.registerModule = RegisterModuleImpl;
     g_loading = &m;
@@ -871,11 +854,9 @@ void load_modules_impl(JNIEnv *env) {
       return;
     }
     if (m.version == 0) {
-      if (yuki_loaded)
-        g_yuki_dlclose(handle);
-      else
-        dlclose(handle);
-      g_modules.pop_back();
+      m.option |= 1u << zygisk::DLCLOSE_MODULE_LIBRARY;
+      if (m.library.close())
+        g_modules.pop_back();
       report_module(YZ_RUNTIME_STATE_FAILED);
       continue;
     }
@@ -934,35 +915,39 @@ void unload_requested_modules(JNIEnv *env) {
     if (!yukizygisk::plt_lifecycle::dispatch_allowed())
       return;
     auto &m = *it;
-    if (m.handle == nullptr ||
+    if (!m.library.retained() ||
         !(m.option & (1u << zygisk::DLCLOSE_MODULE_LIBRARY)))
       continue;
     if (!module_plt_can_unload(m) || !zygisk_restore_module_hooks(env, m.id)) {
       LOGE("module %d unload blocked by active hooks", m.id);
       continue;
     }
-    if (m.yuki_loaded) {
-      g_yuki_dlclose(m.handle);
-      if (static_cast<yukilinker::SoHandle *>(m.handle)->private_state !=
-          nullptr) {
-        LOGE("module %d mapping release failed", m.id);
-        continue;
-      }
-    } else if (dlclose(m.handle) != 0) {
-      LOGE("module %d dlclose failed", m.id);
+    m.abi = nullptr;
+    if (!m.library.close()) {
+      LOGI("module %d retirement deferred", m.id);
       continue;
     }
-    m.handle = nullptr;
-    m.abi = nullptr;
     LOGI("module %d DLCLOSE'd after post-specialize", m.id);
   }
 }
 
+struct PreSpecializeCleanup {
+  PreSpecializeCleanup() = default;
+  PreSpecializeCleanup(const PreSpecializeCleanup &) = delete;
+  PreSpecializeCleanup &operator=(const PreSpecializeCleanup &) = delete;
+  PreSpecializeCleanup(PreSpecializeCleanup &&) = delete;
+  PreSpecializeCleanup &operator=(PreSpecializeCleanup &&) = delete;
+  ~PreSpecializeCleanup() {
+    yukizygisk::linker::close_dependency_directories();
+    zd_restore_module_load_policy();
+  }
+};
+
 void run_app_pre_impl(zygisk::AppSpecializeArgs *args) {
   yukizygisk::plt_lifecycle::ExternalScope external;
+  const PreSpecializeCleanup cleanup;
   if (!external) {
     LOGE("app pre-specialize barrier: errno=%d", external.error());
-    zd_restore_module_load_policy();
     return;
   }
   g_app_uid = args->uid;
@@ -978,7 +963,6 @@ void run_app_pre_impl(zygisk::AppSpecializeArgs *args) {
     }
   g_plt_callback_tid.store(0, std::memory_order_release);
   g_cur = nullptr;
-  zd_restore_module_load_policy();
 }
 
 void run_app_post_impl(JNIEnv *env, const zygisk::AppSpecializeArgs *args) {
@@ -1009,9 +993,9 @@ void run_app_post_impl(JNIEnv *env, const zygisk::AppSpecializeArgs *args) {
 
 void run_server_pre_impl(zygisk::ServerSpecializeArgs *args) {
   yukizygisk::plt_lifecycle::ExternalScope external;
+  const PreSpecializeCleanup cleanup;
   if (!external) {
     LOGE("server pre-specialize barrier: errno=%d", external.error());
-    zd_restore_module_load_policy();
     return;
   }
   g_app_uid = args->uid;
@@ -1030,7 +1014,6 @@ void run_server_pre_impl(zygisk::ServerSpecializeArgs *args) {
   }
   g_plt_callback_tid.store(0, std::memory_order_release);
   g_cur = nullptr;
-  zd_restore_module_load_policy();
 }
 
 void run_server_post_impl(JNIEnv *env,
@@ -1114,9 +1097,11 @@ static void core_start(const char *self_path) {
       if (*p)
         (*p)();
   }
-  g_yuki_dlopen = yuki_core_dlopen_memfd;
-  g_yuki_dlsym = yuki_core_dlsym;
-  g_yuki_dlclose = yuki_core_dlclose;
+  if (!yukizygisk::linker::initialize()) {
+    LOGE("Core linker runtime initialization failed");
+    zd_restore_load_policy();
+    return;
+  }
   zd_load_config();
   const uint32_t runtime_generation =
       zd_get_runtime_generation(YZ_RUNTIME_KIND_ZYGOTE);
@@ -1137,17 +1122,14 @@ static bool first_stage_handoff_complete() {
   if (!yukizygisk::handoff::anonymous_image_matches(g_self_base, g_self_size) ||
       !core_runtime_profile_ready(g_self_base, g_self_size))
     return false;
-  const uintptr_t capabilities[] = {
-      reinterpret_cast<uintptr_t>(g_yuki_dlopen),
-      reinterpret_cast<uintptr_t>(g_yuki_dlsym),
-      reinterpret_cast<uintptr_t>(g_yuki_dlclose)};
+  if (!yukizygisk::linker::handoff_ready(g_self_base, g_self_size))
+    return false;
   const auto result =
       g_self_base == 0
           ? yukizygisk::handoff::verify_loaded(
-                reinterpret_cast<uintptr_t>(core_start), g_loader_base,
-                capabilities, 3)
-          : yukizygisk::handoff::verify(g_self_base, g_self_size, g_loader_base,
-                                        capabilities, 3);
+                reinterpret_cast<uintptr_t>(core_start), g_loader_base)
+          : yukizygisk::handoff::verify(g_self_base, g_self_size,
+                                        g_loader_base);
   LOGI("loader handoff: %s; slot=%p target=%p", result.reason,
        reinterpret_cast<void *>(result.slot),
        reinterpret_cast<void *>(result.target));
@@ -1169,6 +1151,7 @@ zygisk_core_entry(const char *self_path, void *loader_self, void *core_base,
                   void *core_size, int early_packet_fd_plus1) {
   const int packet_fd =
       early_packet_fd_plus1 > 0 ? early_packet_fd_plus1 - 1 : -1;
+  g_yz_config = yukizygisk::config::early_config(packet_fd);
   const bool endpoint_ready = yukizygisk::endpoint::initialize(packet_fd, true);
   yukizygisk::endpoint::close_packet(packet_fd, false);
   if (!endpoint_ready)
@@ -1311,16 +1294,7 @@ void zygisk_self_destruct(JNIEnv *env, bool /*isolated*/) {
         !core_runtime_profile_ready(g_self_base, g_self_size))
       return;
   }
-  // Hook quiescence and module retirement above exclude further Core users.
-  // Unrelated ART threads do not own private runtime state when no key exists.
-  {
-    yukizygisk::plt_lifecycle::Operation operation(
-        yukizygisk::plt_lifecycle::Access::Retire);
-    if (!operation || !yukizygisk::plt_lifecycle::shutdown())
-      return;
-  }
-  if (!yukizygisk::plt_lifecycle::retirement_window_ready(
-          core_private_tsd_used()) ||
+  if (!yukizygisk::plt_lifecycle::retirement_window_ready(false) ||
       g_loader_base != 0 || !yz_capture_ready() ||
       !yz_capture_outside(g_self_base, g_self_size) || gettid() != getpid())
     return;
@@ -1332,16 +1306,24 @@ void zygisk_self_destruct(JNIEnv *env, bool /*isolated*/) {
       yukizygisk::plt_lifecycle::Operation operation(
           yukizygisk::plt_lifecycle::Access::Retire);
       if (!operation || yukizygisk::plt_lifecycle::recovery_pending() ||
-          yukilinker::has_active_tls())
+          !yukizygisk::plt_lifecycle::shutdown())
         return;
       operation.seal();
       g_core_retiring = true;
-      if (!yukilinker::shutdown() || !zygisk_release_hook_storage())
+      // SDK shutdown drains its participants and removes its keys. Only keys
+      // remaining afterwards require the conservative Core thread check.
+      if (!yukizygisk::linker::shutdown())
+        return;
+      if (!yukizygisk::plt_lifecycle::retirement_window_ready(
+              core_private_tsd_used())) {
+        LOGI("core retirement deferred by remaining thread state");
+        return;
+      }
+      if (!zygisk_release_hook_storage())
         return;
       std::vector<Module>().swap(g_modules);
       const auto trimmed = yukiplt_c_trim_idle_storage();
-      if (trimmed.code != YUKIPLT_C_SUCCESS ||
-          !yukizygisk::handoff::release_dependencies())
+      if (trimmed.code != YUKIPLT_C_SUCCESS)
         return;
     }
     g_cur = nullptr;
@@ -1363,7 +1345,7 @@ bool zygisk_app_core_unload_safe() {
     return false;
   size_t retained = 0;
   for (const auto &m : g_modules)
-    if (m.handle != nullptr ||
+    if (m.library.retained() ||
         std::any_of(m.plt_groups.begin(), m.plt_groups.end(),
                     [](const auto &group) {
                       return group->handle.valid() || group->published;

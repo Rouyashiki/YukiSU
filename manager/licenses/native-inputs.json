@@ -172,9 +172,20 @@
     "userspace/zygisk/third_party/yukiplt/src/session.cpp",
     "userspace/zygisk/third_party/yukiplt/src/system_images.hpp",
     "userspace/zygisk/third_party/yukiplt/src/yukiplt.cpp",
-    "userspace/zygisk/third_party/yukiplt/src/yukiplt.map"
+    "userspace/zygisk/third_party/yukiplt/src/yukiplt.map",
+    "userspace/zygisk/third_party/yukilinker/CMakeLists.txt",
+    "userspace/zygisk/third_party/yukilinker/LICENSE",
+    "userspace/zygisk/third_party/yukilinker/cmake/YukiLinkerConfig.cmake.in",
+    "userspace/zygisk/third_party/yukilinker/cmake/YukiLinkerOptions.cmake",
+    "userspace/zygisk/third_party/yukilinker/cmake/YukiLinkerRuntimeSources.cmake",
+    "userspace/zygisk/third_party/yukilinker/cmake/YukiLinkerTargets.cmake",
+    "userspace/zygisk/third_party/yukilinker/include/yukilinker.h",
+    "userspace/zygisk/third_party/yukilinker/include/yukilinker.hpp",
+    "userspace/zygisk/third_party/yukilinker/src/bootstrap/legacy_packet.hpp",
+    "userspace/zygisk/third_party/yukilinker/src/arch/arm64/tlsdesc.S"
   ],
   "submodules": [
+    "userspace/zygisk/third_party/yukilinker",
     "userspace/zygisk/third_party/yukiplt",
     "userspace/ksud/third_party/MagiskbootAlone",
     "userspace/ksud/third_party/bootctlAlone",

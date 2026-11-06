@@ -5,6 +5,10 @@
 
 #include <cstddef>
 
+namespace yukizygisk::linker {
+class Library;
+}
+
 namespace yukizygisk::hyos {
 
 using OpenControlSessionFn = int (*)();
@@ -16,13 +20,15 @@ bool available();
 const ZygiskNextRuntime *runtime();
 size_t registered_module_count();
 bool install_registered_hooks();
+bool release_idle_storage();
 bool original_output_allowed(void **output);
 int child_control_session();
 bool in_specialized_child();
 void lock_child_control_session();
 void unlock_child_control_session();
 void invalidate_child_control_session();
-void begin_module_registration(const NativeModuleBinding *binding);
+void begin_module_registration(const NativeModuleBinding *binding,
+                               const linker::Library *library);
 void end_module_registration();
 
 } // namespace yukizygisk::hyos

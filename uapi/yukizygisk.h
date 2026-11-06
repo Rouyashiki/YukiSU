@@ -192,7 +192,8 @@ struct yz_native_targets_cmd {
 };
 
 #define YZ_EARLY_NATIVE_MAGIC 0x59454e5a /* YENZ */
-#define YZ_EARLY_NATIVE_VERSION 2
+/* v3 requires the native libc bootstrap v1 payload; packet v3 is unchanged. */
+#define YZ_EARLY_NATIVE_VERSION 3
 #define YZ_EARLY_NATIVE_FLAG_ENABLED (1U << 0)
 #define YZ_EARLY_NATIVE_FLAG_ABI32 (1U << 1)
 #define YZ_EARLY_NATIVE_FLAG_ABI64 (1U << 2)
@@ -311,6 +312,7 @@ enum yz_runtime_abi {
 #define YZ_RUNTIME_CAP_EXIT_HISTORY (1U << 3)
 #define YZ_RUNTIME_CAP_HEALTH (1U << 4)
 #define YZ_RUNTIME_CAP_ENDPOINT_STATE (1U << 5)
+#define YZ_RUNTIME_CAP_NATIVE_LIBC_BOOTSTRAP_V1 (1U << 6)
 
 #define YZ_HEALTH_VERSION 1
 #define YZ_HEALTH_POLICY_NONE 0

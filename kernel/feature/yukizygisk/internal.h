@@ -12,8 +12,8 @@ struct ksu_file_load_policy;
 struct mm_struct;
 struct task_struct;
 
-#define YZ_LOADER64_NAME "libyukilinker64.so"
-#define YZ_LOADER32_NAME "libyukilinker32.so"
+#define YZ_LOADER64_NAME "libyloader64.so"
+#define YZ_LOADER32_NAME "libyloader32.so"
 #define YZ_CORE64_NAME "libzygisk64.so"
 #define YZ_CORE32_NAME "libzygisk32.so"
 #define YZ_NATIVE_CORE64_NAME "libyukizncore64.so"
@@ -31,11 +31,11 @@ struct task_struct;
 	"/metadata/watchdog/ksu/yukizygisk/native_snapshot.bin"
 #define YZ_EARLY_MANIFEST_DEFAULT "/metadata/ksu/yukizygisk/native_snapshot.bin"
 #define YZ_EARLY_LOADER64_WATCHDOG                                             \
-	"/metadata/watchdog/ksu/yukizygisk/libyukilinker64.so"
-#define YZ_EARLY_LOADER64_DEFAULT "/metadata/ksu/yukizygisk/libyukilinker64.so"
+	"/metadata/watchdog/ksu/yukizygisk/libyloader64.so"
+#define YZ_EARLY_LOADER64_DEFAULT "/metadata/ksu/yukizygisk/libyloader64.so"
 #define YZ_EARLY_LOADER32_WATCHDOG                                             \
-	"/metadata/watchdog/ksu/yukizygisk/libyukilinker32.so"
-#define YZ_EARLY_LOADER32_DEFAULT "/metadata/ksu/yukizygisk/libyukilinker32.so"
+	"/metadata/watchdog/ksu/yukizygisk/libyloader32.so"
+#define YZ_EARLY_LOADER32_DEFAULT "/metadata/ksu/yukizygisk/libyloader32.so"
 #define YZ_EARLY_NATIVE_CORE64_WATCHDOG                                        \
 	"/metadata/watchdog/ksu/yukizygisk/libyukizncore64.so"
 #define YZ_EARLY_NATIVE_CORE64_DEFAULT                                         \

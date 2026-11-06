@@ -1,5 +1,6 @@
 #pragma once
 
+#include "linker_runtime.hpp"
 #include "native_bionic/check.hpp"
 #include "plt_lifecycle.hpp"
 #include "process_maps.hpp"

@@ -26,6 +26,8 @@ def build_companion_test(root, build, compiler, flags, runner):
     binary = build / 'native_companion_test'
     subprocess.run([*compiler, '-std=c++17', '-O1', '-g', '-pthread', *flags,
                     '-I' + str(core), '-I' + str(build),
+                    '-I' + str(core.parent.parent / 'third_party/yukilinker/include'),
+                    '-I' + str(core.parent.parent / 'third_party/yukiplt/include'),
                     root / 'userspace/zygisk/tests/native_companion_test.cpp',
                     '-o', binary], check=True)
     subprocess.run([*runner, binary], check=True, timeout=15)
@@ -36,9 +38,11 @@ def build_archive(root, build, compiler, flags, export_lifecycle=False):
     vendor = root / 'userspace/zygisk/third_party/yukiplt'
     common = [*compiler, '-std=c++17', '-O1', '-g', '-fPIC', '-fexceptions',
               '-pthread', '-DYUKIPLT_STATIC=1', *flags,
-              '-I' + str(core), '-I' + str(vendor / 'include')]
+              '-I' + str(core), '-I' + str(vendor / 'include'),
+              '-I' + str(vendor.parent / 'yukilinker/include')]
     sources = [*sorted((vendor / 'src').glob('*.cpp')), core / 'plt_lifecycle.cpp',
-               core / 'process_maps.cpp', core / 'core_bindings.cpp']
+               core / 'process_maps.cpp', core / 'core_bindings.cpp',
+               root / 'userspace/zygisk/tests/linker_runtime_stub.cpp']
     objects = [build / (source.stem + '.o') for source in sources]
     def compile_one(pair):
         source, output = pair
@@ -57,6 +61,7 @@ def build_backend(root, build, compiler, flags):
 #include <algorithm>
 #include <memory>
 #include "plt_lifecycle.hpp"
+#include "linker_runtime.hpp"
 namespace yukizygisk::hyos { bool original_output_allowed(void **) { return true; } }
 constexpr int kSuccess = 0, kFailed = 1;
 #define LOGI(...) ((void)0)
@@ -118,8 +123,9 @@ int main(int n, char **v) {
 ''')
     subprocess.run([*common, build / 'driver.cpp', '-ldl', '-o', build / 'driver'], check=True)
     library = build / 'plt_state_test.so'
-    wrapping = ['-Wl,--wrap=mprotect', '-Wl,--wrap=open',
+    wrapping = ['-Wl,--wrap=mprotect', '-Wl,--wrap=open', '-Wl,--wrap=open64',
                 '-Wl,--wrap=pthread_mutex_lock', '-Wl,--wrap=clock_gettime',
+                '-Wl,--wrap=__clock_gettime64',
                 '-Wl,--wrap=pthread_key_create', '-Wl,--wrap=pthread_key_delete',
                 '-Wl,--wrap=' + ('_Znwj' if 'arm-linux' in str(compiler) else '_Znwm')]
     subprocess.run([*common, *wrapping, '-shared', '-Dmain=fixture_main', '-I' + str(build),
@@ -138,8 +144,9 @@ def main():
                     ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'], [])
         if args.qemu:
             for arch, target in [('aarch64', 'aarch64-linux-gnu'), ('arm', 'arm-linux-gnueabihf')]:
+                namespace = ['unshare', '-Urpf', '--mount-proc'] if arch == 'arm' else []
                 build_tests(root, Path(temporary) / arch, [target + '-g++'], [],
-                            ['qemu-' + arch, '-L', '/usr/' + target])
+                            [*namespace, 'qemu-' + arch, '-L', '/usr/' + target])
 
 
 if __name__ == '__main__':

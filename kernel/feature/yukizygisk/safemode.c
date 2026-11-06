@@ -134,6 +134,7 @@ void yz_safemode_fill_runtime_query(struct yz_runtime_query_cmd *query)
 	    YZ_RUNTIME_CAP_MODULE_IMAGE_POLICY |
 	    YZ_RUNTIME_CAP_ZYGOTE_MODULE_REPORT |
 	    YZ_RUNTIME_CAP_INJECTION_STATE |
+	    YZ_RUNTIME_CAP_NATIVE_LIBC_BOOTSTRAP_V1 |
 	    (yz_endpoint_supported() ? YZ_RUNTIME_CAP_ENDPOINT_STATE : 0);
 	yz_copy_name(query->safe_mode_zygote, sizeof(query->safe_mode_zygote),
 		     yz_safemode_zygote);

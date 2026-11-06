@@ -336,9 +336,9 @@ int ensure_binaries(bool ignore_if_exist) {
         if (name == "ksuinit" || name.find("_kernelsu.ko") != std::string::npos ||
             name == "libzygisk64.so" || name == "libzygisk32.so" ||
             name == "libyukizncore64.so" || name == "libyukizncore32.so" ||
-            name == "libyukilinker64.so" || name == "libyukilinker32.so" ||
+            name == "libyloader64.so" || name == "libyloader32.so" ||
             name == "libzygisk.so" || name == "libyukizncore.so" ||
-            name == "libyukilinker.so") {
+            name == "libyloader.so") {
             continue;
         }
 

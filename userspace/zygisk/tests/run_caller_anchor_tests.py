@@ -2,9 +2,34 @@
 
 import argparse
 import os
+import subprocess
 from pathlib import Path
 
-from run_native_bionic_tests import function, generate_linker, run
+def function(source, signature):
+    start = source.index(signature)
+    end = source.index('{', start) + 1
+    depth = 1
+    while depth:
+        depth += (source[end] == '{') - (source[end] == '}')
+        end += 1
+    return source[start:end]
+
+
+def generate_linker(core, build):
+    source = (core / 'solist.cpp').read_text()
+    helpers = '\n'.join(function(source, signature) for signature in (
+        'inline uintptr_t elf_runtime_address(', 'inline uintptr_t elf_load_bias('))
+    reader = function(source, 'class LinkerSyms {') + ';'
+    resolver = function(source, 'bool resolve_loader(').replace(
+        'bool resolve_loader(', 'bool checked_resolve(', 1)
+    (build / 'caller_linker_under_test.inc').write_text(
+        'namespace yuki::solist { namespace {\n' + helpers + '\n' + reader +
+        '\n}}\nnamespace yukizygisk::native_bionic {\n' + resolver + '\n}\n')
+
+
+def run(command, **kwargs):
+    print('+', ' '.join(map(str, command)), flush=True)
+    subprocess.run(list(map(str, command)), check=True, **kwargs)
 
 
 def generate(core, build):

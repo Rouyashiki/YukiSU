@@ -1,3 +1,4 @@
+#include "linker_runtime.hpp"
 #include "native_module_binding.hpp"
 #include <atomic>
 #include <cassert>
@@ -7,6 +8,8 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+
+yukizygisk::linker::Library::~Library() = default;
 
 namespace {
 constexpr uint32_t kHandleMagic = 0x595a4e31u;
@@ -92,6 +95,7 @@ void check_companion_snapshot(bool child) {
   ModuleHandle module;
   module.module_id = "module";
   module.early = true;
+  module.initialized = true;
   g_loaded_modules = {&module};
   specialized_child = child;
   requests = 0;

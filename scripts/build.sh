@@ -179,6 +179,7 @@ fi
 echo ""
 
 if [[ "$SKIP_LKM" != "true" ]]; then
+	python3 "$REPO_ROOT/userspace/zygisk/inject/generate.py" --ndk "$ANDROID_NDK_HOME"
 	echo ">>> [1/5] Build KernelSU LKMs (DDK) ..."
 	mkdir -p "$OUT_DIR"
 	for kmi in "${KMI_TARGETS[@]}"; do
@@ -227,9 +228,10 @@ find "$KSUD_ASSETS" -maxdepth 1 -type f -name '*.ko' -delete
 rm -f -- "$KSUD_ASSETS/ksuinit" "$KSUD_ASSETS/su" \
 	"$KSUD_ASSETS/zygiskd64" "$KSUD_ASSETS/zygiskd32" \
 	"$KSUD_ASSETS/libzygisk64.so" "$KSUD_ASSETS/libzygisk32.so" \
-	"$KSUD_ASSETS/libyukilinker64.so" "$KSUD_ASSETS/libyukilinker32.so" \
+	"$KSUD_ASSETS/libyloader64.so" "$KSUD_ASSETS/libyloader32.so" \
 	"$KSUD_ASSETS/libyukizncore64.so" "$KSUD_ASSETS/libyukizncore32.so" \
 	"$KSUD_ASSETS/libzygisk.so" "$KSUD_ASSETS/libyukilinker.so" \
+	"$KSUD_ASSETS/libyukilinker32.so" "$KSUD_ASSETS/libyukilinker64.so" \
 	"$KSUD_ASSETS/libyukizncore.so"
 
 for kmi in "${KMI_TARGETS[@]}"; do
@@ -253,11 +255,11 @@ build_android_cmake "$ZYGISKD_DIR" "$ZYGISKD_DIR/build" arm64-v8a 31
 build_android_cmake "$ZCORE_DIR" "$ZCORE_DIR/build-armv7" armeabi-v7a 31
 build_android_cmake "$ZYGISKD_DIR" "$ZYGISKD_DIR/build-armv7" armeabi-v7a 31
 cp "$ZCORE_DIR/build/libzygisk64.so" "$KSUD_ASSETS/"
-cp "$ZCORE_DIR/build/libyukilinker64.so" "$KSUD_ASSETS/"
+cp "$ZCORE_DIR/build/libyloader64.so" "$KSUD_ASSETS/"
 cp "$ZCORE_DIR/build/libyukizncore64.so" "$KSUD_ASSETS/"
 cp "$ZYGISKD_DIR/build/zygiskd64" "$KSUD_ASSETS/"
 cp "$ZCORE_DIR/build-armv7/libzygisk32.so" "$KSUD_ASSETS/"
-cp "$ZCORE_DIR/build-armv7/libyukilinker32.so" "$KSUD_ASSETS/"
+cp "$ZCORE_DIR/build-armv7/libyloader32.so" "$KSUD_ASSETS/"
 cp "$ZCORE_DIR/build-armv7/libyukizncore32.so" "$KSUD_ASSETS/"
 cp "$ZYGISKD_DIR/build-armv7/zygiskd32" "$KSUD_ASSETS/"
 echo "    staged arm64/armv7 payloads + zygiskd64/zygiskd32"
