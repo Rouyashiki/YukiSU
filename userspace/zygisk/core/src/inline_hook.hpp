@@ -257,9 +257,13 @@ inline void *install(void *target, void *replacement, Hook *out, bool = false,
     return reject(a64::Error::InvalidInput);
   auto *t = reinterpret_cast<uint32_t *>(target);
 
-  const size_t cap_size = static_cast<size_t>(yz_cap_tmpl_end - yz_cap_tmpl);
-  const size_t ctx_off = static_cast<size_t>(yz_cap_tmpl_ctx - yz_cap_tmpl);
-  const size_t wrap_off = static_cast<size_t>(yz_cap_tmpl_wrap - yz_cap_tmpl);
+  const auto cap_base = reinterpret_cast<uintptr_t>(yz_cap_tmpl);
+  const size_t cap_size =
+      reinterpret_cast<uintptr_t>(yz_cap_tmpl_end) - cap_base;
+  const size_t ctx_off =
+      reinterpret_cast<uintptr_t>(yz_cap_tmpl_ctx) - cap_base;
+  const size_t wrap_off =
+      reinterpret_cast<uintptr_t>(yz_cap_tmpl_wrap) - cap_base;
   const size_t co_off = (cap_size + 3U) & ~static_cast<size_t>(3); // 4-aligned
   const size_t page_size = static_cast<size_t>(getpagesize());
   if (co_off > page_size - 96)
@@ -745,7 +749,9 @@ inline void *install(void *target, void *replacement, Hook *out,
       arm32_code_bytes(thumb ? yz_cap_thumb_tmpl_ctx : yz_cap_arm_tmpl_ctx);
   const uint8_t *capture_wrap =
       arm32_code_bytes(thumb ? yz_cap_thumb_tmpl_wrap : yz_cap_arm_tmpl_wrap);
-  size_t capture_size = static_cast<size_t>(capture_end - capture);
+  const auto capture_address = reinterpret_cast<uintptr_t>(capture);
+  const size_t capture_size =
+      reinterpret_cast<uintptr_t>(capture_end) - capture_address;
   size_t call_original_offset = (capture_size + 3U) & ~size_t{3};
   size_t trampoline_size = call_original_offset + copy_size + 10;
   const size_t page_size = static_cast<size_t>(getpagesize());
@@ -766,8 +772,10 @@ inline void *install(void *target, void *replacement, Hook *out,
           : 0;
   uint32_t wrapper =
       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(replacement));
-  memcpy(base + (capture_ctx - capture), &context, sizeof(context));
-  memcpy(base + (capture_wrap - capture), &wrapper, sizeof(wrapper));
+  memcpy(base + (reinterpret_cast<uintptr_t>(capture_ctx) - capture_address),
+         &context, sizeof(context));
+  memcpy(base + (reinterpret_cast<uintptr_t>(capture_wrap) - capture_address),
+         &wrapper, sizeof(wrapper));
 
   auto *call_original = base + call_original_offset;
   memcpy(call_original, target_bytes, copy_size);
