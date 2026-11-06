@@ -14,6 +14,8 @@
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <yukilinker.h>
@@ -31,17 +33,43 @@ namespace {
 extern "C" int native_register_probe(void *);
 extern "C" void native_test_resume();
 unsigned resumed;
+bool mapping_present(int fd) {
+  struct stat identity{};
+  assert(fstat(fd, &identity) == 0);
+  FILE *maps = fopen("/proc/self/maps", "re");
+  assert(maps);
+  char line[4096];
+  bool present = false;
+  while (fgets(line, sizeof(line), maps)) {
+    unsigned device_major = 0, device_minor = 0;
+    unsigned long long inode = 0;
+    if (sscanf(line, "%*s %*s %*s %x:%x %llu", &device_major, &device_minor,
+               &inode) == 3 &&
+        device_major == major(identity.st_dev) &&
+        device_minor == minor(identity.st_dev) && inode == identity.st_ino)
+      present = true;
+  }
+  const bool complete = !ferror(maps);
+  assert(fclose(maps) == 0 && complete);
+  return present;
+}
 void native_bootstrap(const char *loader_path, int fd, int packet_fd,
                       unsigned fault = 0,
                       void (*invoke)(void (*)(void *), void *) = nullptr) {
   const size_t page = getpagesize();
   const size_t length = (sizeof(NATIVE_RESOLVER) + page - 1) & ~(page - 1);
+  // Core allocations may reuse the resolver's address after its successful
+  // unmap. A unique backing object identifies the mapping across that reuse.
+  const int resolver_file =
+      memfd_create("native-resolver-fixture", MFD_CLOEXEC);
+  assert(resolver_file >= 0 && ftruncate(resolver_file, length) == 0);
   void *parser = mmap(nullptr, length, PROT_READ | PROT_WRITE | PROT_EXEC,
-                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                      MAP_PRIVATE, resolver_file, 0);
   auto *launch = static_cast<unsigned char *>(
       mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC,
            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
   assert(parser != MAP_FAILED && launch != MAP_FAILED);
+  assert(mapping_present(resolver_file));
   memcpy(parser, NATIVE_RESOLVER, sizeof(NATIVE_RESOLVER));
   memcpy(launch, NATIVE_START, sizeof(NATIVE_START));
   auto *data = reinterpret_cast<yz_native_stub *>(launch + YZ_NATIVE_STUB_DATA);
@@ -121,8 +149,8 @@ void native_bootstrap(const char *loader_path, int fd, int packet_fd,
   assert(pread(report, &reported_status, sizeof(reported_status), 0) ==
          sizeof(reported_status));
   assert(reported_status == data->status && close(report) == 0);
-  unsigned char resident;
-  assert(mincore(parser, length, &resident) == -1);
+  assert(!mapping_present(resolver_file));
+  assert(close(resolver_file) == 0);
   assert(munmap(launch, page) == 0);
 }
 
