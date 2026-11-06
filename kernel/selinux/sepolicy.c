@@ -3,6 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/overflow.h>
 #include <linux/printk.h>
+#include <linux/seqlock.h>
 #include <linux/slab.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
@@ -60,6 +61,100 @@ static void add_typeattribute_raw(struct policydb *db, struct type_datum *type,
 
 static bool add_typeattribute(struct policydb *db, const char *type,
 			      const char *attr);
+
+static DEFINE_SEQLOCK(ksu_original_types_lock);
+static const struct policydb *ksu_original_types_policy;
+static const struct policydb *ksu_original_types_backup;
+static u32 ksu_original_types_limit;
+static u32 ksu_original_types_generation;
+
+static void invalidate_original_types_locked(void)
+{
+	WRITE_ONCE(ksu_original_types_policy, NULL);
+	WRITE_ONCE(ksu_original_types_backup, NULL);
+	WRITE_ONCE(ksu_original_types_limit, 0);
+	WRITE_ONCE(ksu_original_types_generation, 0);
+}
+
+bool ksu_set_original_types(struct policydb *db, struct policydb *orig_db,
+			    u32 policy_generation)
+{
+	unsigned long flags;
+	bool valid = db && orig_db && policy_generation &&
+		     orig_db->p_types.nprim &&
+		     orig_db->p_types.nprim == db->p_types.nprim;
+
+	write_seqlock_irqsave(&ksu_original_types_lock, flags);
+	if (valid) {
+		WRITE_ONCE(ksu_original_types_policy, db);
+		WRITE_ONCE(ksu_original_types_backup, orig_db);
+		WRITE_ONCE(ksu_original_types_limit, orig_db->p_types.nprim);
+		WRITE_ONCE(ksu_original_types_generation, policy_generation);
+	} else {
+		invalidate_original_types_locked();
+	}
+	write_sequnlock_irqrestore(&ksu_original_types_lock, flags);
+	return valid;
+}
+
+bool ksu_advance_original_types(struct policydb *db, struct policydb *old_db,
+				u32 old_policy_generation,
+				u32 policy_generation)
+{
+	unsigned long flags;
+	bool valid;
+
+	write_seqlock_irqsave(&ksu_original_types_lock, flags);
+	valid = db && old_db && old_policy_generation && policy_generation &&
+		policy_generation == old_policy_generation + 1 &&
+		ksu_original_types_policy == old_db &&
+		ksu_original_types_generation == old_policy_generation &&
+		ksu_original_types_limit &&
+		old_db->p_types.nprim >= ksu_original_types_limit &&
+		db->p_types.nprim >= old_db->p_types.nprim;
+	if (valid) {
+		WRITE_ONCE(ksu_original_types_policy, db);
+		WRITE_ONCE(ksu_original_types_generation, policy_generation);
+	} else {
+		invalidate_original_types_locked();
+	}
+	write_sequnlock_irqrestore(&ksu_original_types_lock, flags);
+	return valid;
+}
+
+int ksu_type_is_original(struct policydb *db, struct policydb *orig_db,
+			 u32 policy_generation, u32 type_value)
+{
+	const struct policydb *policy, *backup;
+	u32 limit, generation;
+	unsigned int seq;
+
+	/* Cached pointers are identity tokens; callers own policy lifetimes. */
+	do {
+		seq = read_seqbegin(&ksu_original_types_lock);
+		policy = READ_ONCE(ksu_original_types_policy);
+		backup = READ_ONCE(ksu_original_types_backup);
+		limit = READ_ONCE(ksu_original_types_limit);
+		generation = READ_ONCE(ksu_original_types_generation);
+	} while (read_seqretry(&ksu_original_types_lock, seq));
+
+	if (!db || !orig_db || !policy_generation || policy != db ||
+	    backup != orig_db || generation != policy_generation || !limit ||
+	    limit != orig_db->p_types.nprim || type_value > db->p_types.nprim)
+		return -1;
+
+	return type_value && type_value <= limit ? 1 : 0;
+}
+
+static void forget_original_types(struct policydb *db)
+{
+	unsigned long flags;
+
+	write_seqlock_irqsave(&ksu_original_types_lock, flags);
+	if (ksu_original_types_policy == db || ksu_original_types_backup == db)
+		invalidate_original_types_locked();
+	write_sequnlock_irqrestore(&ksu_original_types_lock, flags);
+}
 
 //////////////////////////////////////////////////////
 // Implementation
@@ -1006,6 +1101,7 @@ bool ksu_genfscon(struct policydb *db, const char *fs_name, const char *path,
 
 void ksu_destroy_sepolicy(struct selinux_policy *pol)
 {
+	forget_original_types(&pol->policydb);
 	policydb_destroy(&pol->policydb);
 	kfree(pol);
 }
