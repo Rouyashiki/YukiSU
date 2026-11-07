@@ -82,6 +82,12 @@ An optional second host argument points to an older `libyloader` binary; this
 adds a real missing-loader-capability refusal without keeping old loader source
 in the fixture tree.
 
+The `native_phdr` fixture relocates a shared library's program-header table to
+128 KiB in an additional readable PT_LOAD, as post-link optimizers can do.
+Bionic must load the library and the generated resolver must complete its libc
+census. Unmapped, overflowing, unaligned, excessive-count and unreadable PHDR
+cases must still be rejected before the loader opens.
+
 Native resident tests drain background libdl/PHDR queries before invoking libdl
 in a fork child. Concurrent system-loader activity at fork is outside Bionic's
 async-signal-safe contract; a standalone Bionic-only reproducer is kept with the

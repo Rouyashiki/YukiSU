@@ -218,6 +218,8 @@ static int object(const struct maps *maps, uintptr_t base, struct object *obj) {
 #else
   const unsigned machine = EM_ARM, klass = ELFCLASS32;
 #endif
+  /* Post-link optimization can place PHDRs in a later PT_LOAD. The complete
+   * table is bounded by the address overflow and readable mapping checks. */
   if (h->e_ident[0] != 0x7f || h->e_ident[1] != 'E' || h->e_ident[2] != 'L' ||
       h->e_ident[3] != 'F' || h->e_ident[EI_CLASS] != klass ||
       h->e_ident[EI_DATA] != ELFDATA2LSB ||
@@ -225,8 +227,8 @@ static int object(const struct maps *maps, uintptr_t base, struct object *obj) {
       h->e_version != EV_CURRENT ||
       (h->e_type != ET_DYN && h->e_type != ET_EXEC) ||
       h->e_ehsize != sizeof(*h) || h->e_phentsize != sizeof(ElfW(Phdr)) ||
-      !h->e_phnum || h->e_phnum > 128 || h->e_phoff > 65536 ||
-      h->e_phoff > UINTPTR_MAX - base || h->e_phoff % _Alignof(ElfW(Phdr)) ||
+      !h->e_phnum || h->e_phnum > 128 || h->e_phoff > UINTPTR_MAX - base ||
+      h->e_phoff % _Alignof(ElfW(Phdr)) ||
       !mapped(maps, base + h->e_phoff, h->e_phnum * sizeof(ElfW(Phdr)), PF_R))
     return 0;
   obj->ph = (const void *)(base + h->e_phoff);

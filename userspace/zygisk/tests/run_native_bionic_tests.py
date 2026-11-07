@@ -45,6 +45,10 @@ def main():
                  directory / 'handoff_bionic', directory])
             run([*prefix, emulator, '-L', args.android_sysroot.resolve(),
                  directory / 'native_empty'])
+            run([*prefix, emulator, '-L', args.android_sysroot.resolve(),
+                 '-E', 'LD_LIBRARY_PATH=' + libraries,
+                 directory / 'native_phdr',
+                 directory / 'libintegration_dependency.so'])
 
 
 if __name__ == '__main__':

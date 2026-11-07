@@ -88,6 +88,12 @@ target_include_directories(handoff_bionic PRIVATE ${ROOT} ${SDK}/include)
 target_compile_options(handoff_bionic PRIVATE -UNDEBUG)
 target_link_libraries(handoff_bionic PRIVATE dl)
 
+add_executable(native_phdr native_phdr.cpp)
+target_include_directories(native_phdr PRIVATE ${ROOT})
+target_compile_options(native_phdr PRIVATE -UNDEBUG)
+target_link_libraries(native_phdr PRIVATE dl)
+add_dependencies(native_phdr integration_dependency)
+
 add_executable(native_empty native_empty.c)
 target_include_directories(native_empty PRIVATE ${ROOT})
 target_compile_options(native_empty PRIVATE -ffreestanding -fno-builtin -fno-stack-protector)
