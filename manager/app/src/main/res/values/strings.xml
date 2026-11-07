@@ -23,7 +23,7 @@
     <string name="selinux_status_permissive">Permissive</string>
     <string name="selinux_status_unknown">Unknown</string>
     <string name="superuser">Superuser</string>
-    <string name="recently_installed" tools:ignore="MissingTranslation">Recently installed</string>
+    <string name="recently_installed_or_updated" tools:ignore="MissingTranslation">Recently installed or updated</string>
     <string name="other_apps" tools:ignore="MissingTranslation">Other apps</string>
     <string name="module_failed_to_enable">Failed to enable module: %s</string>
     <string name="module_failed_to_disable">Failed to disable module: %s</string>

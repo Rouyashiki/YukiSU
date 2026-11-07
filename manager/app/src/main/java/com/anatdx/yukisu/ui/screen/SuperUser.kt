@@ -95,8 +95,9 @@ import com.anatdx.yukisu.ui.viewmodel.AppCategory
 import com.anatdx.yukisu.ui.viewmodel.SortType
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import com.anatdx.yukisu.ui.viewmodel.appGroupComparator
-import com.anatdx.yukisu.ui.viewmodel.RECENTLY_INSTALLED_WINDOW_MILLIS
-import com.anatdx.yukisu.ui.viewmodel.isRecentlyInstalled
+import com.anatdx.yukisu.ui.viewmodel.RECENT_APP_WINDOW_MILLIS
+import com.anatdx.yukisu.ui.viewmodel.isRecentApp
+import com.anatdx.yukisu.ui.viewmodel.recentAppComparator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -181,21 +182,21 @@ fun SuperUserScreen(navigator: DestinationsNavigator) {
                 val now = System.currentTimeMillis()
                 nowMillis = now
                 val nextExpiry = filteredAndSortedAppGroups
-                    .filter { isRecentlyInstalled(it.sortKey.latestInstallTime, now) }
-                    .minOfOrNull { it.sortKey.latestInstallTime + RECENTLY_INSTALLED_WINDOW_MILLIS }
+                    .filter { isRecentApp(it.sortKey, now) }
+                    .minOfOrNull { it.sortKey.latestInstallOrUpdateTime + RECENT_APP_WINDOW_MILLIS }
                     ?: break
                 delay((nextExpiry - now).coerceAtLeast(1L))
             }
         }
     }
-    val (recentlyInstalledGroups, otherGroups) = remember(filteredAndSortedAppGroups, nowMillis) {
+    val (recentAppGroups, otherGroups) = remember(filteredAndSortedAppGroups, nowMillis) {
         val (recent, others) = filteredAndSortedAppGroups.partition {
-            isRecentlyInstalled(it.sortKey.latestInstallTime, nowMillis)
+            isRecentApp(it.sortKey, nowMillis)
         }
-        recent.sortedWith(compareBy(appGroupComparator(SortType.INSTALL_TIME_NEW)) { it.sortKey }) to others
+        recent.sortedWith(compareBy(recentAppComparator()) { it.sortKey }) to others
     }
-    val displayedAppGroups = remember(recentlyInstalledGroups, otherGroups) {
-        recentlyInstalledGroups + otherGroups
+    val displayedAppGroups = remember(recentAppGroups, otherGroups) {
+        recentAppGroups + otherGroups
     }
 
     val appCounts = remember(viewModel.appGroupList, viewModel.showSystemApps) {
@@ -235,7 +236,7 @@ fun SuperUserScreen(navigator: DestinationsNavigator) {
             innerPadding = innerPadding,
             viewModel = viewModel,
             filteredAndSortedAppGroups = displayedAppGroups,
-            recentlyInstalledCount = recentlyInstalledGroups.size,
+            recentAppCount = recentAppGroups.size,
             listState = listState,
             scrollBehavior = scrollBehavior,
             navigator = navigator,
@@ -357,7 +358,7 @@ private fun SuperUserContent(
     innerPadding: PaddingValues,
     viewModel: SuperUserViewModel,
     filteredAndSortedAppGroups: List<SuperUserViewModel.AppGroup>,
-    recentlyInstalledCount: Int,
+    recentAppCount: Int,
     listState: androidx.compose.foundation.lazy.LazyListState,
     scrollBehavior: TopAppBarScrollBehavior,
     navigator: DestinationsNavigator,
@@ -377,11 +378,11 @@ private fun SuperUserContent(
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
         ) {
             filteredAndSortedAppGroups.forEachIndexed { index, appGroup ->
-                if (recentlyInstalledCount > 0 && (index == 0 || index == recentlyInstalledCount)) {
-                    item(key = if (index == 0) "recently_installed" else "other_apps") {
+                if (recentAppCount > 0 && (index == 0 || index == recentAppCount)) {
+                    item(key = if (index == 0) "recent_apps" else "other_apps") {
                         Text(
                             text = stringResource(
-                                if (index == 0) R.string.recently_installed else R.string.other_apps
+                                if (index == 0) R.string.recently_installed_or_updated else R.string.other_apps
                             ),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,

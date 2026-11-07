@@ -4,7 +4,11 @@ internal data class AppGroupSortKey(
     val label: String,
     val priority: Int,
     val latestInstallTime: Long,
-)
+    val latestUpdateTime: Long = 0L,
+) {
+    val latestInstallOrUpdateTime: Long
+        get() = maxOf(latestInstallTime, latestUpdateTime)
+}
 
 internal fun appGroupComparator(sortType: SortType): Comparator<AppGroupSortKey> {
     val byName = compareBy<AppGroupSortKey> { it.label.lowercase() }

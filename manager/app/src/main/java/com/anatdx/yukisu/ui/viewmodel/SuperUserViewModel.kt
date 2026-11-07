@@ -299,6 +299,7 @@ class SuperUserViewModel : ViewModel() {
                 else -> 4
             },
             latestInstallTime = apps.maxOf { it.packageInfo.firstInstallTime },
+            latestUpdateTime = apps.maxOf { it.packageInfo.lastUpdateTime },
         )
     }
 
