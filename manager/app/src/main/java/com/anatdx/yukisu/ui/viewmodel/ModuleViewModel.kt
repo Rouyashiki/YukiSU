@@ -3,18 +3,27 @@ package com.anatdx.yukisu.ui.viewmodel
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.anatdx.yukisu.data.registry.UpdateVerification
 import com.anatdx.yukisu.data.repository.ModuleRepositoryProvider
 import com.anatdx.yukisu.ui.webui.ModuleConfig
 import com.anatdx.yukisu.ui.webui.ModuleConfig.Companion.asModuleConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.anatdx.yukisu.BuildConfig
 import com.anatdx.yukisu.ui.util.HanziToPinyin
 import com.anatdx.yukisu.ui.util.listModules
@@ -43,13 +52,35 @@ data class ModuleUpdateInfo(
     val verification: UpdateVerification = UpdateVerification.Legacy,
 )
 
+@Composable
+fun rememberModuleViewModel(): ModuleViewModel = viewModel(
+    viewModelStoreOwner = LocalActivity.current as? ViewModelStoreOwner
+        ?: checkNotNull(LocalViewModelStoreOwner.current),
+)
+
 class ModuleViewModel : ViewModel() {
 
     companion object {
         private const val TAG = "ModuleViewModel"
-        private var modules by mutableStateOf<List<ModuleInfo>>(emptyList())
         private val CUSTOM_USER_AGENT = "YukiSU/${BuildConfig.VERSION_NAME}"
     }
+
+    private var modules by mutableStateOf<List<ModuleInfo>>(emptyList())
+    private val moduleUpdates = ModuleUpdateState(viewModelScope, checkUpdate = ::checkUpdate)
+    private val fetchMutex = Mutex()
+    private var fetchJob: Job? = null
+    private var hasLoaded = false
+    private val updateClient = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    val updateInfo: Map<String, ModuleUpdateInfo>
+        get() = moduleUpdates.updateInfo
+    val availableUpdateCount: Int
+        get() = moduleUpdates.availableCount
 
     private lateinit var moduleSizeCache: ModuleSizeCache
 
@@ -143,110 +174,116 @@ class ModuleViewModel : ViewModel() {
         refreshModuleSizeCache()
     }
 
-    fun fetchModuleList() {
-        viewModelScope.launch(Dispatchers.IO) {
-            isRefreshing = true
+    fun ensureModuleListLoaded() {
+        if ((!hasLoaded || isNeedRefresh) && fetchJob?.isActive != true) {
+            fetchModuleList()
+        }
+    }
 
-            val oldModuleList = modules
+    fun fetchModuleList(forceUpdateCheck: Boolean = false) {
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
+            fetchMutex.withLock {
+                isRefreshing = true
+                val start = SystemClock.elapsedRealtime()
 
-            val start = SystemClock.elapsedRealtime()
+                try {
+                    val moduleInfos = withContext(Dispatchers.IO) {
+                        // ksud reads the YukiZygisk feature itself, does the Zygisk scan and
+                        // the conflict force-disable in this one call, so the list and its
+                        // tags land in a single state write.
+                        val result = listModules()
 
-            kotlin.runCatching {
-                // ksud reads the YukiZygisk feature itself, does the Zygisk scan and
-                // the conflict force-disable in this one call, so the list and its
-                // tags land in a single state write.
-                val result = listModules()
+                        Log.i(TAG, "result: $result")
 
-                Log.i(TAG, "result: $result")
+                        val array = JSONArray(result)
+                        (0 until array.length())
+                            .asSequence()
+                            .map { array.getJSONObject(it) }
+                            .map { obj ->
+                                ModuleInfo(
+                                    obj.getString("id"),
+                                    obj.optString("name"),
+                                    obj.optString("author", "Unknown"),
+                                    obj.optString("version", "Unknown"),
+                                    obj.getIntCompat("versionCode", 0),
+                                    obj.optString("description"),
+                                    obj.getBooleanCompat("enabled"),
+                                    obj.getBooleanCompat("update"),
+                                    obj.getBooleanCompat("remove"),
+                                    obj.optString("updateJson"),
+                                    obj.getBooleanCompat("web"),
+                                    obj.getBooleanCompat("action"),
+                                    obj.getBooleanCompat("metamodule"),
+                                    obj.optString("dir_id", obj.getString("id")),
+                                    obj.optString("actionIcon").takeIf { it.isNotBlank() },
+                                    obj.optString("webuiIcon").takeIf { it.isNotBlank() },
+                                    parseModuleRuntimeKinds(
+                                        obj.optJSONArray("runtimes")?.let { runtimes ->
+                                            List(runtimes.length()) { runtimes.optString(it) }
+                                        },
+                                        obj.optString("runtime"),
+                                    ),
+                                    obj.getBooleanCompat("yzConflict"),
+                                    preinit = obj.optString("preinit")
+                                )
+                            }.toList()
+                    }
 
-                val array = JSONArray(result)
-                val moduleInfos = (0 until array.length())
-                    .asSequence()
-                    .map { array.getJSONObject(it) }
-                    .map { obj ->
-                        ModuleInfo(
-                            obj.getString("id"),
-                            obj.optString("name"),
-                            obj.optString("author", "Unknown"),
-                            obj.optString("version", "Unknown"),
-                            obj.getIntCompat("versionCode", 0),
-                            obj.optString("description"),
-                            obj.getBooleanCompat("enabled"),
-                            obj.getBooleanCompat("update"),
-                            obj.getBooleanCompat("remove"),
-                            obj.optString("updateJson"),
-                            obj.getBooleanCompat("web"),
-                            obj.getBooleanCompat("action"),
-                            obj.getBooleanCompat("metamodule"),
-                            obj.optString("dir_id", obj.getString("id")),
-                            obj.optString("actionIcon").takeIf { it.isNotBlank() },
-                            obj.optString("webuiIcon").takeIf { it.isNotBlank() },
-                            parseModuleRuntimeKinds(
-                                obj.optJSONArray("runtimes")?.let { runtimes ->
-                                    List(runtimes.length()) { runtimes.optString(it) }
-                                },
-                                obj.optString("runtime"),
-                            ),
-                            obj.getBooleanCompat("yzConflict"),
-                            preinit = obj.optString("preinit")
-                        )
-                    }.toList()
+                    modules = moduleInfos
+                    hasLoaded = true
+                    isNeedRefresh = false
+                    moduleUpdates.refresh(moduleInfos, force = forceUpdateCheck)
 
-                modules = moduleInfos
-
-                launch {
-                    modules.forEach { module ->
-                        withContext(Dispatchers.IO) {
-                            try {
-                                runCatching {
-                                    module.config = module.id.asModuleConfig
-                                }.onFailure { e ->
-                                    Log.e(TAG, "Failed to load config from id for module ${module.id}", e)
-                                }
-                                if (module.config == null) {
+                    launch(Dispatchers.IO) {
+                        moduleInfos.forEach { module ->
+                            withContext(Dispatchers.IO) {
+                                try {
                                     runCatching {
-                                        module.config = module.name.asModuleConfig
+                                        module.config = module.id.asModuleConfig
                                     }.onFailure { e ->
-                                        Log.e(TAG, "Failed to load config from name for module ${module.id}", e)
+                                        Log.e(TAG, "Failed to load config from id for module ${module.id}", e)
                                     }
-                                }
-                                if (module.config == null) {
-                                    runCatching {
-                                        module.config = module.description.asModuleConfig
-                                    }.onFailure { e ->
-                                        Log.e(TAG, "Failed to load config from description for module ${module.id}", e)
+                                    if (module.config == null) {
+                                        runCatching {
+                                            module.config = module.name.asModuleConfig
+                                        }.onFailure { e ->
+                                            Log.e(TAG, "Failed to load config from name for module ${module.id}", e)
+                                        }
                                     }
-                                }
-                                if (module.config == null) {
+                                    if (module.config == null) {
+                                        runCatching {
+                                            module.config = module.description.asModuleConfig
+                                        }.onFailure { e ->
+                                            Log.e(TAG, "Failed to load config from description for module ${module.id}", e)
+                                        }
+                                    }
+                                    if (module.config == null) {
+                                        module.config = ModuleConfig()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to load any config for module ${module.id}", e)
                                     module.config = ModuleConfig()
                                 }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to load any config for module ${module.id}", e)
-                                module.config = ModuleConfig()
                             }
                         }
                     }
+
+                    withContext(Dispatchers.IO) {
+                        if (::moduleSizeCache.isInitialized) {
+                            val currentModules = moduleInfos.map { it.dirId }
+                            moduleSizeCache.initializeCacheIfNeeded(currentModules)
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "fetchModuleList: ", e)
+                } finally {
+                    isRefreshing = false
                 }
-
-                if (::moduleSizeCache.isInitialized) {
-                    val currentModules = modules.map { it.dirId }
-                    moduleSizeCache.initializeCacheIfNeeded(currentModules)
-                }
-
-                isNeedRefresh = false
-                isRefreshing = false
-            }.onFailure { e ->
-                Log.e(TAG, "fetchModuleList: ", e)
-                isRefreshing = false
+                Log.i(TAG, "load cost: ${SystemClock.elapsedRealtime() - start}, modules: $modules")
             }
-
-            // when both old and new is kotlin.collections.EmptyList
-            // moduleList update will don't trigger
-            if (oldModuleList === modules) {
-                isRefreshing = false
-            }
-
-            Log.i(TAG, "load cost: ${SystemClock.elapsedRealtime() - start}, modules: $modules")
         }
     }
 
@@ -254,7 +291,7 @@ class ModuleViewModel : ViewModel() {
         return version.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
     }
 
-    suspend fun checkUpdate(m: ModuleInfo): ModuleUpdateInfo {
+    private suspend fun checkUpdate(m: ModuleInfo): ModuleUpdateInfo {
         val empty = ModuleUpdateInfo()
         if (m.updateJson.isEmpty() || m.remove || m.update || !m.enabled) {
             return empty
@@ -263,18 +300,12 @@ class ModuleViewModel : ViewModel() {
             val url = m.updateJson
             Log.i(TAG, "checkUpdate url: $url")
 
-            val client = okhttp3.OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
-                .build()
-
             val request = okhttp3.Request.Builder()
                 .url(url)
                 .header("User-Agent", CUSTOM_USER_AGENT)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            updateClient.newCall(request).execute().use { response ->
                 Log.d(TAG, "checkUpdate code: ${response.code}")
                 if (response.isSuccessful) response.body.string() else ""
             }

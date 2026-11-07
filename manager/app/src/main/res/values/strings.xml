@@ -226,6 +226,10 @@
     <string name="profile_selinux_domain">Domain</string>
     <string name="profile_selinux_rules">Rules</string>
     <string name="module_update">Update</string>
+    <plurals name="module_updates_available" tools:ignore="MissingTranslation">
+        <item quantity="one">%1$d module update available</item>
+        <item quantity="other">%1$d module updates available</item>
+    </plurals>
     <string name="module_downloading">Downloading module: %s</string>
     <string name="module_start_downloading">Start downloading: %s</string>
     <string name="new_version_available">New version %s is available, click to upgrade</string>

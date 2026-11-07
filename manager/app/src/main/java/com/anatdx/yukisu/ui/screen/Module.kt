@@ -78,7 +78,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.text.HtmlCompat
 import com.anatdx.yukisu.data.registry.UpdateVerification
 import com.anatdx.yukisu.ui.viewmodel.ModuleUpdateInfo
@@ -109,6 +108,7 @@ import com.anatdx.yukisu.ui.util.module.Shortcut
 import com.anatdx.yukisu.ui.util.module.ModuleLink
 import com.anatdx.yukisu.ui.util.module.ModuleRuntimeKind
 import com.anatdx.yukisu.ui.viewmodel.ModuleViewModel
+import com.anatdx.yukisu.ui.viewmodel.rememberModuleViewModel
 import com.anatdx.yukisu.ui.webui.WebUIActivity
 import com.anatdx.yukisu.ui.webui.WebUIXActivity
 import kotlinx.coroutines.Dispatchers
@@ -132,7 +132,7 @@ private data class ModuleDownloadUiState(
 @Destination<RootGraph>
 @Composable
 fun ModuleScreen(navigator: DestinationsNavigator) {
-    val viewModel = viewModel<ModuleViewModel>()
+    val viewModel = rememberModuleViewModel()
     val context = LocalContext.current
     val resources = LocalResources.current
     val prefs = context.getSharedPreferences("settings", MODE_PRIVATE)
@@ -387,11 +387,9 @@ fun ModuleScreen(navigator: DestinationsNavigator) {
     }
 
     LaunchedEffect(Unit) {
-        if (viewModel.moduleList.isEmpty() || viewModel.isNeedRefresh) {
-            viewModel.sortEnabledFirst = prefs.getBoolean("module_sort_enabled_first", false)
-            viewModel.sortActionFirst = prefs.getBoolean("module_sort_action_first", false)
-            viewModel.fetchModuleList()
-        }
+        viewModel.sortEnabledFirst = prefs.getBoolean("module_sort_enabled_first", false)
+        viewModel.sortActionFirst = prefs.getBoolean("module_sort_action_first", false)
+        viewModel.ensureModuleListLoaded()
     }
 
     // Both checks were re-running on every recomposition; cache them.
@@ -1082,7 +1080,7 @@ private fun ModuleList(
     YukiPullToRefreshBox(
         modifier = boxModifier,
         onRefresh = {
-            viewModel.fetchModuleList()
+            viewModel.fetchModuleList(forceUpdateCheck = true)
             onRefreshMounts()
         },
         isRefreshing = viewModel.isRefreshing
@@ -1142,9 +1140,7 @@ private fun ModuleList(
                         key = { it.dirId }
                     ) { module ->
                         val scope = rememberCoroutineScope()
-                        val updatedModule by produceState(initialValue = ModuleUpdateInfo(), key1 = module) {
-                            value = withContext(Dispatchers.IO) { viewModel.checkUpdate(module) }
-                        }
+                        val updatedModule = viewModel.updateInfo[module.dirId] ?: ModuleUpdateInfo()
 
                         ModuleItem(
                             navigator = navigator,
@@ -1248,7 +1244,7 @@ fun ModuleItem(
         shape = MaterialTheme.shapes.large,
     ) {
         val textDecoration = if (!module.remove) null else TextDecoration.LineThrough
-        val viewModel = viewModel<ModuleViewModel>()
+        val viewModel = rememberModuleViewModel()
 
         var localEnabled by remember(module.enabled) { mutableStateOf(module.enabled) }
         val scope = rememberCoroutineScope()

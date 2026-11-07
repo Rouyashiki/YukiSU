@@ -12,7 +12,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.ramcosta.composedestinations.generated.NavGraphs
@@ -20,10 +23,12 @@ import com.ramcosta.composedestinations.spec.RouteOrDirection
 import com.ramcosta.composedestinations.utils.isRouteOnBackStackAsState
 import com.ramcosta.composedestinations.utils.rememberDestinationsNavigator
 import com.anatdx.yukisu.ui.MainActivity
+import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.activity.util.*
 import com.anatdx.yukisu.ui.screen.BottomBarDestination
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getBarColor
 import com.anatdx.yukisu.ui.util.*
+import com.anatdx.yukisu.ui.viewmodel.rememberModuleViewModel
 
 @SuppressLint("ContextCastToActivity")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,14 +44,14 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
 
     val isHideOtherInfo = settings.isHideOtherInfo
 
-    // 收集计数数据
     val superuserCount by AppData.DataRefreshManager.superuserCount.collectAsState()
     val moduleCount by AppData.DataRefreshManager.moduleCount.collectAsState()
     val pluginCount by AppData.DataRefreshManager.pluginCount.collectAsState()
+    val moduleUpdateCount = rememberModuleViewModel().availableUpdateCount
 
     fun badgeCountOf(destination: BottomBarDestination) = when (destination) {
         BottomBarDestination.SuperUser -> superuserCount
-        BottomBarDestination.Module -> moduleCount
+        BottomBarDestination.Module -> if (moduleUpdateCount > 0) moduleUpdateCount else moduleCount
         BottomBarDestination.Plugin -> pluginCount
         else -> 0
     }
@@ -78,7 +83,12 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
                 NavigationRailItem(
                     selected = selected,
                     onClick = { navigate(destination, selected) },
-                    icon = { DestinationIcon(destination, badgeCountOf(destination), !isHideOtherInfo) },
+                    icon = {
+                        DestinationIcon(
+                            destination, badgeCountOf(destination), !isHideOtherInfo,
+                            isUpdateBadge = destination == BottomBarDestination.Module && moduleUpdateCount > 0,
+                        )
+                    },
                     label = { Text(stringResource(destination.label), style = MaterialTheme.typography.labelMedium) },
                 )
             }
@@ -98,7 +108,10 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
                     selected = selected,
                     onClick = { navigate(destination, selected) },
                     icon = {
-                        DestinationIcon(destination, badgeCount, !isHideOtherInfo)
+                        DestinationIcon(
+                            destination, badgeCount, !isHideOtherInfo,
+                            isUpdateBadge = destination == BottomBarDestination.Module && moduleUpdateCount > 0,
+                        )
                     },
                     label = {
                         Text(
@@ -116,7 +129,8 @@ fun BottomBar(navController: NavHostController, vertical: Boolean = false) {
 private fun DestinationIcon(
     destination: BottomBarDestination,
     badgeCount: Int,
-    showBadge: Boolean
+    showBadge: Boolean,
+    isUpdateBadge: Boolean,
 ) {
     val icon: @Composable () -> Unit = {
         Icon(
@@ -130,9 +144,18 @@ private fun DestinationIcon(
         return
     }
 
+    val updateDescription = if (isUpdateBadge) {
+        pluralStringResource(R.plurals.module_updates_available, badgeCount, badgeCount)
+    } else null
     BadgedBox(
         badge = {
-            Badge(containerColor = MaterialTheme.colorScheme.secondary) {
+            Badge(
+                modifier = if (updateDescription != null) {
+                    Modifier.clearAndSetSemantics { contentDescription = updateDescription }
+                } else Modifier,
+                containerColor = if (isUpdateBadge) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                contentColor = if (isUpdateBadge) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSecondary,
+            ) {
                 Text(badgeCount.toString(), style = MaterialTheme.typography.labelSmall)
             }
         }

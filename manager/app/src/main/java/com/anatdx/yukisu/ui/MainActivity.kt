@@ -64,6 +64,7 @@ import com.anatdx.yukisu.ui.util.install
 import com.anatdx.yukisu.ui.util.migrateFeatureDefaults
 import com.anatdx.yukisu.ui.util.resetTaskDescriptionToAppName
 import com.anatdx.yukisu.ui.viewmodel.HomeViewModel
+import com.anatdx.yukisu.ui.viewmodel.ModuleViewModel
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
 import com.anatdx.yukisu.ui.webui.WebUIActivity
 import com.anatdx.yukisu.ui.webui.initPlatform
@@ -84,6 +85,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var homeViewModel: HomeViewModel
     internal val settingsStateFlow = MutableStateFlow(SettingsState())
     private val intentDispatcher by viewModels<IntentDispatcher>()
+    private val moduleViewModel by viewModels<ModuleViewModel>()
     private var pendingZipDecision: CompletableDeferred<Unit>? = null
 
     data class SettingsState(
@@ -304,6 +306,7 @@ class MainActivity : ComponentActivity() {
     private fun initializeViewModels() {
         superUserViewModel = SuperUserViewModel()
         homeViewModel = HomeViewModel()
+        moduleViewModel.initializeCache(applicationContext)
 
         themeChangeObserver = ThemeUtils.registerThemeChangeObserver(this)
     }
@@ -394,6 +397,9 @@ class MainActivity : ComponentActivity() {
 
     internal fun onManagerAccessChanged() {
         intentDispatcher.managerAccess.notifyChanged()
+        if (Natives.isFullFeatured()) {
+            moduleViewModel.ensureModuleListLoaded()
+        }
     }
 
     private fun resolveModuleIntent(intent: Intent): ModuleLink? {

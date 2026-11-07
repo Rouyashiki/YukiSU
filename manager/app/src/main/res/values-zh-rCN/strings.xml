@@ -222,6 +222,9 @@
     <string name="profile_selinux_domain">域</string>
     <string name="profile_selinux_rules">规则</string>
     <string name="module_update">更新</string>
+    <plurals name="module_updates_available">
+        <item quantity="other">%1$d 个模块待更新</item>
+    </plurals>
     <string name="module_downloading">正在下载模块：%s</string>
     <string name="module_start_downloading">开始下载：%s</string>
     <string name="new_version_available">发现新版本：%s，点击升级。</string>

@@ -35,7 +35,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.ComponentActivity
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.ui.platform.LocalUriHandler
@@ -55,7 +54,7 @@ import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.theme.CardConfig.cardAlpha
 import com.anatdx.yukisu.ui.util.*
 import com.anatdx.yukisu.ui.util.module.ModuleUtils
-import com.anatdx.yukisu.ui.viewmodel.ModuleViewModel
+import com.anatdx.yukisu.ui.viewmodel.rememberModuleViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -152,7 +151,7 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val scrollBehavior = rememberYukiTopAppBarScrollBehavior()
-    val viewModel: ModuleViewModel = viewModel()
+    val viewModel = rememberModuleViewModel()
 
     val errorCodeString = stringResource(R.string.error_code)
     val checkLogString = stringResource(R.string.check_log)
