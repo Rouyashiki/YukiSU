@@ -296,9 +296,6 @@
     <string name="sort_name_desc">ಹೆಸರು ಅವರೋಹಣ</string>
     <string name="sort_install_time_new">ಅನುಸ್ಥಾಪನಾ ಸಮಯ (ಹೊಸತು ಮೊದಲ)</string>
     <string name="sort_install_time_old">ಅನುಸ್ಥಾಪನಾ ಸಮಯ (ಹಳೆಯ ಮೊದಲ)</string>
-    <string name="sort_size_desc">ಗಾತ್ರ (ಮೊದಲು ದೊಡ್ಡದು)</string>
-    <string name="sort_size_asc">ಗಾತ್ರದ ಆರೋಹಣ ಕ್ರಮ</string>
-    <string name="sort_usage_freq">ಹೆಚ್ಚಾಗಿ ಬಳಸಲಾಗುತ್ತದೆ</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">ಈ ವರ್ಗದಲ್ಲಿ ಯಾವುದೇ ಅಪ್ಲಿಕೇಶನ್ ಇಲ್ಲ</string>
     <!-- 标签相关 -->

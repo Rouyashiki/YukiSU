@@ -88,15 +88,12 @@ import com.anatdx.yukisu.ui.util.module.ModuleModify
 import com.anatdx.yukisu.ui.viewmodel.AppCategory
 import com.anatdx.yukisu.ui.viewmodel.SortType
 import com.anatdx.yukisu.ui.viewmodel.SuperUserViewModel
+import com.anatdx.yukisu.ui.viewmodel.appGroupComparator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
-enum class AppPriority(val value: Int) {
-    DYNAMIC_MANAGER(0), SHELL(1), ROOT(2), CUSTOM(3), DEFAULT(4)
-}
 
 data class BottomSheetMenuItem(
     val icon: ImageVector,
@@ -156,7 +153,6 @@ fun SuperUserScreen(navigator: DestinationsNavigator) {
     ) {
         var groups = viewModel.appGroupList
 
-        // 按分类筛选
         groups = when (viewModel.selectedCategory) {
             AppCategory.ALL -> groups
             AppCategory.ROOT -> groups.filter { it.allowSu || it.isDynamicManager }
@@ -164,41 +160,7 @@ fun SuperUserScreen(navigator: DestinationsNavigator) {
             AppCategory.DEFAULT -> groups.filter { !it.allowSu && !it.isDynamicManager && !it.hasCustomProfile }
         }
 
-        // 排序
-        groups.sortedWith { group1, group2 ->
-            val priority1 = when {
-                group1.isDynamicManager -> AppPriority.DYNAMIC_MANAGER
-                group1.uid == SuperUserViewModel.SHELL_UID -> AppPriority.SHELL
-                group1.allowSu -> AppPriority.ROOT
-                group1.hasCustomProfile -> AppPriority.CUSTOM
-                else -> AppPriority.DEFAULT
-            }
-            val priority2 = when {
-                group2.isDynamicManager -> AppPriority.DYNAMIC_MANAGER
-                group2.uid == SuperUserViewModel.SHELL_UID -> AppPriority.SHELL
-                group2.allowSu -> AppPriority.ROOT
-                group2.hasCustomProfile -> AppPriority.CUSTOM
-                else -> AppPriority.DEFAULT
-            }
-
-            val priorityComparison = priority1.value.compareTo(priority2.value)
-            if (priorityComparison != 0) {
-                priorityComparison
-            } else {
-                when (viewModel.currentSortType) {
-                    SortType.NAME_ASC -> group1.mainApp.label.lowercase()
-                        .compareTo(group2.mainApp.label.lowercase())
-                    SortType.NAME_DESC -> group2.mainApp.label.lowercase()
-                        .compareTo(group1.mainApp.label.lowercase())
-                    SortType.INSTALL_TIME_NEW -> group2.mainApp.packageInfo.firstInstallTime
-                        .compareTo(group1.mainApp.packageInfo.firstInstallTime)
-                    SortType.INSTALL_TIME_OLD -> group1.mainApp.packageInfo.firstInstallTime
-                        .compareTo(group2.mainApp.packageInfo.firstInstallTime)
-                    else -> group1.mainApp.label.lowercase()
-                        .compareTo(group2.mainApp.label.lowercase())
-                }
-            }
-        }
+        groups.sortedWith(compareBy(appGroupComparator(viewModel.currentSortType)) { it.sortKey })
     }
 
     val appCounts = remember(viewModel.appGroupList, viewModel.showSystemApps) {
@@ -508,6 +470,7 @@ private fun SuperUserBottomSheet(
             onSortTypeChanged = { newSortType ->
                 viewModel.updateCurrentSortType(newSortType)
                 scope.launch {
+                    listState.scrollToItem(0)
                     bottomSheetState.hide()
                     onDismiss()
                 }

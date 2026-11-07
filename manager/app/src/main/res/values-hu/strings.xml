@@ -297,9 +297,6 @@ A</string>
     <string name="sort_name_desc">Név csökkenő</string>
     <string name="sort_install_time_new">Telepítési idő (legújabb elöl)</string>
     <string name="sort_install_time_old">Telepítési idő (legrégebbi elöl)</string>
-    <string name="sort_size_desc">Méret (a legnagyobb először)</string>
-    <string name="sort_size_asc">Méret szerint növekvő sorrendben</string>
-    <string name="sort_usage_freq">Leggyakrabban használt</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Nincs alkalmazás ebben a kategóriában</string>
     <!-- 标签相关 -->

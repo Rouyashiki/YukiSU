@@ -298,9 +298,6 @@
     <string name="sort_name_desc">Nume descrescător</string>
     <string name="sort_install_time_new">Timp de instalare (cel mai nou primul)</string>
     <string name="sort_install_time_old">Timp de instalare (cel mai vechi mai întâi)</string>
-    <string name="sort_size_desc">Dimensiune (mai mare mai întâi)</string>
-    <string name="sort_size_asc">Ordinea crescătoare a mărimii</string>
-    <string name="sort_usage_freq">Cel mai des folosit</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Nicio aplicație în această categorie</string>
     <!-- 标签相关 -->

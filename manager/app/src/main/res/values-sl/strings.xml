@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Ime padajoče</string>
     <string name="sort_install_time_new">Čas namestitve (najprej najnovejši)</string>
     <string name="sort_install_time_old">Čas namestitve (najprej najstarejši)</string>
-    <string name="sort_size_desc">Velikost (največja najprej)</string>
-    <string name="sort_size_asc">Naraščajoči vrstni red velikosti</string>
-    <string name="sort_usage_freq">Najpogosteje uporabljena</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">V tej kategoriji ni aplikacij</string>
     <!-- 标签相关 -->

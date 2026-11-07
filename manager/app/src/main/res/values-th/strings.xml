@@ -298,9 +298,6 @@
     <string name="sort_name_desc">ชื่อจากมากไปน้อย</string>
     <string name="sort_install_time_new">เวลาติดตั้ง (ใหม่สุดก่อน)</string>
     <string name="sort_install_time_old">เวลาติดตั้ง (เก่าที่สุดก่อน)</string>
-    <string name="sort_size_desc">ขนาด (ใหญ่ที่สุดก่อน)</string>
-    <string name="sort_size_asc">เรียงลำดับขนาดจากน้อยไปหามาก</string>
-    <string name="sort_usage_freq">ใช้บ่อยที่สุด</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">ไม่มีแอปพลิเคชันในหมวดหมู่นี้</string>
     <!-- 标签相关 -->

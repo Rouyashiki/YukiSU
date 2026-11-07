@@ -296,9 +296,6 @@
     <string name="sort_name_desc">이름 내림차순</string>
     <string name="sort_install_time_new">설치 시간(최신순)</string>
     <string name="sort_install_time_old">설치 시간(오래된 것부터)</string>
-    <string name="sort_size_desc">크기(큰 것부터)</string>
-    <string name="sort_size_asc">크기 오름차순</string>
-    <string name="sort_usage_freq">가장 자주 사용되는</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">이 카테고리에 애플리케이션이 없습니다</string>
     <!-- 标签相关 -->

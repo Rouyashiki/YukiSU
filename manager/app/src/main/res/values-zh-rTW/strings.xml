@@ -316,9 +316,6 @@
     <string name="sort_name_desc">名稱降序</string>
     <string name="sort_install_time_new">安裝時間（新）</string>
     <string name="sort_install_time_old">安裝時間（舊）</string>
-    <string name="sort_size_desc">大小降序</string>
-    <string name="sort_size_asc">大小升序</string>
-    <string name="sort_usage_freq">使用頻率</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">此分類中無應用</string>
     <!-- 标签相关 -->

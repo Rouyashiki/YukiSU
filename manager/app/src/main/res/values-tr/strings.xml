@@ -296,9 +296,6 @@
     <string name="sort_name_desc">İsme göre azalan sırada</string>
     <string name="sort_install_time_new">Kurulum zamanı (yeni)</string>
     <string name="sort_install_time_old">Kurulum zamanı (eski)</string>
-    <string name="sort_size_desc">Boyuta göre azalan sırada</string>
-    <string name="sort_size_asc">Boyuta göre artan sırada</string>
-    <string name="sort_usage_freq">Kullanım sıklığına göre</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Bu kategoride uygulama yok</string>
     <!-- 标签相关 -->

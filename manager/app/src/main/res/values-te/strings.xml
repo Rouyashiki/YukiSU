@@ -296,9 +296,6 @@
     <string name="sort_name_desc">పేరు అవరోహణ</string>
     <string name="sort_install_time_new">ఇన్‌స్టాలేషన్ సమయం (కొత్తది)</string>
     <string name="sort_install_time_old">ఇన్‌స్టాలేషన్ సమయం (పాతది)</string>
-    <string name="sort_size_desc">పరిమాణం అవరోహణ క్రమం</string>
-    <string name="sort_size_asc">పరిమాణం ఆరోహణ క్రమం</string>
-    <string name="sort_usage_freq">వాడుక తరచుదనం</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">ఈ వర్గంలో అప్లికేషన్ లేదు</string>
     <!-- 标签相关 -->

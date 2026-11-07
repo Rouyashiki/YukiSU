@@ -298,9 +298,6 @@
     <string name="sort_name_desc">Nazwa malejąco</string>
     <string name="sort_install_time_new">Czas instalacji (najpierw najnowsze)</string>
     <string name="sort_install_time_old">Czas instalacji (najpierw najstarszy)</string>
-    <string name="sort_size_desc">Rozmiar (najpierw największy)</string>
-    <string name="sort_size_asc">Rosnąco według wielkości</string>
-    <string name="sort_usage_freq">Najczęściej używane</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Brak aplikacji w tej kategorii</string>
     <!-- 标签相关 -->

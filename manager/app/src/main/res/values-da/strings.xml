@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Faldende efter navn</string>
     <string name="sort_install_time_new">Installationstid (nyeste først)</string>
     <string name="sort_install_time_old">Installationstid (ældste først)</string>
-    <string name="sort_size_desc">Størrelse (størst først)</string>
-    <string name="sort_size_asc">Stigende størrelsesrækkefølge</string>
-    <string name="sort_usage_freq">Oftest brugt</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Ingen app i denne kategori</string>
     <!-- 标签相关 -->

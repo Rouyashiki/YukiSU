@@ -296,9 +296,6 @@
     <string name="sort_name_desc">নাম অবরোহী</string>
     <string name="sort_install_time_new">ইনস্টলেশন সময় (নতুন)</string>
     <string name="sort_install_time_old">ইনস্টলেশন সময় (পুরনো)</string>
-    <string name="sort_size_desc">আকারের অবরোহী ক্রম</string>
-    <string name="sort_size_asc">আকারের আরোহী ক্রম</string>
-    <string name="sort_usage_freq">ব্যবহারের ফ্রিকোয়েন্সি</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">এই বিভাগে কোনো অ্যাপ্লিকেশন নেই</string>
     <!-- 标签相关 -->

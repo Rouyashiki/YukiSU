@@ -296,9 +296,6 @@
     <string name="sort_name_desc">ترتیب نزولی نام</string>
     <string name="sort_install_time_new">زمان نصب (ابتدا جدیدترین)</string>
     <string name="sort_install_time_old">زمان نصب (ابتدا قدیمی ترین)</string>
-    <string name="sort_size_desc">اندازه (اول بزرگترین)</string>
-    <string name="sort_size_asc">ترتیب صعودی اندازه</string>
-    <string name="sort_usage_freq">بیشترین استفاده را دارد</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">هیچ برنامه‌ای در این دسته نیست</string>
     <!-- 标签相关 -->

@@ -51,10 +51,7 @@ enum class SortType(val displayNameRes: Int, val persistKey: String) {
     NAME_ASC(com.anatdx.yukisu.R.string.sort_name_asc, "NAME_ASC"),
     NAME_DESC(com.anatdx.yukisu.R.string.sort_name_desc, "NAME_DESC"),
     INSTALL_TIME_NEW(com.anatdx.yukisu.R.string.sort_install_time_new, "INSTALL_TIME_NEW"),
-    INSTALL_TIME_OLD(com.anatdx.yukisu.R.string.sort_install_time_old, "INSTALL_TIME_OLD"),
-    SIZE_DESC(com.anatdx.yukisu.R.string.sort_size_desc, "SIZE_DESC"),
-    SIZE_ASC(com.anatdx.yukisu.R.string.sort_size_asc, "SIZE_ASC"),
-    USAGE_FREQ(com.anatdx.yukisu.R.string.sort_usage_freq, "USAGE_FREQ");
+    INSTALL_TIME_OLD(com.anatdx.yukisu.R.string.sort_install_time_old, "INSTALL_TIME_OLD");
 
     companion object {
         fun fromPersistKey(key: String): SortType = entries.find { it.persistKey == key } ?: NAME_ASC
@@ -291,6 +288,18 @@ class SuperUserViewModel : ViewModel() {
         val userName: String? = Natives.getUserName(uid)
         @IgnoredOnParcel
         val hasCustomProfile : Boolean = profile?.let { if (allowSu) !it.rootUseDefault else !it.nonRootUseDefault } ?: false
+        @IgnoredOnParcel
+        internal val sortKey = AppGroupSortKey(
+            label = mainApp.label,
+            priority = when {
+                isDynamicManager -> 0
+                uid == SHELL_UID -> 1
+                allowSu -> 2
+                hasCustomProfile -> 3
+                else -> 4
+            },
+            latestInstallTime = apps.maxOf { it.packageInfo.firstInstallTime },
+        )
     }
 
     private val appProcessingThreadPool = ThreadPoolExecutor(

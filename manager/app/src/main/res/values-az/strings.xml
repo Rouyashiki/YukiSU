@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Ada görə azalan sıra</string>
     <string name="sort_install_time_new">Quraşdırma vaxtı (əvvəlcə yeni)</string>
     <string name="sort_install_time_old">Quraşdırma vaxtı (əvvəl ən köhnə)</string>
-    <string name="sort_size_desc">Ölçü (əvvəl ən böyük)</string>
-    <string name="sort_size_asc">Ölçülərin artan sırası</string>
-    <string name="sort_usage_freq">Ən çox istifadə olunur</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Bu kateqoriyada tətbiq yoxdur</string>
     <!-- 标签相关 -->

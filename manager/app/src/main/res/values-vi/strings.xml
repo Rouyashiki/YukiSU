@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Tên (Giảm dần)</string>
     <string name="sort_install_time_new">Thời gian cài đặt (Mới)</string>
     <string name="sort_install_time_old">Thời gian cài đặt (Cũ)</string>
-    <string name="sort_size_desc">Kích thước (Giảm dần)</string>
-    <string name="sort_size_asc">Kích thước (Tăng dần)</string>
-    <string name="sort_usage_freq">Tần suất sử dụng</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Không có ứng dụng nào trong danh mục này</string>
     <!-- 标签相关 -->

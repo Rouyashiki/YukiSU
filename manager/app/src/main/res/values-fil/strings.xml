@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Pababa ng pangalan</string>
     <string name="sort_install_time_new">Oras ng pag-install (pinakabago muna)</string>
     <string name="sort_install_time_old">Oras ng pag-install (pinakaluma muna)</string>
-    <string name="sort_size_desc">Sukat (pinakamalaki muna)</string>
-    <string name="sort_size_asc">Pataas na pagkakasunod-sunod ng laki</string>
-    <string name="sort_usage_freq">Pinakamadalas na ginagamit</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Walang application sa kategoryang ito</string>
     <!-- 标签相关 -->

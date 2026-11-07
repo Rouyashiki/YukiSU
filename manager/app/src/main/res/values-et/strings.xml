@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Nimi kahanevalt</string>
     <string name="sort_install_time_new">Paigaldusaeg (uusimad enne)</string>
     <string name="sort_install_time_old">Paigaldusaeg (vanim enne)</string>
-    <string name="sort_size_desc">Suurus (suurem enne)</string>
-    <string name="sort_size_asc">Suuruse kasvav järjestus</string>
-    <string name="sort_usage_freq">Kõige sagedamini kasutatav</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Selles kategoorias pole rakendusi</string>
     <!-- 标签相关 -->

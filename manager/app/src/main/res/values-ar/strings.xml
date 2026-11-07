@@ -298,9 +298,6 @@
     <string name="sort_name_desc">الاسم تنازلياً</string>
     <string name="sort_install_time_new">وقت التثبيت (الأحدث أولاً)</string>
     <string name="sort_install_time_old">وقت التثبيت (الأقدم أولاً)</string>
-    <string name="sort_size_desc">الحجم (الأكبر أولا)</string>
-    <string name="sort_size_asc">ترتيب تصاعدي للحجم</string>
-    <string name="sort_usage_freq">الأكثر استخداما</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">لا توجد تطبيقات في هذه الفئة</string>
     <!-- 标签相关 -->

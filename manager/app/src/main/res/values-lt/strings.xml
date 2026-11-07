@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Pavadinimas mažėjančia tvarka</string>
     <string name="sort_install_time_new">Diegimo laikas (pirmiausia naujausi)</string>
     <string name="sort_install_time_old">Diegimo laikas (pirmiausia seniausias)</string>
-    <string name="sort_size_desc">Dydis (pirmiausia didžiausias)</string>
-    <string name="sort_size_asc">Dydžio didėjimo tvarka</string>
-    <string name="sort_usage_freq">Dažniausiai naudojamas</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Šioje kategorijoje nėra programų</string>
     <!-- 标签相关 -->

@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Nama menurun</string>
     <string name="sort_install_time_new">Masa pemasangan (terbaharu dahulu)</string>
     <string name="sort_install_time_old">Masa pemasangan (paling lama dahulu)</string>
-    <string name="sort_size_desc">Saiz (terbesar dahulu)</string>
-    <string name="sort_size_asc">Tertib saiz menaik</string>
-    <string name="sort_usage_freq">Paling kerap digunakan</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Tiada aplikasi dalam kategori ini</string>
     <!-- 标签相关 -->

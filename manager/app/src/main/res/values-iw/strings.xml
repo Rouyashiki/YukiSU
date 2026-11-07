@@ -296,9 +296,6 @@
     <string name="sort_name_desc">סדר יורד לפי שם</string>
     <string name="sort_install_time_new">זמן התקנה (חדש)</string>
     <string name="sort_install_time_old">זמן התקנה (ישן)</string>
-    <string name="sort_size_desc">סדר יורד לפי גודל</string>
-    <string name="sort_size_asc">סדר עולה לפי גודל</string>
-    <string name="sort_usage_freq">תדירות שימוש</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">אין אפליקציה בקטגוריה זו</string>
     <!-- 标签相关 -->

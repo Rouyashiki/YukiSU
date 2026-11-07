@@ -296,9 +296,6 @@
     <string name="sort_name_desc">नाम अवरोही</string>
     <string name="sort_install_time_new">स्थापना का समय (नवीनतम पहले)</string>
     <string name="sort_install_time_old">स्थापना का समय (सबसे पुराना पहले)</string>
-    <string name="sort_size_desc">आकार (पहले सबसे बड़ा)</string>
-    <string name="sort_size_asc">आकार का आरोही क्रम</string>
-    <string name="sort_usage_freq">सबसे अधिक प्रयोग किया जाता है</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">इस श्रेणी में कोई एप्लिकेशन नहीं</string>
     <!-- 标签相关 -->

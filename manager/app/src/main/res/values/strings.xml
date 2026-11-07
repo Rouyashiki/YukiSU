@@ -516,9 +516,6 @@
     <string name="sort_name_desc">Name descending</string>
     <string name="sort_install_time_new">Installation time (New)</string>
     <string name="sort_install_time_old">Installation time (Old)</string>
-    <string name="sort_size_desc">Descending order of size</string>
-    <string name="sort_size_asc">Ascending order of size</string>
-    <string name="sort_usage_freq">Frequency of use</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">No application in this category</string>
     <!-- 标签相关 -->

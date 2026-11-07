@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Име опадајуће</string>
     <string name="sort_install_time_new">Време уградње (Ново)</string>
     <string name="sort_install_time_old">Време инсталације (старо)</string>
-    <string name="sort_size_desc">Опадајући редослед величине</string>
-    <string name="sort_size_asc">Узлазни редослед величине</string>
-    <string name="sort_usage_freq">Учесталост коришћења</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Нема апликација у овој категорији</string>
     <!-- 标签相关 -->

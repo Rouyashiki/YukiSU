@@ -298,9 +298,6 @@
     <string name="sort_name_desc">Название (по убыванию)</string>
     <string name="sort_install_time_new">Время установки (новые)</string>
     <string name="sort_install_time_old">Время установки (старые)</string>
-    <string name="sort_size_desc">Размер (по убыванию)</string>
-    <string name="sort_size_asc">Размер (по возрастанию)</string>
-    <string name="sort_usage_freq">Частота использования</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">В этой категории нет приложений</string>
     <!-- 标签相关 -->

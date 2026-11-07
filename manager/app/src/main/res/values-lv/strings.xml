@@ -298,9 +298,6 @@
     <string name="sort_name_desc">Nosaukums dilstošā secībā</string>
     <string name="sort_install_time_new">Uzstādīšanas laiks (jaunākie vispirms)</string>
     <string name="sort_install_time_old">Uzstādīšanas laiks (vecākais vispirms)</string>
-    <string name="sort_size_desc">Izmērs (vispirms lielākais)</string>
-    <string name="sort_size_asc">Lieluma augošā secībā</string>
-    <string name="sort_usage_freq">Visbiežāk lietots</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Šajā kategorijā nav lietotņu</string>
     <!-- 标签相关 -->

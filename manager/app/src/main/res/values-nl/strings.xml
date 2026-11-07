@@ -298,9 +298,6 @@
     <string name="sort_name_desc">Naam aflopend</string>
     <string name="sort_install_time_new">Installatietijd (nieuwste eerst)</string>
     <string name="sort_install_time_old">Installatietijd (oudste eerst)</string>
-    <string name="sort_size_desc">Grootte (grootste eerst)</string>
-    <string name="sort_size_asc">Oplopende volgorde van grootte</string>
-    <string name="sort_usage_freq">Meest gebruikt</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Geen applicatie in deze categorie</string>
     <!-- 标签相关 -->

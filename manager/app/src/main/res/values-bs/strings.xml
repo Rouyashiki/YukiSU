@@ -296,9 +296,6 @@
     <string name="sort_name_desc">Naziv silazno</string>
     <string name="sort_install_time_new">Vrijeme instalacije (prvo najnovije)</string>
     <string name="sort_install_time_old">Vrijeme instalacije (prvo najstariji)</string>
-    <string name="sort_size_desc">Veličina (prvo najveća)</string>
-    <string name="sort_size_asc">Uzlazni redoslijed veličine</string>
-    <string name="sort_usage_freq">Najčešće korišteni</string>
     <!-- 状态相关 -->
     <string name="no_apps_in_category">Nema aplikacija u ovoj kategoriji</string>
     <!-- 标签相关 -->
