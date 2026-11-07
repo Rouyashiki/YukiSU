@@ -277,9 +277,9 @@ void api_plt_hook_register_byname(const char *path_regex, const char *symbol,
             resolved.push_back(
                 {map.dev, map.inode, std::move(image.value()), std::move(pin)});
             found = resolved.end() - 1;
+            module->plt_pending.push_back(
+                {found->image, found->pin, symbol, new_func, old_func});
           }
-          module->plt_pending.push_back(
-              {found->image, found->pin, symbol, new_func, old_func});
         }
       } catch (...) {
         module->plt_registration_failed = true;
