@@ -139,7 +139,7 @@ bool prepare_runtime(std::string& error) {
     for (const auto* name :
          {"config.json", "config.json.lock", "module_mode.json", "module_bypass.json",
           "module_rules.json", "user_hide_rules.json", "hide_bypass.json", "kagamid.pid",
-          "kagamid.sock", "kagamid.lock", "mirror.img", "mirror.erofs"}) {
+          "kagamid.sock", "kagamid.lock", "kagamid.requests.lock", "mirror.img", "mirror.erofs"}) {
         if (!prepare_private_file(runtime_data_dir() / name, error))
             return false;
     }

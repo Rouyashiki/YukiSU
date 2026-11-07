@@ -14,6 +14,7 @@
 #include "kagami/kasumi_client.hpp"
 #include "mount/kasumi.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -27,6 +28,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/file.h>
+#include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -38,8 +40,55 @@ namespace kagami {
 namespace fs = std::filesystem;
 
 namespace {
+using Clock = std::chrono::steady_clock;
+constexpr auto idle_timeout = std::chrono::seconds(3);
+constexpr auto hide_retry_timeout = std::chrono::seconds(30);
+
 int print_status_json();
+int launch_background(int request_lock_fd);
 bool request_completed = false;
+
+class RequestLock {
+public:
+    explicit RequestLock(std::string& error, bool prepare = false) : fd_(open_lock()) {
+        if (fd_ < 0 && errno == ENOENT && prepare) {
+            if (!prepare_runtime(error))
+                return;
+            fd_ = open_lock();
+        }
+        if (fd_ < 0)
+            error = std::strerror(errno);
+    }
+    ~RequestLock() {
+        const int saved_errno = errno;
+        if (fd_ >= 0)
+            close(fd_);
+        errno = saved_errno;
+    }
+    RequestLock(const RequestLock&) = delete;
+    RequestLock& operator=(const RequestLock&) = delete;
+    RequestLock(RequestLock&&) = delete;
+    RequestLock& operator=(RequestLock&&) = delete;
+
+    [[nodiscard]] int get() const { return fd_; }
+    [[nodiscard]] bool lock(int operation) const {
+        if (fd_ < 0)
+            return false;
+        int result;
+        do {
+            result = flock(fd_, operation);
+        } while (result < 0 && errno == EINTR);
+        return result == 0;
+    }
+
+private:
+    static int open_lock() {
+        return open((runtime_data_dir() / "kagamid.requests.lock").c_str(),
+                    O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
+    }
+
+    int fd_;
+};
 
 void append_log(const std::string& message, logging::Level level = logging::Level::Info) {
     logging::write(level, "daemon", message);
@@ -181,13 +230,32 @@ int open_client_socket(std::string& error, int timeout_seconds) {
 }
 
 int send_request(const std::vector<std::string>& args, std::size_t start, std::string& response,
-                 std::string& error, int timeout_seconds = 0, bool* completed = nullptr) {
+                 std::string& error, int timeout_seconds = 0, bool* completed = nullptr,
+                 bool auto_start = false) {
     if (completed)
         *completed = true;
+    const RequestLock request_lock(error, auto_start);
+    if (request_lock.get() < 0)
+        return 1;
+    if (!request_lock.lock(LOCK_SH)) {
+        error = std::strerror(errno);
+        return 1;
+    }
     const auto token = reboot::client_token();
     if (timeout_seconds <= 0 && !token.empty())
         timeout_seconds = 180;
-    const int fd = open_client_socket(error, timeout_seconds);
+    int fd = open_client_socket(error, timeout_seconds);
+    if (fd < 0 && auto_start && (errno == ENOENT || errno == ECONNREFUSED)) {
+        // Serialize startup with idle shutdown and other first-use clients.
+        if (!request_lock.lock(LOCK_UN) || !request_lock.lock(LOCK_EX)) {
+            error = std::strerror(errno);
+            return 1;
+        }
+        fd = open_client_socket(error, timeout_seconds);
+        if (fd < 0 && (errno == ENOENT || errno == ECONNREFUSED) &&
+            launch_background(request_lock.get()) == 0)
+            fd = open_client_socket(error, timeout_seconds);
+    }
     if (fd < 0) {
         return 1;
     }
@@ -228,6 +296,7 @@ bool daemon_running() {
 }
 
 int serve_foreground(int ready_fd = -1) {
+    (void)prctl(PR_SET_NAME, "kagamid", 0, 0, 0);
     reboot::release();
     umask(0077);
     std::string preparation_error;
@@ -263,6 +332,13 @@ int serve_foreground(int ready_fd = -1) {
     }
     if (flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
         std::cerr << "kagamid is already running\n";
+        close(lock_fd);
+        return 1;
+    }
+    const RequestLock request_lock(preparation_error);
+    if (request_lock.get() < 0) {
+        append_log("cannot open request lock: " + std::string(std::strerror(errno)),
+                   logging::Level::Error);
         close(lock_fd);
         return 1;
     }
@@ -319,13 +395,51 @@ int serve_foreground(int ready_fd = -1) {
     }
     bool stopping = false;
     int exit_code = 0;
+    auto idle_deadline = Clock::now() + idle_timeout;
+    auto hide_deadline = Clock::time_point{};
     while (!stopping) {
         if (reboot::recover_abandoned(ksud::recover_soft_reboot))
             append_log("recovered abandoned soft reboot transaction", logging::Level::Error);
+        const bool reboot_pending =
+            reboot::active() || reboot::state().at("result").string_or("") == "accepted";
         const bool pending_hides = mount::kasumi::has_pending_hide_rules();
-        pollfd descriptors[] = {{server_fd, POLLIN, 0},
-                                {pending_hides ? mounts_fd : -1, POLLPRI, 0}};
-        const int ready = poll(descriptors, 2, 2000);
+        const auto now = Clock::now();
+        if (!pending_hides)
+            hide_deadline = {};
+        else if (hide_deadline == Clock::time_point{})
+            hide_deadline = now + hide_retry_timeout;
+        const auto deadline =
+            pending_hides ? std::max(idle_deadline, hide_deadline) : idle_deadline;
+        int wait_ms = 2000;
+        if (!reboot_pending) {
+            if (now >= deadline) {
+                // Clients hold a shared lock from connect through completion.
+                if (request_lock.lock(LOCK_EX | LOCK_NB)) {
+                    pollfd queued{server_fd, POLLIN, 0};
+                    const int ready = poll(&queued, 1, 0);
+                    if (ready == 0) {
+                        if (pending_hides)
+                            append_log("hide retry deadline reached; saved rules remain pending",
+                                       logging::Level::Warning);
+                        break;
+                    }
+                    (void)request_lock.lock(LOCK_UN);
+                } else if (errno != EWOULDBLOCK) {
+                    append_log("cannot lock idle shutdown: " + std::string(std::strerror(errno)),
+                               logging::Level::Error);
+                    exit_code = 1;
+                    break;
+                }
+                wait_ms = 1000;
+            } else {
+                wait_ms = static_cast<int>(
+                    std::chrono::ceil<std::chrono::milliseconds>(deadline - now).count());
+            }
+        }
+        pollfd descriptors[] = {
+            {server_fd, POLLIN, 0},
+            {pending_hides && now < hide_deadline ? mounts_fd : -1, POLLPRI, 0}};
+        const int ready = poll(descriptors, 2, wait_ms);
         if (ready < 0) {
             if (errno == EINTR)
                 continue;
@@ -356,6 +470,7 @@ int serve_foreground(int ready_fd = -1) {
                        logging::Level::Error);
             continue;
         }
+        idle_deadline = Clock::now() + idle_timeout;
 
         timeval timeout = {};
         timeout.tv_sec = 5;
@@ -414,6 +529,7 @@ int serve_foreground(int ready_fd = -1) {
         send_response(client_fd, result.exit_code == 0, result.exit_code, result.error_number,
                       result.stdout_text, result.stderr_text);
         close(client_fd);
+        idle_deadline = Clock::now() + idle_timeout;
     }
 
     append_log("kagamid stopped");
@@ -426,11 +542,7 @@ int serve_foreground(int ready_fd = -1) {
     return exit_code;
 }
 
-int start_background(bool report_status) {
-    if (daemon_running()) {
-        return report_status ? print_status_json() : 0;
-    }
-
+int launch_background(int request_lock_fd) {
     std::string preparation_error;
     if (!prepare_runtime(preparation_error) || !logging::prepare_boot_log(preparation_error)) {
         std::cerr << preparation_error << '\n';
@@ -447,6 +559,7 @@ int start_background(bool report_status) {
         return 1;
     }
     if (detached == ksud::ProcessDaemonizeResult::Daemon) {
+        close(request_lock_fd);
         close(ready_pipe[0]);
         const int null_fd = open("/dev/null", O_RDONLY);
         if (null_fd >= 0) {
@@ -479,7 +592,7 @@ int start_background(bool report_status) {
         close(ready_pipe[0]);
         if (!ok)
             return 1;
-        return report_status ? print_status_json() : 0;
+        return 0;
     }
     close(ready_pipe[0]);
     std::cerr << "kagamid did not become ready\n";
@@ -495,11 +608,7 @@ int run_via_daemon(const std::vector<std::string>& args, bool display_errors) {
 
     std::string response;
     std::string error;
-    int request_status = send_request(args, 0, response, error, 0, &request_completed);
-    if (request_status == 1) {
-        if (start_background(false) == 0)
-            request_status = send_request(args, 0, response, error, 0, &request_completed);
-    }
+    const int request_status = send_request(args, 0, response, error, 0, &request_completed, true);
     if (request_status != 0) {
         if (display_errors)
             return ksud::terminal::error(
@@ -575,7 +684,7 @@ int run_daemon_command(const std::vector<std::string>& args) {
         return serve_foreground();
     }
     if (sub == "start") {
-        return start_background(true);
+        return run_via_daemon({"daemon", "status"});
     }
     if (sub == "call") {
         if (args.size() < 3) {
@@ -584,7 +693,7 @@ int run_daemon_command(const std::vector<std::string>& args) {
         }
         std::string response;
         std::string error;
-        const int rc = send_request(args, 2, response, error);
+        const int rc = send_request(args, 2, response, error, 0, nullptr, true);
         if (rc != 0) {
             std::cerr << "daemon unavailable: " << error << "\n";
             return rc;

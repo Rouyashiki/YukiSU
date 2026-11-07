@@ -30,6 +30,14 @@ configuration patches validate field names, JSON types, enum values, paths, and
 numeric ranges before taking the configuration lock. Existing stored configuration
 keeps its legacy loading behavior.
 
+The Kagami controller starts on demand, including for `daemon call`, and exits
+after three idle seconds. `daemon start` and `daemon serve` use the same idle
+lifetime. An active soft reboot keeps the controller available until the
+transaction finishes or abandoned-transaction recovery completes. Legacy hide
+rule retries wait for mount events for up to 30 seconds; unresolved saved rules
+remain available for the next controller invocation. Kernel-managed hide rules
+do not require the controller to stay alive.
+
 Arguments after the module path in `ksud insmod` are passed to the loader verbatim;
 use `ksud insmod --help` to inspect that command. Use `--option=-value` when an
 option's value starts with a dash. Empty UTS field values are accepted and restore

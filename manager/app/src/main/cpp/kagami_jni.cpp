@@ -45,6 +45,8 @@ static_assert(offsetof(kasumi_conflicts_arg, events) == 8);
 static_assert(KSM_IOC_GET_CONFLICTS == 0x8508532eU);
 static_assert(KSM_IOC_ACK_CONFLICTS == 0x4008532fU);
 constexpr const char *socket_path = "/data/adb/ksu/kagami/kagamid.sock";
+constexpr const char *request_lock_path =
+    "/data/adb/ksu/kagami/kagamid.requests.lock";
 constexpr const char *log_path = kagami::embedded_log_file;
 constexpr size_t response_limit = 1024UL * 1024;
 std::mutex worker_mutex;
@@ -321,16 +323,35 @@ std::string exchange(int fd, const std::string &request) {
 
 std::string request_controller(const std::string &ksud,
                                const std::string &request) {
-  int connected = connect_controller(socket_path);
-  if (connected == -ENOENT || connected == -ECONNREFUSED) {
+  for (bool started = false;; started = true) {
+    int connected;
+    {
+      const Fd request_lock(open(
+          request_lock_path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600));
+      if (request_lock.get() < 0) {
+        connected = -errno;
+      } else {
+        int locked;
+        do {
+          locked = flock(request_lock.get(), LOCK_SH);
+        } while (locked < 0 && errno == EINTR);
+        if (locked < 0)
+          failure("Lock Kagami request");
+        connected = connect_controller(socket_path);
+        if (connected >= 0) {
+          const Fd fd(connected);
+          // Never replay a mutation after any request bytes might have been
+          // delivered.
+          return exchange(fd.get(), request);
+        }
+      }
+    }
+    if (started || (connected != -ENOENT && connected != -ECONNREFUSED))
+      failure("Connect Kagami", -connected);
+    // Startup needs the exclusive request lock; release ours before spawning
+    // it.
     start_controller(ksud);
-    connected = connect_controller(socket_path);
   }
-  if (connected < 0)
-    failure("Connect Kagami", -connected);
-  const Fd fd(connected);
-  // Never replay a mutation after any request bytes might have been delivered.
-  return exchange(fd.get(), request);
 }
 
 std::string read_tail(const char *path, size_t limit, size_t lines) {

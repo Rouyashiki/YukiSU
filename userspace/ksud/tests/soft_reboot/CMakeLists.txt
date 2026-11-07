@@ -37,3 +37,31 @@ target_compile_options(soft_reboot_request_test PRIVATE -UNDEBUG)
 target_link_libraries(soft_reboot_request_test PRIVATE Threads::Threads)
 add_test(NAME soft_reboot_requests COMMAND soft_reboot_request_test)
 set_tests_properties(soft_reboot_requests PROPERTIES TIMEOUT 10)
+
+add_executable(kagami_daemon_test ../kagami_daemon_test.cpp
+    ../../kagami/src/core/daemon.cpp ../../kagami/src/core/reboot_state.cpp)
+target_include_directories(kagami_daemon_test PRIVATE ../../kagami/src
+    ../../kagami/include ../../src ../../../..)
+target_compile_options(kagami_daemon_test PRIVATE -UNDEBUG -include linux/types.h
+    -ffunction-sections -fdata-sections)
+target_link_options(kagami_daemon_test PRIVATE -Wl,--gc-sections -Wl,--wrap=fcntl)
+target_link_libraries(kagami_daemon_test PRIVATE Threads::Threads)
+foreach(scenario lifecycle concurrent recovery pending recovery-race)
+    add_test(NAME kagami_daemon_${scenario} COMMAND kagami_daemon_test ${scenario})
+    set_tests_properties(kagami_daemon_${scenario} PROPERTIES TIMEOUT 60)
+endforeach()
+
+set(KAGAMI_JNI_INCLUDE_DIR "" CACHE PATH "Directory containing the Android NDK jni.h")
+if(KAGAMI_JNI_INCLUDE_DIR)
+    configure_file("${KAGAMI_JNI_INCLUDE_DIR}/jni.h" "jni/jni.h" COPYONLY)
+    add_executable(kagami_manager_client_test ../kagami_manager_client_test.cpp)
+    target_include_directories(kagami_manager_client_test PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}/jni" ../../kagami/include ../../../..)
+    target_compile_options(kagami_manager_client_test PRIVATE -UNDEBUG -include linux/types.h
+        -ffunction-sections -fdata-sections)
+    target_link_options(kagami_manager_client_test PRIVATE -Wl,--gc-sections
+        -Wl,--wrap=open -Wl,--wrap=connect -Wl,--wrap=getsockopt -Wl,--wrap=posix_spawn)
+    target_link_libraries(kagami_manager_client_test PRIVATE Threads::Threads)
+    add_test(NAME kagami_manager_client COMMAND kagami_manager_client_test)
+    set_tests_properties(kagami_manager_client PROPERTIES TIMEOUT 20)
+endif()
