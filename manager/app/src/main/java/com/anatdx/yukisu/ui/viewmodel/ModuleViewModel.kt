@@ -7,6 +7,7 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -377,7 +378,7 @@ class ModuleSizeCache(context: Context) {
     }
 
     private val cachePrefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
-    private val sizeCache = mutableMapOf<String, Long>()
+    private val sizeCache = mutableStateMapOf<String, Long>()
 
     init {
         loadCacheFromPrefs()

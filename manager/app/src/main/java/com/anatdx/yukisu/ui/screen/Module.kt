@@ -1251,9 +1251,7 @@ fun ModuleItem(
 
         val conflictDisabled = module.zygiskConflict
 
-        val sizeStr = remember(module.dirId) {
-            viewModel.getModuleSize(module.dirId)
-        }
+        val sizeStr = viewModel.getModuleSize(module.dirId)
 
         Column(
             modifier = Modifier.padding(22.dp, 18.dp, 22.dp, 12.dp)
