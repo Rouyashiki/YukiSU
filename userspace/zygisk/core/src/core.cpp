@@ -134,21 +134,42 @@ Module *plt_module() {
              : nullptr;
 }
 
-yukiplt::Result<yukiplt::NamedImage>
-module_plt_image(dev_t dev, ino_t inode,
-                 std::shared_ptr<yukizygisk::linker::PrivateImage> &pin) {
+yukiplt::Result<yukiplt::NamedImage> module_plt_image(
+    dev_t dev, ino_t inode,
+    std::shared_ptr<yukizygisk::linker::PrivateImage> &pin,
+    const std::vector<yukizygisk::MapInfo> *snapshot = nullptr,
+    const std::vector<std::shared_ptr<yukizygisk::linker::PrivateImage>>
+        *private_snapshot = nullptr) {
   bool ambiguous = false;
-  pin = yukizygisk::linker::private_image(dev, inode, &ambiguous);
+  if (private_snapshot) {
+    for (const auto &image : *private_snapshot) {
+      if (image->device != static_cast<uint64_t>(dev) ||
+          image->inode != static_cast<uint64_t>(inode))
+        continue;
+      if (pin) {
+        ambiguous = true;
+        break;
+      }
+      pin = image;
+    }
+  } else {
+    pin = yukizygisk::linker::private_image(dev, inode, &ambiguous);
+  }
   if (ambiguous)
     return yukiplt::Error::Make(yukiplt::ErrorCode::kAmbiguousImage);
   if (pin)
     return pin->named;
-  int map_error = 0;
-  const auto maps = yukizygisk::MapInfo::Scan(&map_error);
-  if (map_error != 0)
-    return yukiplt::Error::Sys(yukiplt::ErrorCode::kVmaUnavailable, map_error);
+  std::vector<yukizygisk::MapInfo> captured;
+  if (snapshot == nullptr) {
+    int map_error = 0;
+    captured = yukizygisk::MapInfo::Scan(&map_error);
+    if (map_error != 0)
+      return yukiplt::Error::Sys(yukiplt::ErrorCode::kVmaUnavailable,
+                                 map_error);
+    snapshot = &captured;
+  }
   std::unique_ptr<yukiplt::NamedImage> found;
-  for (const auto &map : maps) {
+  for (const auto &map : *snapshot) {
     if (map.dev != dev || map.inode != inode)
       continue;
     auto image =
@@ -213,31 +234,82 @@ void api_plt_hook_register_byname(const char *path_regex, const char *symbol,
     return;
   }
   const size_t first_request = module->plt_pending.size();
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation) {
+    module->plt_registration_failed = true;
+    regfree(&expression);
+    return;
+  }
   try {
-    int error = 0;
-    const auto maps = yukizygisk::MapInfo::Scan(&error);
-    if (error != 0)
-      module->plt_registration_failed = true;
-    for (const auto &map : maps) {
-      if (map.offset == 0 && (map.perms & PROT_READ) && map.inode != 0 &&
-          regexec(&expression, map.path.c_str(), 0, nullptr, 0) == 0)
-        api_plt_hook_register(map.dev, map.inode, symbol, new_func, old_func);
-    }
-    yukizygisk::plt_lifecycle::Operation operation;
-    if (operation) {
-      for (auto &pin : yukizygisk::linker::private_images()) {
-        const bool already_selected =
-            std::any_of(module->plt_pending.begin() + first_request,
-                        module->plt_pending.end(), [&](const auto &request) {
-                          return same_module_image(request.image, pin->named);
-                        });
-        if (!already_selected &&
-            regexec(&expression, pin->named.path.c_str(), 0, nullptr, 0) == 0)
+    const auto private_images = yukizygisk::linker::private_images();
+    auto resolve_maps = [&]() noexcept {
+      try {
+        struct Resolved {
+          dev_t dev;
+          ino_t inode;
+          yukiplt::NamedImage image;
+          std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
+        };
+        std::vector<Resolved> resolved;
+        int error = 0;
+        const auto maps = yukizygisk::MapInfo::Scan(&error);
+        if (error != 0)
+          module->plt_registration_failed = true;
+        for (const auto &map : maps) {
+          if (map.offset != 0 || !(map.perms & PROT_READ) || map.inode == 0 ||
+              regexec(&expression, map.path.c_str(), 0, nullptr, 0) != 0)
+            continue;
+          auto found = std::find_if(
+              resolved.begin(), resolved.end(), [&](const auto &entry) {
+                return entry.dev == map.dev && entry.inode == map.inode;
+              });
+          if (found == resolved.end()) {
+            std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
+            auto image = module_plt_image(map.dev, map.inode, pin, &maps,
+                                          &private_images);
+            if (!image) {
+              module->plt_registration_failed = true;
+              LOGE("module %d PLT image: %s errno=%d", module->id,
+                   yukiplt::error_name(image.error().code),
+                   image.error().sys_errno);
+              continue;
+            }
+            resolved.push_back(
+                {map.dev, map.inode, std::move(image.value()), std::move(pin)});
+            found = resolved.end() - 1;
+          }
           module->plt_pending.push_back(
-              {pin->named, pin, symbol, new_func, old_func});
+              {found->image, found->pin, symbol, new_func, old_func});
+        }
+      } catch (...) {
+        module->plt_registration_failed = true;
       }
-    } else {
+    };
+    struct Context {
+      decltype(resolve_maps) *resolve = nullptr;
+      bool visited = false;
+    } context{&resolve_maps};
+    // Keep maps sampling and address resolution in one system-loader window.
+    core_system_iterate_phdr(
+        [](dl_phdr_info *, size_t, void *data) {
+          auto &state = *static_cast<Context *>(data);
+          state.visited = true;
+          (*state.resolve)();
+          return 1;
+        },
+        &context);
+    if (!context.visited)
       module->plt_registration_failed = true;
+    for (const auto &pin : private_images) {
+      const bool already_selected =
+          std::any_of(module->plt_pending.begin() + first_request,
+                      module->plt_pending.end(), [&](const auto &request) {
+                        return same_module_image(request.image, pin->named);
+                      });
+      if (!already_selected &&
+          regexec(&expression, pin->named.path.c_str(), 0, nullptr, 0) == 0)
+        module->plt_pending.push_back(
+            {pin->named, pin, symbol, new_func, old_func});
     }
   } catch (...) {
     module->plt_registration_failed = true;

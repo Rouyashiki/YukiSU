@@ -159,7 +159,8 @@ char *new_strdup(const char *str) {
     ZLOGI("reached ZygoteInit -- VM is up, JNI is now safe");
     hook_zygote_jni();
   }
-  return g_strdup.load() ? g_strdup.load()(str) : nullptr;
+  const auto original = g_strdup.load();
+  return original ? original(str) : nullptr;
 }
 
 bool reset_art_method_fd(void *jit, size_t jit_size, int fd) {

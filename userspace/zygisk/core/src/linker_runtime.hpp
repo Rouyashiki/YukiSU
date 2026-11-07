@@ -68,6 +68,8 @@ private:
 // A stable PHDR copy and an image lease outlive every custom YukiPLT handle.
 struct PrivateImage {
   yukilinker_c_image_id id{};
+  uint64_t device = 0;
+  uint64_t inode = 0;
   yukiplt::NamedImage named;
   std::vector<ElfW(Phdr)> headers;
   LeaseState *lease = nullptr;

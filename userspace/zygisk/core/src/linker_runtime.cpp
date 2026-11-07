@@ -387,6 +387,8 @@ pin_image(const yukilinker_c_image_record &record) {
     }
   }
   auto image = std::make_shared<PrivateImage>();
+  image->device = record.device;
+  image->inode = record.inode;
   image->id = record.id;
   image->lease = acquire(record.id, YUKILINKER_C_LEASE_HOST_BRIDGE);
   if (!image->lease)
@@ -811,16 +813,43 @@ yukiplt::HookResult hook_batch(yukiplt::MapsCache &cache,
   std::vector<yukiplt::FunctionHookRequestEx> selected;
   imports.reserve(count);
   selected.reserve(count);
-  for (size_t i = 0; i < count; ++i) {
-    const yukiplt::FunctionImportSelector selector{
-        {requests[i].symbol}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot};
-    auto found = yukiplt::find_function_import(image.image, selector);
-    if (!found) {
-      failure.error = found.error();
+  bool batch_selected = false;
+  if (count > 1) {
+    std::vector<yukiplt::FunctionHookTarget> targets;
+    targets.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      const yukiplt::FunctionImportSelector selector{
+          {requests[i].symbol}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot};
+      targets.push_back(
+          {image.image,
+           {selector, requests[i].replacement, requests[i].out_original}});
+    }
+    auto plan =
+        yukiplt::build_function_hook_plan(targets.data(), targets.size());
+    if (!plan && plan.error().code == yukiplt::ErrorCode::kOutOfMemory) {
+      failure.error = plan.error();
       return failure;
     }
-    imports.push_back(std::move(found.value()));
-    const uintptr_t slot = imports.back().base.import.slot_address;
+    if (plan) {
+      for (const auto &target : plan.value().targets())
+        imports.push_back(target.selected);
+      batch_selected = true;
+    }
+  }
+  for (size_t i = 0; i < count; ++i) {
+    // Failed plans replay the original request order, including GOT
+    // preconditions.
+    if (!batch_selected) {
+      const yukiplt::FunctionImportSelector selector{
+          {requests[i].symbol}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot};
+      auto found = yukiplt::find_function_import(image.image, selector);
+      if (!found) {
+        failure.error = found.error();
+        return failure;
+      }
+      imports.push_back(std::move(found.value()));
+    }
+    const uintptr_t slot = imports[i].base.import.slot_address;
     if (slot % alignof(uintptr_t))
       return failure;
     // The custom-image lease and Core mapping barrier keep this GOT slot
@@ -829,7 +858,7 @@ yukiplt::HookResult hook_batch(yukiplt::MapsCache &cache,
         __atomic_load_n(reinterpret_cast<uintptr_t *>(slot), __ATOMIC_ACQUIRE);
     if (!original)
       return failure;
-    selected.push_back({yukiplt::exact_function_selector(imports.back()),
+    selected.push_back({yukiplt::exact_function_selector(imports[i]),
                         requests[i].replacement, requests[i].out_original, true,
                         original});
   }

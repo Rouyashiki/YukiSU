@@ -23,13 +23,11 @@ std::shared_ptr<PrivateImage> private_image(dev_t, ino_t, bool *ambiguous) {
   return {};
 }
 std::vector<std::shared_ptr<PrivateImage>> private_images() { return {}; }
-yukiplt::HookResult hook_batch(yukiplt::MapsCache &cache,
-                               const yukiplt::NamedImage &image,
-                               const yukiplt::HookRequest *requests,
-                               size_t count, yukiplt::SlotReport *reports,
-                               yukiplt::OperationDiagnostic *diagnostic) {
-  return yukiplt::hook_batch_nonnull_named_cached(cache, image, requests, count,
-                                                  reports, diagnostic);
-}
+#include "plt_batch.inc"
 } // namespace yukizygisk::linker
 extern "C" pid_t __real_fork() { return fork(); }
+extern "C" int core_system_iterate_phdr(int (*callback)(dl_phdr_info *, size_t,
+                                                        void *),
+                                        void *data) {
+  return dl_iterate_phdr(callback, data);
+}

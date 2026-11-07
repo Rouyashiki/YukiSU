@@ -36,9 +36,13 @@ def build_companion_test(root, build, compiler, flags, runner):
 def build_archive(root, build, compiler, flags, export_lifecycle=False):
     core = root / 'userspace/zygisk/core/src'
     vendor = root / 'userspace/zygisk/third_party/yukiplt'
+    adapter = (core / 'linker_runtime.cpp').read_text()
+    (build / 'plt_batch.inc').write_text(
+        adapter[adapter.index('yukiplt::HookResult hook_batch('):
+                adapter.rindex('} // namespace yukizygisk::linker')])
     common = [*compiler, '-std=c++17', '-O1', '-g', '-fPIC', '-fexceptions',
               '-pthread', '-DYUKIPLT_STATIC=1', *flags,
-              '-I' + str(core), '-I' + str(vendor / 'include'),
+              '-I' + str(core), '-I' + str(build), '-I' + str(vendor / 'include'),
               '-I' + str(vendor.parent / 'yukilinker/include')]
     sources = [*sorted((vendor / 'src').glob('*.cpp')), core / 'plt_lifecycle.cpp',
                core / 'process_maps.cpp', core / 'core_bindings.cpp',
@@ -89,8 +93,14 @@ extern "C" bool fixture_retire_plt() {
 
 def build_tests(root, build, compiler, flags, runner):
     build.mkdir(parents=True, exist_ok=True)
-    build_companion_test(root, build, compiler, flags, runner)
     core = root / 'userspace/zygisk/core/src'
+    maps_test = build / 'process_maps_test'
+    subprocess.run([*compiler, '-std=c++17', '-O1', '-g', *flags,
+                    '-I' + str(core), root / 'userspace/zygisk/tests/process_maps_test.cpp',
+                    core / 'process_maps.cpp', '-Wl,--wrap=fopen',
+                    '-Wl,--wrap=fopen64', '-o', maps_test], check=True)
+    subprocess.run([*runner, maps_test], check=True, timeout=15)
+    build_companion_test(root, build, compiler, flags, runner)
     tests = Path(__file__).parent
     module = (core / 'core.cpp').read_text()
     declarations = module[module.index('struct ModulePltRequest {'):module.index('struct Module {')]

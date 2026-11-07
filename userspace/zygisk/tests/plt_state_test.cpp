@@ -376,6 +376,43 @@ extern "C" int __wrap_clock_gettime(clockid_t clock, timespec *now) {
 int main(int argc, char **argv) {
   CHECK(argc == 2);
   PltFixture fixture(argv[1]);
+  {
+    auto custom = fixture.image();
+    custom.image.instance_token = 71;
+    yukiplt::MapsCache cache;
+    CHECK(cache.capture().ok());
+    void *originals[2]{};
+    yukiplt::HookRequest requests[] = {
+        {"fixture_value", reinterpret_cast<void *>(other_replacement),
+         &originals[0]},
+        {"fixture_second", reinterpret_cast<void *>(other_replacement),
+         &originals[1]}};
+    auto installed = yukizygisk::linker::hook_batch(cache, custom, requests, 2,
+                                                    nullptr, nullptr);
+    CHECK(installed.ok() && fixture.call() == 42 && originals[0] &&
+          originals[1]);
+    CHECK(yukiplt::unhook_cached(cache, installed.handle).ok());
+    const auto imported = yukiplt::find_function_import(
+        custom.image,
+        {{"fixture_value"}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot});
+    CHECK(imported);
+    const auto slot_address = imported.value().base.import.slot_address;
+    write_fixture_slot(slot_address, nullptr);
+    requests[0].out_original = nullptr;
+    requests[1] = {"fixture_missing",
+                   reinterpret_cast<void *>(other_replacement), nullptr};
+    auto failed = yukizygisk::linker::hook_batch(cache, custom, requests, 2,
+                                                 nullptr, nullptr);
+    CHECK(failed.error.code == yukiplt::ErrorCode::kInvalidArgument &&
+          !failed.handle.valid());
+    write_fixture_slot(slot_address, originals[0]);
+    requests[1] = requests[0];
+    failed = yukizygisk::linker::hook_batch(cache, custom, requests, 2, nullptr,
+                                            nullptr);
+    CHECK(failed.error.code == yukiplt::ErrorCode::kInvalidArgument &&
+          !failed.handle.valid());
+    CHECK(fixture.call() == 17);
+  }
   const yukiplt::HookRequest request{"fixture_value",
                                      reinterpret_cast<void *>(replacement),
                                      original.output_address()};
@@ -521,6 +558,13 @@ int main(int argc, char **argv) {
   g_modules.resize(2);
   g_cur = &g_modules[0];
   g_plt_callback_tid.store(gettid());
+  api_plt_hook_register_byname("libplt_target\\.so$", "fixture_value",
+                               reinterpret_cast<void *>(other_replacement),
+                               nullptr);
+  CHECK(!g_cur->plt_registration_failed && g_cur->plt_pending.size() == 1);
+  CHECK(api_plt_hook_commit() && fixture.call() == 42);
+  CHECK(yukiplt::unhook(g_cur->plt_groups.back()->handle).ok());
+  g_cur->plt_groups.clear();
   api_plt_hook_register(fixture.map.dev, fixture.map.inode, nullptr,
                         reinterpret_cast<void *>(other_replacement), nullptr);
   CHECK(!api_plt_hook_commit() && api_plt_hook_commit());
