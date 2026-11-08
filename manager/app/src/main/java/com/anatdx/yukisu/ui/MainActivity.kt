@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -23,6 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -133,6 +137,19 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val snackBarHostState = rememberSnackbarController()
                     val navigationLeaveGuard = remember { NavigationLeaveGuard() }
+                    val context = LocalContext.current
+                    val uriHandler = LocalUriHandler.current
+                    val safeUriHandler = remember(context, uriHandler) {
+                        object : UriHandler {
+                            override fun openUri(uri: String) {
+                                try {
+                                    uriHandler.openUri(uri)
+                                } catch (_: IllegalArgumentException) {
+                                    Toast.makeText(context, R.string.external_link_open_failed, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
                     val predictiveBackEnabled by rememberPredictiveBackEnabled()
                     val currentDestination = navController.currentBackStackEntryAsState().value?.destination
 
@@ -260,6 +277,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     CompositionLocalProvider(
+                        LocalUriHandler provides safeUriHandler,
                         LocalSnackbarHost provides snackBarHostState,
                         LocalNavigationLeaveGuard provides navigationLeaveGuard,
                     ) {

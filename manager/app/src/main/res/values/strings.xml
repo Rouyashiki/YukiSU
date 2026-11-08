@@ -317,6 +317,7 @@
     <string name="grant_root_failed">Failed to grant root!</string>
     <string name="action">Action</string>
     <string name="close">Close</string>
+    <string name="external_link_open_failed" tools:ignore="MissingTranslation">Unable to open link</string>
     <string name="enable_web_debugging">Enable WebView debugging</string>
     <string name="enable_web_debugging_summary">Can be used to debug WebUI. Please enable only when needed</string>
     <string name="home_auth_superkey_tag">SuperKey</string>
