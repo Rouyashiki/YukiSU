@@ -317,6 +317,7 @@ struct ZygiskContext {
   int fork_errno = 0;
   jboolean *child_zygote = nullptr;
   jintArray *fds_to_ignore = nullptr; // app fork only -- the exempt channel
+  bool skip_fd_sanitize = false;
   std::vector<bool> allowed_fds;
   std::vector<int> exempted_fds;
 };
@@ -882,7 +883,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            g_ctx = nullptr;
            return pid;
          })},
-    /* USAP specialize path. */
+    /* Specialize an existing child (USAP or batched app fork). */
     {"nativeSpecializeAppProcess",
      "(II[II[[IILjava/lang/String;Ljava/lang/String;ZLjava/lang/String;"
      "Ljava/lang/String;Z[Ljava/lang/String;[Ljava/lang/String;ZZ)V",
@@ -903,13 +904,18 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            args.whitelisted_data_info_list = &allowlisted_data_info;
            args.mount_data_dirs = &mount_data_dirs;
            args.mount_storage_dirs = &mount_storage_dirs;
+           ZygiskContext ctx;
+           ctx.env = env;
+           ctx.child_zygote = &is_child_zygote;
+           ctx.skip_fd_sanitize = true;
+           g_ctx = &ctx;
            bool run_modules = !is_isolated(uid) && !is_child_zygote;
            const bool can_unmap =
                !is_child_zygote || yz_app_zygote_can_unmap(env, nice_name, uid);
            int decision = forked_decision(true, uid);
            if (decision == 2) // denylist + force mode: do not inject
              run_modules = false;
-           if (run_modules) { // USAP: skip isolated processes
+           if (run_modules) {
              zygisk_load_modules(env);
              zygisk_run_app_pre(&args);
            }
@@ -924,6 +930,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                allowlisted_data_info, mount_data_dirs, mount_storage_dirs);
            if (run_modules)
              zygisk_run_app_post(env, &args);
+           g_ctx = nullptr;
            finish_app_child(env, can_unmap, is_isolated(uid));
          })},
     {"nativeSpecializeAppProcess",
@@ -948,13 +955,18 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            args.mount_data_dirs = &mount_data_dirs;
            args.mount_storage_dirs = &mount_storage_dirs;
            args.mount_sysprop_overrides = &mount_sysprop_overrides;
+           ZygiskContext ctx;
+           ctx.env = env;
+           ctx.child_zygote = &is_child_zygote;
+           ctx.skip_fd_sanitize = true;
+           g_ctx = &ctx;
            bool run_modules = !is_isolated(uid) && !is_child_zygote;
            const bool can_unmap =
                !is_child_zygote || yz_app_zygote_can_unmap(env, nice_name, uid);
            int decision = forked_decision(true, uid);
            if (decision == 2) // denylist + force mode: do not inject
              run_modules = false;
-           if (run_modules) { // USAP: skip isolated processes
+           if (run_modules) {
              zygisk_load_modules(env);
              zygisk_run_app_pre(&args);
            }
@@ -970,6 +982,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                mount_sysprop_overrides);
            if (run_modules)
              zygisk_run_app_post(env, &args);
+           g_ctx = nullptr;
            finish_app_child(env, can_unmap, is_isolated(uid));
          })},
     {"nativeSpecializeAppProcess",
@@ -995,6 +1008,11 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
            args.mount_data_dirs = &mount_data_dirs;
            args.mount_storage_dirs = &mount_storage_dirs;
            args.mount_sysprop_overrides = &mount_sysprop_overrides;
+           ZygiskContext ctx;
+           ctx.env = env;
+           ctx.child_zygote = &is_child_zygote;
+           ctx.skip_fd_sanitize = true;
+           g_ctx = &ctx;
            bool run_modules = !is_isolated(uid) && !is_child_zygote;
            const bool can_unmap =
                !is_child_zygote || yz_app_zygote_can_unmap(env, nice_name, uid);
@@ -1017,6 +1035,7 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
                mount_sysprop_overrides);
            if (run_modules)
              zygisk_run_app_post(env, &args);
+           g_ctx = nullptr;
            finish_app_child(env, can_unmap, is_isolated(uid));
          })},
     /* system_server fork. */
@@ -1462,7 +1481,13 @@ void zygisk_hook_jni_methods(JNIEnv *env, const char *cls,
 }
 
 bool zygisk_exempt_fd(int fd) {
-  if (g_ctx == nullptr || g_ctx->fds_to_ignore == nullptr || fd < 0)
+  if (g_ctx == nullptr || fd < 0)
+    return false;
+  // Existing children do not run the fork path's fd sweep. Their contexts
+  // keep pid == -1 so module-initiated forks still reach the real fork.
+  if (g_ctx->skip_fd_sanitize)
+    return true;
+  if (g_ctx->fds_to_ignore == nullptr)
     return false;
   g_ctx->exempted_fds.push_back(fd);
   return true;

@@ -1,5 +1,6 @@
 // Include the complete production translation unit to drive its internal module
 // ownership and ABI callbacks without an ART process or kernel daemon.
+// NOLINTNEXTLINE(bugprone-suspicious-include)
 #include "core.cpp"
 #include "handoff_control.hpp"
 #include <cassert>
@@ -21,6 +22,7 @@ extern "C" void yz_jni_entry_0();
 extern "C" void *g_yz_jni_targets[];
 extern "C" pid_t __real_fork();
 void fixture_quiesce_unused_hooks();
+void fixture_exempt_fds();
 void fixture_snapshot_fds();
 int fixture_dependency_directory(const char *path);
 void fixture_sanitize_fds(bool app);
@@ -337,6 +339,7 @@ int exercise(const char *directory) {
   control->span = g_self_size;
   const int result = control->adapter_only ? exercise_adapter(directory)
                                            : exercise_ordinary(directory);
+  fixture_exempt_fds();
   fixture_quiesce_unused_hooks();
   g_yz_jni_targets[0] = reinterpret_cast<void *>(retire_fixture);
   control->retire = reinterpret_cast<int (*)(void *)>(yz_jni_entry_0);
