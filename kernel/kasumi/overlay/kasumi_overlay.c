@@ -553,7 +553,7 @@ static KASUMI_NOCFI int kasumi_add_path_entry(const char *src, const char *tgt,
 			flags = KASUMI_VNODE_F_DIR;
 		else if (S_ISCHR(entry->source_mode) &&
 			 !d_inode(source.dentry)->i_rdev) {
-			ret = -EOPNOTSUPP;
+			ret = kasumi_add_hide_rule(src, rule_flags);
 			goto fail;
 		} else if (S_ISCHR(entry->source_mode) ||
 			   S_ISBLK(entry->source_mode) ||
@@ -567,6 +567,8 @@ static KASUMI_NOCFI int kasumi_add_path_entry(const char *src, const char *tgt,
 		flags |= KASUMI_VNODE_F_BYPASS;
 	ret = kasumi_dirhijack_add_shadow(src, &source, ino, flags);
 	path_put(&source);
+	if (!ret)
+		ret = kasumi_forget_hide_rule(src, false);
 	return ret;
 fail:
 	kasumi_entry_release_source(entry);
@@ -804,6 +806,13 @@ KASUMI_NOCFI int kasumi_materialize_merge(const char *src_prefix,
 	if (IS_ERR(f)) {
 		path_put(&path);
 		return PTR_ERR(f);
+	}
+
+	ret = kasumi_forget_hide_rule(src_prefix, true);
+	if (ret) {
+		fput(f);
+		path_put(&path);
+		return ret;
 	}
 
 	mctx.ctx.actor = kasumi_mat_filldir;

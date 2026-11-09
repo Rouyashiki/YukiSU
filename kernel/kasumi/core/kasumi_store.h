@@ -58,6 +58,8 @@ kasumi_spoof_kstat_lookup_by_path(const char *path_str);
 struct kasumi_spoof_kstat_entry *
 kasumi_spoof_kstat_lookup_by_ino(unsigned long ino, unsigned long dev);
 
+int kasumi_add_hide_rule(const char *path, u32 rule_flags);
+int kasumi_forget_hide_rule(const char *path, bool unbind);
 void kasumi_mark_inode_hidden(struct inode *inode);
 void kasumi_clear_inode_flags_for_path(const char *path_str, unsigned int bit);
 // Publishes a captured entry and retires the previous path owner.

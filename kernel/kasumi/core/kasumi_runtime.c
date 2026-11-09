@@ -792,7 +792,8 @@ KASUMI_NOCFI void kasumi_clear_inode_flags_for_path(const char *path_str,
 
 	if (!path_str)
 		return;
-	if (kern_path(path_str, LOOKUP_FOLLOW, &p) != 0)
+	if (kern_path(path_str, bit == AS_FLAGS_KASUMI_HIDE ? 0 : LOOKUP_FOLLOW,
+		      &p) != 0)
 		return;
 	if (p.dentry && d_inode(p.dentry) && d_inode(p.dentry)->i_mapping)
 		clear_bit(bit, &d_inode(p.dentry)->i_mapping->flags);

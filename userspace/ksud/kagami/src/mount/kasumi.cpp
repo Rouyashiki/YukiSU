@@ -77,11 +77,39 @@ struct RuleBatch {
         bool merge;
         int flags = 0;
     };
+    // Payload whiteouts compete by priority; explicit hides remain unconditional.
+    struct Whiteout {
+        std::string path;
+        int flags = 0;
+    };
+    std::map<std::string, Whiteout> whiteouts;
     std::vector<Mapping> mappings;
     std::map<std::string, int> hide;
 };
 
-bool merge_tree_supported(const fs::path& root) {
+bool collect_whiteout(const fs::path& source, const std::string& virtual_path, RuleBatch& batch,
+                      int flags) {
+    std::error_code ec;
+    const bool parent_exists = fs::is_directory(fs::path(virtual_path).parent_path(), ec);
+    if (ec && ec != std::errc::no_such_file_or_directory && ec != std::errc::not_a_directory) {
+        mlog("kasumi: cannot resolve whiteout parent for " + virtual_path + ": " + ec.message(),
+             logging::Level::Error);
+        return false;
+    }
+    // New directories are backed directly by the module tree.
+    const auto path = parent_exists ? virtual_path : resolve_virtual_path(source.string());
+    auto& whiteout = batch.whiteouts[virtual_path];
+    if (whiteout.path != path)
+        whiteout = {};
+    whiteout.path = path;
+    whiteout.flags |= flags;
+    return true;
+}
+
+bool merge_tree_supported(const fs::path& root, const std::string& virtual_root, RuleBatch& batch,
+                          bool& expand) {
+    expand = false;
+    std::vector<std::string> entries;
     bool opaque;
     if (!fsutil::directory_is_opaque(root.string(), opaque))
         return false;
@@ -102,6 +130,21 @@ bool merge_tree_supported(const fs::path& root) {
                  logging::Level::Error);
             return false;
         }
+        const auto relative = it->path().lexically_relative(root);
+        const auto path = resolve_virtual_path((fs::path(virtual_root) / relative).string());
+        if (fs::is_character_file(status)) {
+            struct stat st = {};
+            if (lstat(it->path().c_str(), &st) != 0)
+                return false;
+            if (S_ISCHR(st.st_mode) && major(st.st_rdev) == 0 && minor(st.st_rdev) == 0)
+                expand = true;
+        }
+        entries.push_back(path);
+    }
+    if (!ec && !expand) {
+        batch.whiteouts.erase(virtual_root);
+        for (const auto& path : entries)
+            batch.whiteouts.erase(path);
     }
     return !ec;
 }
@@ -163,21 +206,28 @@ bool compile_tree(const fs::path& source_root, const std::string& virtual_root,
             return false;
         }
         if (S_ISCHR(st.st_mode) && major(st.st_rdev) == 0 && minor(st.st_rdev) == 0) {
-            batch.hide[virtual_path] |= flags;
+            if (!collect_whiteout(source, virtual_path, batch, flags))
+                return false;
             continue;
         }
         if (S_ISDIR(st.st_mode)) {
+            batch.whiteouts.erase(virtual_path);
             std::error_code target_ec;
             if (fs::is_directory(virtual_path, target_ec) && !target_ec &&
                 !rules.has_nested_rule(virtual_path)) {
-                if (!merge_tree_supported(source))
+                bool expand;
+                if (!merge_tree_supported(source, virtual_path, batch, expand))
                     return false;
-                batch.mappings.push_back({virtual_path, source.string(), true, flags});
-                it.disable_recursion_pending();
+                // Resolve whiteout precedence before sending any kernel merge.
+                if (!expand) {
+                    batch.mappings.push_back({virtual_path, source.string(), true, flags});
+                    it.disable_recursion_pending();
+                }
             }
             continue;
         }
-        if (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode)) {
+        if (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode) || S_ISCHR(st.st_mode) ||
+            S_ISBLK(st.st_mode) || S_ISFIFO(st.st_mode)) {
             if (S_ISLNK(st.st_mode)) {
                 std::error_code target_ec;
                 const auto target_status = fs::symlink_status(virtual_path, target_ec);
@@ -193,6 +243,7 @@ bool compile_tree(const fs::path& source_root, const std::string& virtual_root,
                                     .lexically_normal();
                             };
                             if (destination(module_link) == destination(system_link)) {
+                                batch.whiteouts.erase(virtual_path);
                                 mlog("kasumi: preserving matching symlink alias " + virtual_path +
                                      " from " + source.string());
                                 continue;
@@ -208,6 +259,11 @@ bool compile_tree(const fs::path& source_root, const std::string& virtual_root,
                     return false;
                 }
             }
+            batch.whiteouts.erase(virtual_path);
+            std::error_code resolved_error;
+            const auto resolved = fs::canonical(virtual_path, resolved_error);
+            if (!resolved_error)
+                batch.whiteouts.erase(resolved.string());
             batch.mappings.push_back({virtual_path, source.string(), false, flags});
         }
     }
@@ -216,6 +272,52 @@ bool compile_tree(const fs::path& source_root, const std::string& virtual_root,
              logging::Level::Error);
     }
     return !ec;
+}
+
+bool finish_whiteouts(RuleBatch& batch) {
+    std::vector<ModuleRule> omitted;
+    for (const auto& [virtual_path, whiteout] : batch.whiteouts) {
+        if (whiteout.path != virtual_path)
+            omitted.push_back({virtual_path, "none", false});
+    }
+    if (!omitted.empty()) {
+        const detail::RuleIndex excluded(omitted);
+        RuleBatch filtered;
+        for (const auto& mapping : batch.mappings) {
+            std::string path = mapping.path;
+            if (mapping.merge) {
+                std::error_code ec;
+                const auto resolved = fs::canonical(path, ec);
+                if (ec) {
+                    mlog("kasumi: cannot resolve merge target " + path + ": " + ec.message(),
+                         logging::Level::Error);
+                    return false;
+                }
+                path = resolved.string();
+            }
+            if (excluded.effective_rule(path))
+                continue;
+            if (mapping.merge && excluded.has_nested_rule(path)) {
+                // A backing hide cannot mask entries synthesized by another module.
+                if (!compile_tree(mapping.source, path, excluded, filtered,
+                                  (mapping.flags & KSM_RULE_BYPASS_POLICY) != 0))
+                    return false;
+                if (!filtered.whiteouts.empty()) {
+                    mlog(
+                        "kasumi: merge source changed while resolving whiteouts: " + mapping.source,
+                        logging::Level::Error);
+                    return false;
+                }
+            } else {
+                filtered.mappings.push_back(mapping);
+            }
+        }
+        batch.mappings = std::move(filtered.mappings);
+    }
+    for (const auto& [virtual_path, whiteout] : batch.whiteouts) {
+        batch.hide[whiteout.path] |= whiteout.flags;
+    }
+    return true;
 }
 
 bool collect_module_rules(const std::vector<ModuleEntry>& modules, const Config& config,
@@ -250,7 +352,7 @@ bool collect_module_rules(const std::vector<ModuleEntry>& modules, const Config&
                 return false;
         }
     }
-    return true;
+    return finish_whiteouts(batch);
 }
 
 bool collect_legacy_module_hides(std::map<std::string, int>& hides) {
