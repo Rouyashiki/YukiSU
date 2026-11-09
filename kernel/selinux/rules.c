@@ -1144,6 +1144,11 @@ void apply_kernelsu_rules(void)
 	ksu_typeattribute(db, KERNEL_SU_FILE, "mlstrustedobject");
 	ksu_allow(db, ALL, KERNEL_SU_FILE, ALL, ALL);
 
+	/* Loop I/O runs in kernel workers, outside the root caller's domain. */
+	ksu_type(db, "kagami_image", "file_type");
+	ksu_allow(db, "kernel", "kagami_image", "file", "read");
+	ksu_allow(db, "kernel", "kagami_image", "file", "write");
+
 	apply_root_domain_rules(db, KERNEL_SU_DOMAIN);
 	/* Keep explicit legacy custom profiles functional. */
 	apply_root_domain_rules(db, KSU_LEGACY_SU_DOMAIN);

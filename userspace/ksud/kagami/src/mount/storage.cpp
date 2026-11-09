@@ -325,6 +325,11 @@ Handle setup(const Config& config) {
             mlog("storage: erofs image missing (" + erofs_img + "); build it at install time");
             return h;
         }
+        std::string metadata_error;
+        if (!prepare_loop_image(erofs_img, metadata_error)) {
+            mlog("storage: " + metadata_error, logging::Level::Error);
+            return h;
+        }
         if (!run_tool({"mount", "-t", "erofs", "-o", "loop,ro", erofs_img, h.content_dir})) {
             mlog("storage: mount erofs image failed", logging::Level::Error);
             return h;
@@ -393,7 +398,7 @@ Handle setup(const Config& config) {
         return h;
     }
     std::string metadata_error;
-    if (!prepare_private_file(img, metadata_error)) {
+    if (!prepare_loop_image(img, metadata_error)) {
         mlog("storage: " + metadata_error, logging::Level::Error);
         return h;
     }

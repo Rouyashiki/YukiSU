@@ -17,6 +17,7 @@ bool marker_matches_current_boot(const std::filesystem::path& path);
 bool write_boot_marker(const std::filesystem::path& path, const std::string& detail = {});
 bool prepare_private_directory(const std::filesystem::path& path, std::string& error);
 bool prepare_private_file(const std::filesystem::path& path, std::string& error);
+bool prepare_loop_image(const std::filesystem::path& path, std::string& error);
 bool prepare_runtime(std::string& error);
 
 }  // namespace kagami

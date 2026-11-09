@@ -64,7 +64,8 @@ bool write_boot_marker(const fs::path& path, const std::string& detail) {
 }
 
 namespace {
-bool metadata(const fs::path& path, mode_t mode, std::string& error) {
+bool metadata(const fs::path& path, mode_t mode, std::string& error,
+              [[maybe_unused]] const char* context = "u:object_r:adb_data_file:s0") {
     struct stat st{};
     if (lstat(path.c_str(), &st) != 0) {
         error = "lstat " + path.string() + ": " + std::strerror(errno);
@@ -80,12 +81,12 @@ bool metadata(const fs::path& path, mode_t mode, std::string& error) {
         return false;
     }
 #if defined(__ANDROID__)
-    constexpr char context[] = "u:object_r:adb_data_file:s0";
     char current[256]{};
     const ssize_t length =
         lgetxattr(path.c_str(), "security.selinux", current, sizeof(current) - 1);
     if (length < 0 || std::strcmp(current, context) != 0) {
-        if (lsetxattr(path.c_str(), "security.selinux", context, sizeof(context), 0) != 0) {
+        if (lsetxattr(path.c_str(), "security.selinux", context, std::strlen(context) + 1, 0) !=
+            0) {
             error = "label " + path.string() + ": " + std::strerror(errno);
             return false;
         }
@@ -129,6 +130,20 @@ bool prepare_private_file(const fs::path& path, std::string& error) {
     return metadata(path, 0600, error);
 }
 
+bool prepare_loop_image(const fs::path& path, std::string& error) {
+    error.clear();
+    struct stat st{};
+    if (lstat(path.c_str(), &st) != 0) {
+        error = "lstat " + path.string() + ": " + std::strerror(errno);
+        return false;
+    }
+    if (!S_ISREG(st.st_mode) || st.st_nlink != 1) {
+        error = "not a private loop image: " + path.string();
+        return false;
+    }
+    return metadata(path, 0600, error, "u:object_r:kagami_image:s0");
+}
+
 bool prepare_runtime(std::string& error) {
     error.clear();
     if (!prepare_private_directory(runtime_data_dir(), error) ||
@@ -139,7 +154,7 @@ bool prepare_runtime(std::string& error) {
     for (const auto* name :
          {"config.json", "config.json.lock", "module_mode.json", "module_bypass.json",
           "module_rules.json", "user_hide_rules.json", "hide_bypass.json", "kagamid.pid",
-          "kagamid.sock", "kagamid.lock", "kagamid.requests.lock", "mirror.img", "mirror.erofs"}) {
+          "kagamid.sock", "kagamid.lock", "kagamid.requests.lock"}) {
         if (!prepare_private_file(runtime_data_dir() / name, error))
             return false;
     }
