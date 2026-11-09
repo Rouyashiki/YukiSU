@@ -129,9 +129,13 @@ KSU_RUNNER_CFLAGS := $(CLANG_FLAGS) -std=gnu11 -Os -Wall \
 	-fno-asynchronous-unwind-tables -fno-unwind-tables \
 	-ffunction-sections -fdata-sections
 
+# PID 1 must be able to load the runner with 4K, 16K or 64K pages.
+KSU_RUNNER_LDFLAGS := -static -nostdlib -e _start --gc-sections -s \
+	-z max-page-size=0x10000 -z noseparate-code
+
 quiet_cmd_ksu_runner = RUNNER  $@
       cmd_ksu_runner = $(CC) $(KSU_RUNNER_CFLAGS) -c -o $@.o $< && \
-		$(LD) -static -nostdlib -e _start --gc-sections -s -o $@ $@.o && \
+		$(LD) $(KSU_RUNNER_LDFLAGS) -o $@ $@.o && \
 		rm -f $@.o
 
 $(obj)/preinit/runner.elf: $(KSU_KERNEL_DIR)/preinit/runner/runner.c \
