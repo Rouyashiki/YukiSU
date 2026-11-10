@@ -117,13 +117,6 @@ static bool ksu_hooks_started;
 
 static void ksu_hook_init(void)
 {
-	int ret = ksu_syscall_hook_init();
-
-	ksu_hooks_started = false;
-	if (ret) {
-		pr_err("ksu: syscall_hook_init failed: %d\n", ret);
-		return;
-	}
 	ksu_syscall_hook_manager_init();
 	ksu_hooks_started = true;
 }
@@ -203,6 +196,14 @@ int __init kernelsu_init(void)
 		}
 		pr_warn("uts_view: unavailable: %d\n", ret);
 	}
+	ret = ksu_syscall_hook_init();
+	if (ret) {
+		pr_err("ksu: syscall_hook_init failed: %d\n", ret);
+		ksu_uts_view_exit();
+		put_cred(ksu_cred);
+		ksu_cred = NULL;
+		return ret;
+	}
 	ksu_module_blacklist_init();
 	ksu_feature_init();
 	ksu_hide_bootloader_init();
@@ -243,11 +244,6 @@ int __init kernelsu_init(void)
 		 */
 		escape_to_root_for_init();
 
-		if (!getenforce()) {
-			pr_info("Permissive SELinux, enforcing\n");
-			setenforce(true);
-		}
-
 		ksu_allowlist_init();
 		ksu_load_allow_list();
 
@@ -267,6 +263,11 @@ int __init kernelsu_init(void)
 		track_throne(false);
 
 		ksu_feature_apply_forced();
+
+		if (!getenforce()) {
+			pr_info("Permissive SELinux, enforcing\n");
+			setenforce(true);
+		}
 	} else {
 		ksu_throne_tracker_init();
 		ksu_ksud_init();

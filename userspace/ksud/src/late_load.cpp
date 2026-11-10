@@ -129,28 +129,8 @@ void restart_manager(const std::string& package_name) {
     (void)exec_command({"am", "start", "-n", activity});
 }
 
-bool run_finalizer_command(const std::vector<std::string>& args, const char* prefix) {
-    const auto result = exec_command(args);
-    if (result.exit_code == 0) {
-        return true;
-    }
-
-    LOGE("%s failed: %s", prefix, args.front().c_str());
-    if (!result.stdout_str.empty()) {
-        LOGE("stdout: %s", result.stdout_str.c_str());
-    }
-    if (!result.stderr_str.empty()) {
-        LOGE("stderr: %s", result.stderr_str.c_str());
-    }
-    return false;
-}
-
 void run_post_magica_cleanup() {
     LOGI("Running post-magica finalization after late-load");
-
-    if (!run_finalizer_command({"setenforce", "1"}, "late-load post-magica")) {
-        LOGE("Failed to re-enable SELinux enforcing after Magica late-load");
-    }
 
     if (magica::disable_adb_root() != 0) {
         LOGE("Failed to restore adb properties after Magica late-load");
@@ -165,6 +145,8 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
     case ProcessDaemonizeResult::Parent:
         return 0;
     case ProcessDaemonizeResult::Error:
+        if (post_magica)
+            run_post_magica_cleanup();
         return 1;
     case ProcessDaemonizeResult::Daemon:
         break;
