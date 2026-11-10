@@ -39,7 +39,10 @@ var softRebootStatus by mutableStateOf(SoftRebootStatus())
 
 private suspend fun querySoftRebootStatus(): SoftRebootStatus = withContext(Dispatchers.IO) {
     runCatching {
-        val root = JSONObject(ksudReadString("soft-reboot-status --json"))
+        check(Natives.isManager)
+        val shell = getRootShell()
+        check(shell.isRoot)
+        val root = JSONObject(ksudReadString("soft-reboot-status --json", shell))
         check(root.getInt("interface_version") == 1)
         val last = root.optJSONObject("last") ?: JSONObject()
         SoftRebootStatus(
