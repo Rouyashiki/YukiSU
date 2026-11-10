@@ -38,6 +38,15 @@ add_test(NAME ksucalls_probe COMMAND ksucalls_probe_test)
 set_tests_properties(late_load_cli kernelsu_loader ksucalls_sigsys ksucalls_probe
     PROPERTIES TIMEOUT 20)
 
+add_executable(kmi_detection_test ../kmi_detection_test.cpp
+    ${KSUD_ROOT}/src/boot/boot_patch.cpp ${KSUD_ROOT}/src/utils.cpp)
+target_include_directories(kmi_detection_test PRIVATE "${KSUD_ROOT}/../.."
+    "${KSUD_ROOT}/third_party/mbedtls/include")
+target_link_options(kmi_detection_test PRIVATE -Wl,--wrap=open -Wl,--wrap=opendir
+    -Wl,--wrap=uname)
+add_test(NAME kmi_detection COMMAND kmi_detection_test)
+set_tests_properties(kmi_detection PROPERTIES TIMEOUT 20)
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(LibLZMA REQUIRED)
 find_package(ZLIB REQUIRED)

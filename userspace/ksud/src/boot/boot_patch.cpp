@@ -1940,29 +1940,30 @@ std::string read_kernel_release_from_sysfs() {
 }
 
 std::string parse_kmi_from_release(const std::string& full_version) {
-    // Extract major.minor (e.g. "6.6")
-    const size_t dot1 = full_version.find('.');
-    if (dot1 == std::string::npos)
+    if (const auto kmi = parse_kmi_string(full_version))
+        return *kmi;
+
+    DIR* dir = opendir("/vendor/lib/modules");
+    if (!dir)
         return "";
-    size_t dot2 = full_version.find('.', dot1 + 1);
-    if (dot2 == std::string::npos)
-        dot2 = full_version.length();
-
-    std::string major_minor = full_version.substr(0, dot2);
-
-    // Try to find android version (e.g. "android15")
-    const size_t android_pos = full_version.find("-android");
-    if (android_pos != std::string::npos) {
-        const size_t ver_start = android_pos + 8;
-        size_t ver_end = full_version.find('-', ver_start);
-        if (ver_end == std::string::npos)
-            ver_end = full_version.length();
-
-        const std::string android_ver = full_version.substr(ver_start, ver_end - ver_start);
-        return "android" + android_ver + "-" + major_minor;
+    std::string module;
+    while (const auto* entry = readdir(dir)) {
+        if (fs::path(entry->d_name).extension() == ".ko") {
+            module = std::string("/vendor/lib/modules/") + entry->d_name;
+            break;
+        }
     }
+    closedir(dir);
+    if (module.empty())
+        return "";
 
-    return major_minor;
+    const auto output = exec_command({"modinfo", module});
+    std::string kmi;
+    for_each_line(output.stdout_str, [&kmi](std::string_view line) {
+        if (kmi.empty() && line.rfind("vermagic", 0) == 0)
+            kmi = parse_kmi_string(line).value_or("");
+    });
+    return kmi;
 }
 
 std::string read_effective_kernel_release() {
