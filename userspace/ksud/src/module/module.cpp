@@ -1302,8 +1302,8 @@ int prune_modules() {
         std::error_code error;
         const bool marked = std::filesystem::exists(module / REMOVE_FILE_NAME, error);
         if (error) {
-            LOGE("Failed to inspect module removal flag: %s", error.message().c_str());
-            return 1;
+            LOGW("Failed to inspect module removal flag: %s", error.message().c_str());
+            continue;
         }
         if (marked)
             removed.emplace_back(
@@ -1332,12 +1332,11 @@ int prune_modules() {
         std::filesystem::remove_all(std::string(MODULE_CONFIG_DIR) + module_id, error);
         if (error) {
             LOGW("Failed to remove config for %s: %s", module_id.c_str(), error.message().c_str());
-            return 1;
         }
         std::filesystem::remove_all(module, error);
         if (error) {
             LOGW("Failed to remove module %s: %s", module_id.c_str(), error.message().c_str());
-            return 1;
+            continue;
         }
         LOGI("Removed module %s", module_id.c_str());
     }
