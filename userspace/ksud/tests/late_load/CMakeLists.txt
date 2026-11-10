@@ -80,3 +80,12 @@ target_link_libraries(asset_data_test PRIVATE LibLZMA::LibLZMA ZLIB::ZLIB)
 target_link_options(asset_data_test PRIVATE -Wl,--wrap=mbedtls_sha256)
 add_test(NAME asset_data COMMAND asset_data_test "${ASSET_FIXTURE}")
 set_tests_properties(asset_data PROPERTIES TIMEOUT 20)
+
+add_executable(active_module_policy_test ../active_module_policy_test.cpp
+    ${KSUD_ROOT}/src/module/module.cpp ${KSUD_ROOT}/src/utils.cpp)
+target_include_directories(active_module_policy_test PRIVATE "${KSUD_ROOT}/../..")
+target_compile_definitions(active_module_policy_test PRIVATE RESETPROP_ALONE_AVAILABLE=1)
+target_link_options(active_module_policy_test PRIVATE -Wl,--wrap=open -Wl,--wrap=stat
+    -Wl,--wrap=opendir)
+add_test(NAME active_module_policy COMMAND active_module_policy_test)
+set_tests_properties(active_module_policy PROPERTIES TIMEOUT 20)

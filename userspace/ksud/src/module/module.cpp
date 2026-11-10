@@ -1748,8 +1748,8 @@ int load_sepolicy_rule() {
 
         const std::string module_path = std::string(MODULE_DIR) + entry->d_name;
 
-        // Skip disabled modules
-        if (file_exists(module_path + "/" + DISABLE_FILE_NAME))
+        if (file_exists(module_path + "/" + DISABLE_FILE_NAME) ||
+            file_exists(module_path + "/" + REMOVE_FILE_NAME))
             continue;
 
         const std::string rule_file = module_path + "/sepolicy.rule";
@@ -1805,8 +1805,8 @@ int load_system_prop() {
 
         const std::string module_path = std::string(MODULE_DIR) + entry->d_name;
 
-        // Skip disabled modules
-        if (file_exists(module_path + "/" + DISABLE_FILE_NAME))
+        if (file_exists(module_path + "/" + DISABLE_FILE_NAME) ||
+            file_exists(module_path + "/" + REMOVE_FILE_NAME))
             continue;
 
         const std::string prop_file = module_path + "/system.prop";
