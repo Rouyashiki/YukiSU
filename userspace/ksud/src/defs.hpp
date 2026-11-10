@@ -20,6 +20,7 @@ constexpr auto EMULATED_SOFT_REBOOT_TIMEOUT = std::chrono::seconds(5);
 // Version info
 constexpr const char* KSUD_VERSION = "1.0.0";
 constexpr int KSUD_VERSION_CODE = 10000;
+constexpr const char* DEFAULT_PACKAGE_NAME = "com.anatdx.yukisu";
 extern const char* const VERSION_CODE;
 extern const char* const VERSION_NAME;
 

@@ -598,14 +598,17 @@ int cmd_flash_new(const std::vector<std::string>& args, const CliArguments& cli)
 }
 
 int cmd_late_load(const CliArguments& cli) {
+    const std::string package_name =
+        cli.has("--package-name") ? cli.value("--package-name") : DEFAULT_PACKAGE_NAME;
     if (cli.has("--magica")) {
         uint32_t port = 0;
         if (!parse_uint32(cli.value("--magica"), &port) || port == 0 || port > 65535)
             return terminal::usage_error("invalid Magica port: expected 1 through 65535",
                                          "ksud late-load --magica [PORT] [--allow-shell]");
-        return magica::run(static_cast<uint16_t>(port), cli.has("--allow-shell"));
+        return magica::run(static_cast<uint16_t>(port), package_name, cli.has("--allow-shell"));
     }
-    return late_load::run(cli.has("--post-magica"), cli.has("--allow-shell"), cli.value("--kmi"));
+    return late_load::run(package_name, cli.has("--post-magica"), cli.has("--allow-shell"),
+                          cli.value("--kmi"));
 }
 
 }  // namespace

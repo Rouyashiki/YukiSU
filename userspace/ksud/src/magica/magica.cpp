@@ -207,7 +207,7 @@ bool connect_to_adbd(AdbClient* client, uint16_t port) {
 
 }  // namespace
 
-int run(uint16_t port, bool allow_shell) {
+int run(uint16_t port, const std::string& package_name, bool allow_shell) {
     LOGI("Magica bootstrap triggered on tcp:%u", port);
 
     if (!enable_adb_root(port)) {
@@ -228,7 +228,14 @@ int run(uint16_t port, bool allow_shell) {
     }
     exe_path[static_cast<size_t>(len)] = '\0';
 
-    std::string command = std::string(exe_path.data()) + " late-load --post-magica";
+    const auto quote = [](const std::string& value) {
+        std::string result = "'";
+        for (const char ch : value)
+            result += ch == '\'' ? "'\\''" : std::string(1, ch);
+        return result + "'";
+    };
+    std::string command =
+        quote(exe_path.data()) + " late-load --post-magica --package-name " + quote(package_name);
     if (allow_shell) {
         command += " --allow-shell";
     }

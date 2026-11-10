@@ -31,7 +31,6 @@ namespace ksud::late_load {
 
 namespace {
 
-constexpr const char* kManagerPackage = "com.anatdx.yukisu";
 constexpr const char* kLateLoadTmpCandidates[] = {
     "/dev/kernelsu_XXXXXX",
     "/data/local/tmp/kernelsu_XXXXXX",
@@ -123,9 +122,10 @@ void run_stage_scripts(const std::string& stage, ScriptWait wait) {
     exec_stage_script(stage, wait);
 }
 
-void restart_manager() {
-    const std::string activity = std::string(kManagerPackage) + "/.ui.MainActivity";
-    (void)exec_command({"am", "force-stop", kManagerPackage});
+void restart_manager(const std::string& package_name) {
+    const std::string activity = package_name + "/com.anatdx.yukisu.ui.MainActivity";
+    LOGI("late-load: restarting manager %s", package_name.c_str());
+    (void)exec_command({"am", "force-stop", package_name});
     (void)exec_command({"am", "start", "-n", activity});
 }
 
@@ -159,7 +159,8 @@ void run_post_magica_cleanup() {
 
 }  // namespace
 
-int run(bool post_magica, bool allow_shell, const std::string& kmi) {
+int run(const std::string& package_name, bool post_magica, bool allow_shell,
+        const std::string& kmi) {
     switch (daemonize_process(false)) {
     case ProcessDaemonizeResult::Parent:
         return 0;
@@ -170,7 +171,7 @@ int run(bool post_magica, bool allow_shell, const std::string& kmi) {
     }
 
     LOGI("late-load command triggered");
-    const auto execute = [allow_shell, &kmi]() -> int {
+    const auto execute = [allow_shell, &kmi, &package_name]() -> int {
         if (!is_kernelsu_loaded() && !extract_and_load_kernelsu(allow_shell, kmi)) {
             return 1;
         }
@@ -253,7 +254,7 @@ int run(bool post_magica, bool allow_shell, const std::string& kmi) {
         on_services();
         on_boot_completed();
 
-        restart_manager();
+        restart_manager(package_name);
 
         return 0;
     };
