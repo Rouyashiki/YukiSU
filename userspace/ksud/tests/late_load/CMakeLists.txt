@@ -89,3 +89,9 @@ target_link_options(active_module_policy_test PRIVATE -Wl,--wrap=open -Wl,--wrap
     -Wl,--wrap=opendir -Wl,--wrap=readdir)
 add_test(NAME active_module_policy COMMAND active_module_policy_test)
 set_tests_properties(active_module_policy PROPERTIES TIMEOUT 20)
+
+add_executable(restorecon_test ../restorecon_test.cpp ${KSUD_ROOT}/src/core/restorecon.cpp)
+target_include_directories(restorecon_test PRIVATE "${KSUD_ROOT}/../..")
+target_link_options(restorecon_test PRIVATE -Wl,--wrap=lgetxattr -Wl,--wrap=lsetxattr)
+add_test(NAME restorecon COMMAND restorecon_test)
+set_tests_properties(restorecon PROPERTIES TIMEOUT 20)

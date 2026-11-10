@@ -3,6 +3,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <vector>
 #include "../defs.hpp"
 #include "../log.hpp"
@@ -22,14 +23,22 @@ bool lsetfilecon(const fs::path& path, const std::string& con) {
     return true;
 }
 
-std::string lgetfilecon(const fs::path& path) {
+namespace {
+
+std::optional<std::string> read_file_context(const fs::path& path) {
     std::array<char, 256> buf{};
     const ssize_t len = lgetxattr(path.c_str(), SELINUX_XATTR, buf.data(), buf.size() - 1);
     if (len < 0) {
-        return "";
+        return std::nullopt;
     }
     buf[static_cast<size_t>(len)] = '\0';
-    return {buf.data()};
+    return std::string(buf.data());
+}
+
+}  // namespace
+
+std::string lgetfilecon(const fs::path& path) {
+    return read_file_context(path).value_or("");
 }
 
 bool setsyscon(const fs::path& path) {
@@ -42,10 +51,12 @@ bool restore_syscon(const fs::path& dir) {
         return !ec;
     }
 
+    if (!setsyscon(dir))
+        return false;
     for (auto it = fs::recursive_directory_iterator(dir, ec);
          it != fs::recursive_directory_iterator() && !ec; it.increment(ec)) {
         if (!setsyscon(it->path())) {
-            LOGW("Failed to restore context for %s", it->path().c_str());
+            return false;
         }
     }
     if (ec) {
@@ -61,19 +72,18 @@ bool restore_syscon_if_unlabeled(const fs::path& dir) {
         return !ec;
     }
 
+    const auto restore = [](const fs::path& path) {
+        const auto con = read_file_context(path);
+        if (path == DAEMON_PATH)
+            return con == KSU_CON || lsetfilecon(path, KSU_CON);
+        return !con || (!con->empty() && *con != UNLABEL_CON) || lsetfilecon(path, SYSTEM_CON);
+    };
+    if (!restore(dir))
+        return false;
     for (auto it = fs::recursive_directory_iterator(dir, ec);
          it != fs::recursive_directory_iterator() && !ec; it.increment(ec)) {
-        const std::string con = lgetfilecon(it->path());
-        if (it->path() == DAEMON_PATH) {
-            if (con != KSU_CON && !lsetfilecon(it->path(), KSU_CON))
-                LOGW("Failed to migrate daemon context for %s", it->path().c_str());
-            continue;
-        }
-        if (con.empty() || con == UNLABEL_CON) {
-            if (!lsetfilecon(it->path(), SYSTEM_CON)) {
-                LOGW("Failed to restore context for %s", it->path().c_str());
-            }
-        }
+        if (!restore(it->path()))
+            return false;
     }
     if (ec) {
         LOGE("Error walking directory %s: %s", dir.c_str(), ec.message().c_str());
