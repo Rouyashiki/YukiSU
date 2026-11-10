@@ -6,6 +6,7 @@
 #include "../utils.hpp"
 
 #include <dirent.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <algorithm>
 #include <array>
@@ -295,8 +296,6 @@ int module_config_handle(const CliArguments& cli) {
 }
 
 void clear_all_temp_configs() {
-    // Clear all temporary module configs
-    // This is called during post-fs-data to clean up temp configs from previous boot
     DIR* dir = opendir(MODULE_CONFIG_DIR);
     if (!dir) {
         return;
@@ -306,11 +305,12 @@ void clear_all_temp_configs() {
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
+        const std::string config_dir = std::string(MODULE_CONFIG_DIR) + entry->d_name;
+        struct stat status{};
+        if (stat(config_dir.c_str(), &status) != 0 || !S_ISDIR(status.st_mode))
             continue;
 
-        const std::string temp_config =
-            std::string(MODULE_CONFIG_DIR) + entry->d_name + "/" + TEMP_CONFIG_NAME;
+        const std::string temp_config = config_dir + "/" + TEMP_CONFIG_NAME;
         if (access(temp_config.c_str(), F_OK) == 0) {
             unlink(temp_config.c_str());
         }

@@ -56,6 +56,14 @@ extern "C" DIR* __wrap_opendir(const char* path) {
     return __real_opendir(redirect(path).c_str());
 }
 
+extern "C" dirent* __real_readdir(DIR*);
+extern "C" dirent* __wrap_readdir(DIR* dir) {
+    auto* entry = __real_readdir(dir);
+    if (entry)
+        entry->d_type = DT_UNKNOWN;
+    return entry;
+}
+
 int main() {
     char directory[] = "/tmp/yukisu-active-modules-XXXXXX";
     assert(mkdtemp(directory));

@@ -86,6 +86,6 @@ add_executable(active_module_policy_test ../active_module_policy_test.cpp
 target_include_directories(active_module_policy_test PRIVATE "${KSUD_ROOT}/../..")
 target_compile_definitions(active_module_policy_test PRIVATE RESETPROP_ALONE_AVAILABLE=1)
 target_link_options(active_module_policy_test PRIVATE -Wl,--wrap=open -Wl,--wrap=stat
-    -Wl,--wrap=opendir)
+    -Wl,--wrap=opendir -Wl,--wrap=readdir)
 add_test(NAME active_module_policy COMMAND active_module_policy_test)
 set_tests_properties(active_module_policy PROPERTIES TIMEOUT 20)

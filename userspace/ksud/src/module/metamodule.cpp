@@ -4,8 +4,8 @@
 #include "../log.hpp"
 #include "module.hpp"
 
-#include <dirent.h>
 #include <sys/stat.h>
+#include <filesystem>
 
 namespace ksud {
 
@@ -16,18 +16,13 @@ bool file_exists(const std::string& path) {
 }
 
 std::string get_metamodule_module_path(std::string* module_id_out = nullptr) {
-    const std::string module_id = get_metamodule_id();
-    if (module_id.empty()) {
-        return "";
-    }
-
-    std::string module_path = std::string(MODULE_DIR) + module_id;
-    if (!file_exists(module_path)) {
+    std::string module_path = get_metamodule_path();
+    if (module_path.empty()) {
         return "";
     }
 
     if (module_id_out != nullptr) {
-        *module_id_out = module_id;
+        *module_id_out = std::filesystem::path(module_path).filename().string();
     }
     return module_path;
 }

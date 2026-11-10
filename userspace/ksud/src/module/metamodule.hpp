@@ -7,6 +7,7 @@ namespace ksud {
 struct ScriptWait;
 
 // Metamodule support
+std::string get_metamodule_path();
 int metamodule_init();
 int metamodule_exec_stage_script(const std::string& stage, ScriptWait wait,
                                  std::string* error = nullptr);

@@ -116,6 +116,11 @@ bool file_exists(const std::string& path) {
     return stat(path.c_str(), &st) == 0;
 }
 
+bool is_module_directory(const std::string& path) {
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
 bool has_rc_extension(const std::filesystem::path& path) {
     return path.extension() == ".rc";
 }
@@ -338,11 +343,11 @@ std::string get_metamodule_path_impl() {
         if (entry->d_name[0] == '.') {
             continue;
         }
-        if (entry->d_type != DT_DIR) {
+        const std::string module_path = std::string(MODULE_DIR) + entry->d_name;
+        if (!is_module_directory(module_path)) {
             continue;
         }
 
-        const std::string module_path = std::string(MODULE_DIR) + entry->d_name;
         const auto props = parse_module_prop(module_path + "/module.prop");
         if (is_metamodule(props)) {
             closedir(dir);
@@ -658,6 +663,10 @@ void apply_common_script_env(const CommonScriptEnv& env, const char* module_id,
 
 std::string get_metamodule_id() {
     return get_metamodule_id_impl();
+}
+
+std::string get_metamodule_path() {
+    return get_metamodule_path_impl();
 }
 
 namespace {
@@ -1154,11 +1163,11 @@ void collect_module_infos(const std::string& root_dir, bool pending_update,
         if (entry->d_name[0] == '.') {
             continue;
         }
-        if (entry->d_type != DT_DIR) {
+        const std::string module_path = root_dir + entry->d_name;
+        if (!is_module_directory(module_path)) {
             continue;
         }
 
-        const std::string module_path = root_dir + entry->d_name;
         ModuleInfo info;
         if (!load_module_info(module_path, entry->d_name, pending_update, info)) {
             continue;
@@ -1260,10 +1269,8 @@ std::optional<std::vector<std::filesystem::path>> module_directories() {
     for (; !error && entry != std::filesystem::directory_iterator{}; entry.increment(error)) {
         if (entry->path().filename().string().front() == '.')
             continue;
-        const auto status = entry->symlink_status(error);
-        if (error)
-            break;
-        if (std::filesystem::is_directory(status))
+        std::error_code status_error;
+        if (entry->is_directory(status_error))
             modules.push_back(entry->path());
     }
     if (error) {
@@ -1346,7 +1353,7 @@ int disable_all_modules() {
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
+        if (!is_module_directory(std::string(MODULE_DIR) + entry->d_name))
             continue;
 
         module_disable(entry->d_name);
@@ -1368,10 +1375,10 @@ int handle_updated_modules() {
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
+        const std::string src = update_dir + entry->d_name;
+        if (!is_module_directory(src))
             continue;
 
-        const std::string src = update_dir + entry->d_name;
         const std::string dst = std::string(MODULE_DIR) + entry->d_name;
         const bool disabled = file_exists(dst + "/" + DISABLE_FILE_NAME);
         const bool removed = file_exists(dst + "/" + REMOVE_FILE_NAME);
@@ -1669,19 +1676,20 @@ int exec_stage_script(const std::string& stage, ScriptWait wait, std::string* er
     }
     int result = 0;
 
-    const std::string metamodule_id = get_metamodule_id_impl();
+    std::error_code path_error;
+    const auto metamodule_path = std::filesystem::canonical(get_metamodule_path_impl(), path_error);
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
-            continue;
-
         const std::string module_id = entry->d_name;
-        if (!metamodule_id.empty() && module_id == metamodule_id)
+        const std::string module_path = std::string(MODULE_DIR) + module_id;
+        if (!is_module_directory(module_path))
             continue;
 
-        const std::string module_path = std::string(MODULE_DIR) + module_id;
+        if (!metamodule_path.empty() &&
+            std::filesystem::canonical(module_path, path_error) == metamodule_path && !path_error)
+            continue;
 
         // Skip disabled modules
         if (file_exists(module_path + "/" + DISABLE_FILE_NAME))
@@ -1743,10 +1751,9 @@ int load_sepolicy_rule() {
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
-            continue;
-
         const std::string module_path = std::string(MODULE_DIR) + entry->d_name;
+        if (!is_module_directory(module_path))
+            continue;
 
         if (file_exists(module_path + "/" + DISABLE_FILE_NAME) ||
             file_exists(module_path + "/" + REMOVE_FILE_NAME))
@@ -1800,10 +1807,9 @@ int load_system_prop() {
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
-            continue;
-
         const std::string module_path = std::string(MODULE_DIR) + entry->d_name;
+        if (!is_module_directory(module_path))
+            continue;
 
         if (file_exists(module_path + "/" + DISABLE_FILE_NAME) ||
             file_exists(module_path + "/" + REMOVE_FILE_NAME))
@@ -1880,11 +1886,10 @@ std::map<std::string, std::vector<std::string>> get_managed_features() {
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
             continue;
-        if (entry->d_type != DT_DIR)
-            continue;
-
         const std::string module_id = entry->d_name;
         const std::string module_path = std::string(MODULE_DIR) + module_id;
+        if (!is_module_directory(module_path))
+            continue;
 
         // Check if module is active (not disabled/removed)
         if (file_exists(module_path + "/disable"))
