@@ -193,6 +193,8 @@ int main() {
     };
     reset(0);
     assert(load() && calls == 1);
+    reset(0);
+    assert(ksud::kernelsu_loader::load_module(fixture(), "allow_shell=1") && calls == 1);
     const std::string required = "6.12.38-android16 SMP preempt mod_unload aarch64";
     const std::string mismatch =
         "3,42,123,-;kernelsu: version magic 'old' should be '" + required + "'\n";

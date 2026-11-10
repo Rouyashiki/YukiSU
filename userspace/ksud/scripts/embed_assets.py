@@ -212,6 +212,35 @@ bool get_asset(const std::string& name, const uint8_t*& data, size_t& size) {
     return false;
 }
 
+std::optional<std::vector<uint8_t>> get_asset_data(const std::string& name) {
+    for (const auto& entry : asset_registry) {
+        if (entry.name == nullptr) break;
+        if (name != entry.name) continue;
+
+        std::vector<uint8_t> data(entry.original_size == 0 ? 1 : entry.original_size);
+        bool ok;
+        if (entry.codec == AssetCodec::SolidXz) {
+            ok = yukisu_unpack_xz_range_to_buffer(entry.data, entry.size, entry.offset,
+                entry.original_size, entry.pack_original_size, data.data()) == 0;
+        } else {
+            uLongf size = data.size();
+            ok = uncompress(data.data(), &size, entry.data, entry.size) == Z_OK &&
+                 size == entry.original_size;
+        }
+        data.resize(entry.original_size);
+        if (ok && entry.sha256 != nullptr) {
+            std::array<unsigned char, 32> digest{};
+            ok = mbedtls_sha256(data.data(), data.size(), digest.data(), 0) == 0 &&
+                 memcmp(digest.data(), entry.sha256, digest.size()) == 0;
+        }
+        if (ok) return data;
+        LOGE("Asset extraction or verification failed for %s", name.c_str());
+        return std::nullopt;
+    }
+    LOGE("Asset not found: %s", name.c_str());
+    return std::nullopt;
+}
+
 static bool file_sha256_matches(const std::string& path, const unsigned char* expected) {
     const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) return false;

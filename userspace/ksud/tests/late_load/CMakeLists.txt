@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(ksud_late_load_tests LANGUAGES CXX)
+project(ksud_late_load_tests LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(-include linux/types.h)
+add_compile_options(-UNDEBUG -include linux/types.h -ffunction-sections -fdata-sections)
+add_link_options(-Wl,--gc-sections)
 enable_testing()
 set(KSUD_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
@@ -36,3 +37,32 @@ target_link_options(ksucalls_probe_test PRIVATE
 add_test(NAME ksucalls_probe COMMAND ksucalls_probe_test)
 set_tests_properties(late_load_cli kernelsu_loader ksucalls_sigsys ksucalls_probe
     PROPERTIES TIMEOUT 20)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(LibLZMA REQUIRED)
+find_package(ZLIB REQUIRED)
+set(ASSET_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/assets")
+file(MAKE_DIRECTORY "${ASSET_FIXTURE}")
+string(REPEAT "first-kernel-payload" 9000 first)
+string(REPEAT "second-kernel-payload" 9000 second)
+file(WRITE "${ASSET_FIXTURE}/android14-6.1_kernelsu.ko" "${first}")
+file(WRITE "${ASSET_FIXTURE}/android16-6.12_kernelsu.ko" "${second}")
+file(WRITE "${ASSET_FIXTURE}/payload.bin" "ordinary payload")
+file(WRITE "${ASSET_FIXTURE}/empty.bin" "")
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/assets_data.cpp"
+    COMMAND ${Python3_EXECUTABLE} "${KSUD_ROOT}/scripts/embed_assets.py"
+        "${ASSET_FIXTURE}" "${CMAKE_CURRENT_BINARY_DIR}/assets_data.cpp"
+    DEPENDS "${KSUD_ROOT}/scripts/embed_assets.py"
+    VERBATIM)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/asset_mbedtls_config.h" "#define MBEDTLS_SHA256_C\n")
+add_executable(asset_data_test ../asset_data_test.cpp
+    "${CMAKE_CURRENT_BINARY_DIR}/assets_data.cpp" ${KSUD_ROOT}/src/xz_range.c
+    ${KSUD_ROOT}/third_party/mbedtls/library/sha256.c
+    ${KSUD_ROOT}/third_party/mbedtls/library/platform_util.c)
+target_include_directories(asset_data_test PRIVATE "${CMAKE_CURRENT_BINARY_DIR}"
+    "${KSUD_ROOT}/src" "${KSUD_ROOT}/../.." "${KSUD_ROOT}/third_party/mbedtls/include")
+target_compile_definitions(asset_data_test PRIVATE MBEDTLS_CONFIG_FILE="asset_mbedtls_config.h")
+target_link_libraries(asset_data_test PRIVATE LibLZMA::LibLZMA ZLIB::ZLIB)
+target_link_options(asset_data_test PRIVATE -Wl,--wrap=mbedtls_sha256)
+add_test(NAME asset_data COMMAND asset_data_test "${ASSET_FIXTURE}")
+set_tests_properties(asset_data PROPERTIES TIMEOUT 20)

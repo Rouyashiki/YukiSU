@@ -21,21 +21,13 @@
 #include "yukizygisk_diagnostics.hpp"
 
 #include <unistd.h>
-#include <cerrno>
-#include <cstring>
 #include <optional>
 #include <string>
-#include <vector>
+#include <utility>
 
 namespace ksud::late_load {
 
 namespace {
-
-constexpr const char* kLateLoadTmpCandidates[] = {
-    "/dev/kernelsu_XXXXXX",
-    "/data/local/tmp/kernelsu_XXXXXX",
-    "/data/adb/kernelsu_XXXXXX",
-};
 
 void dump_process_info(const char* stage) {
     const auto context = read_file("/proc/self/attr/current");
@@ -70,35 +62,14 @@ bool extract_and_load_kernelsu(bool allow_shell, const std::string& selected_kmi
     }
 
     const std::string asset_name = kmi + "_kernelsu.ko";
-    std::array<char, PATH_MAX> tmp_path{};
-    int tmp_fd = -1;
-    for (const char* candidate : kLateLoadTmpCandidates) {
-        (void)std::snprintf(tmp_path.data(), tmp_path.size(), "%s", candidate);
-        tmp_fd = mkstemp(tmp_path.data());
-        if (tmp_fd >= 0) {
-            LOGI("late-load: using temp module path %s", tmp_path.data());
-            break;
-        }
-        LOGW("late-load: mkstemp failed at %s: %s", candidate, strerror(errno));
-    }
-    if (tmp_fd < 0) {
-        LOGE("late-load: failed to allocate temp module file");
-        return false;
-    }
-    close(tmp_fd);
-
-    const bool copied = copy_asset_to_file(asset_name, tmp_path.data());
-    if (!copied) {
-        LOGE("late-load: no embedded module matches %s", asset_name.c_str());
-        unlink(tmp_path.data());
+    auto image = get_asset_data(asset_name);
+    if (!image) {
+        LOGE("late-load: failed to extract embedded module %s", asset_name.c_str());
         return false;
     }
 
     LOGI("late-load: loading %s via relocated init_module", asset_name.c_str());
-    const bool loaded =
-        ksud::kernelsu_loader::load_module(tmp_path.data(), get_kernelsu_load_params(allow_shell));
-    unlink(tmp_path.data());
-    return loaded;
+    return kernelsu_loader::load_module(std::move(*image), get_kernelsu_load_params(allow_shell));
 }
 
 void run_stage_scripts(const std::string& stage, ScriptWait wait) {

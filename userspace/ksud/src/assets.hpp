@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -9,8 +10,9 @@ namespace ksud {
 // List all embedded asset names
 const std::vector<std::string>& list_assets();
 
-// Get asset data by name
+// Returns the compressed storage, not an executable image.
 bool get_asset(const std::string& name, const uint8_t*& data, size_t& size);
+std::optional<std::vector<uint8_t>> get_asset_data(const std::string& name);
 
 // Copy asset to file
 bool copy_asset_to_file(const std::string& name, const std::string& dest_path);

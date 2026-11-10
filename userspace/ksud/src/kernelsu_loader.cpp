@@ -18,6 +18,7 @@
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ksud::kernelsu_loader {
@@ -300,7 +301,10 @@ bool load_module(const char* path, const std::string& param_values, bool kernel_
     if (!read_file_bytes(path, &buffer)) {
         return false;
     }
+    return load_module(std::move(buffer), param_values, kernel_lookup);
+}
 
+bool load_module(std::vector<uint8_t> buffer, const std::string& param_values, bool kernel_lookup) {
     if (buffer.size() < EI_NIDENT || memcmp(buffer.data(), ELFMAG, SELFMAG) != 0) {
         LOGE("loader: invalid ELF image");
         return false;
