@@ -12,4 +12,11 @@ add_executable(late_load_cli_test
     ${KSUD_ROOT}/src/terminal.cpp)
 add_test(NAME late_load_cli COMMAND late_load_cli_test)
 
-set_tests_properties(late_load_cli PROPERTIES TIMEOUT 20)
+add_executable(kernelsu_loader_test
+    ../kernelsu_loader_test.cpp
+    ${KSUD_ROOT}/src/kernelsu_loader.cpp)
+target_include_directories(kernelsu_loader_test PRIVATE "${KSUD_ROOT}/../..")
+target_link_options(kernelsu_loader_test PRIVATE "-Wl,--wrap=open" "-Wl,--wrap=syscall")
+add_test(NAME kernelsu_loader COMMAND kernelsu_loader_test)
+
+set_tests_properties(late_load_cli kernelsu_loader PROPERTIES TIMEOUT 20)
