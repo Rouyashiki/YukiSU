@@ -1390,7 +1390,7 @@ int handle_updated_modules() {
                 LOGW("Failed to remove old module %s: %s", dst.c_str(),
                      remove_error.message().c_str());
                 result = 1;
-                continue;
+                break;
             }
         }
 
@@ -1398,15 +1398,16 @@ int handle_updated_modules() {
         if (rename(src.c_str(), dst.c_str()) == 0) {
             if (removed) {
                 if (!ensure_file_exists(dst + "/" + REMOVE_FILE_NAME))
-                    result = 1;
+                    LOGW("Failed to preserve removal flag for %s", dst.c_str());
             } else if (disabled) {
                 if (!ensure_file_exists(dst + "/" + DISABLE_FILE_NAME))
-                    result = 1;
+                    LOGW("Failed to preserve disabled flag for %s", dst.c_str());
             }
             LOGI("Updated module: %s", entry->d_name);
         } else {
             LOGE("Failed to update module: %s", entry->d_name);
             result = 1;
+            break;
         }
     }
 
@@ -1706,8 +1707,10 @@ int exec_stage_script(const std::string& stage, ScriptWait wait, std::string* er
         script += stage;
         script += ".sh";
         if (run_script(script, wait, module_id, nullptr, nullptr, false,
-                       ScriptExitPolicy::ObserveExit, error) != 0)
+                       ScriptExitPolicy::ObserveExit, error) != 0) {
             result = 1;
+            break;
+        }
     }
 
     closedir(dir);
@@ -1733,8 +1736,10 @@ int exec_common_scripts(const std::string& stage_dir, ScriptWait wait, std::stri
             continue;
 
         if (run_script(script, wait, "", nullptr, nullptr, false, ScriptExitPolicy::ObserveExit,
-                       error) != 0)
+                       error) != 0) {
             result = 1;
+            break;
+        }
     }
 
     closedir(dir);
@@ -1791,17 +1796,18 @@ int load_sepolicy_rule() {
 int load_system_prop() {
     DIR* dir = opendir(MODULE_DIR);
     if (!dir)
-        return 0;
+        return errno == ENOENT ? 0 : 1;
 
 #if !defined(RESETPROP_ALONE_AVAILABLE) || !RESETPROP_ALONE_AVAILABLE
     // Only relevant without the built-in: the fallback path below execs this binary.
     if (!file_exists(RESETPROP_PATH)) {
         LOGW("resetprop not found at %s, skipping system.prop loading", RESETPROP_PATH);
         closedir(dir);
-        return 0;
+        return 1;
     }
 #endif  // #if !defined(RESETPROP_ALONE_AVAILABLE) ...
 
+    int result = 0;
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.')
@@ -1820,49 +1826,40 @@ int load_system_prop() {
 
         LOGI("Loading system.prop from %s", entry->d_name);
 
-        // Read and set properties. The built-in resetprop is safe to call
-        // directly; forking once per property only duplicated ksud's page
-        // tables and added a waitpid round-trip for no isolation benefit.
-        const auto content = read_file(prop_file);
-        if (!content)
-            continue;
-        for_each_line(*content, [](std::string_view line) {
-            line = trim_view(line);
-            if (line.empty() || line[0] == '#')
-                return;
+        const bool read_ok =
+            for_each_file_line(prop_file.c_str(), [&result](std::string_view line) {
+                line = trim_view(line);
+                if (line.empty() || line.front() == '#')
+                    return true;
+                const auto equal = line.find('=');
+                if (equal == std::string_view::npos)
+                    return true;
+                const std::string key(trim_view(line.substr(0, equal)));
+                const std::string value(trim_view(line.substr(equal + 1)));
+                if (key.empty())
+                    return true;
 
-            const size_t eq = line.find('=');
-            if (eq == std::string_view::npos)
-                return;
-
-            const std::string key(trim_view(line.substr(0, eq)));
-            const std::string value(trim_view(line.substr(eq + 1)));
 #if defined(RESETPROP_ALONE_AVAILABLE) && RESETPROP_ALONE_AVAILABLE
-            std::array<char*, 5> argv_c = {
-                const_cast<char*>("resetprop"),
-                const_cast<char*>("-n"),
-                const_cast<char*>(key.c_str()),
-                const_cast<char*>(value.c_str()),
-                nullptr,
-            };
-            if (resetprop_main(4, argv_c.data()) != 0)
-                LOGW("Failed to apply property %s", key.c_str());
+                std::array<char*, 6> argv_c = {
+                    const_cast<char*>("resetprop"),   const_cast<char*>("-n"),
+                    const_cast<char*>("--"),          const_cast<char*>(key.c_str()),
+                    const_cast<char*>(value.c_str()), nullptr,
+                };
+                result = resetprop_main(5, argv_c.data());
 #else
-            const pid_t pid = fork();
-            if (pid == 0) {
-                execl(RESETPROP_PATH, "resetprop", "-n", key.c_str(), value.c_str(), nullptr);
-                _exit(127);
-            }
-            if (pid > 0) {
-                int status;
-                waitpid(pid, &status, 0);
-            }
+            result = exec_command({RESETPROP_PATH, "-n", "--", key, value}).exit_code;
 #endif  // #if defined(RESETPROP_ALONE_AVAILABLE) ...
-        });
+                return result == 0;
+            });
+        if (!read_ok || result != 0) {
+            LOGW("Failed to load properties from %s", prop_file.c_str());
+            result = 1;
+            break;
+        }
     }
 
     closedir(dir);
-    return 0;
+    return result;
 }
 
 // Parse bool config value (true, yes, 1, on -> true)

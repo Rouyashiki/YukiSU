@@ -95,3 +95,13 @@ target_include_directories(restorecon_test PRIVATE "${KSUD_ROOT}/../..")
 target_link_options(restorecon_test PRIVATE -Wl,--wrap=lgetxattr -Wl,--wrap=lsetxattr)
 add_test(NAME restorecon COMMAND restorecon_test)
 set_tests_properties(restorecon PROPERTIES TIMEOUT 20)
+
+add_executable(module_lifecycle_test ../module_lifecycle_test.cpp
+    ${KSUD_ROOT}/src/module/module.cpp ${KSUD_ROOT}/src/module/metamodule.cpp
+    ${KSUD_ROOT}/src/module/module_config.cpp ${KSUD_ROOT}/src/utils.cpp)
+target_include_directories(module_lifecycle_test PRIVATE "${KSUD_ROOT}/../..")
+target_compile_definitions(module_lifecycle_test PRIVATE RESETPROP_ALONE_AVAILABLE=1)
+target_link_options(module_lifecycle_test PRIVATE -Wl,--wrap=fork -Wl,--wrap=execl
+    -Wl,--wrap=rename -Wl,--wrap=readdir)
+add_test(NAME module_lifecycle COMMAND module_lifecycle_test)
+set_tests_properties(module_lifecycle PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
