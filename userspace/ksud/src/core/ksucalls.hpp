@@ -57,6 +57,8 @@ struct ListTryUmountCmd {
 // fallback for driver-fd retrieval. Other SIGSYS deliveries retain the
 // previously installed disposition.
 void setup_sigsys_handler();
+// Probe without caching an absent driver before late-load installs it.
+bool has_kernelsu();
 int ksuctl(int request, void* arg);
 // Claim the scoped fd installed after sucompat's exec; it is already CLOEXEC
 // for the target shell. Call only during fresh-exec, single-threaded su startup.

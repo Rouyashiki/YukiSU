@@ -5,10 +5,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <memory>
 #include "terminal.hpp"
 #ifdef __ANDROID__
-#include <sys/system_properties.h>
+#include <android/log.h>
 #endif  // #ifdef __ANDROID__
 
 namespace ksud {
@@ -61,12 +60,11 @@ void log_write(LogLevel level, const char* fmt, va_list args) {
         msg[0] = '\0';
     }
 
-    const std::unique_ptr<FILE, decltype(&fclose)> log_file(fopen("/dev/log/main", "w"), fclose);
-    if (log_file != nullptr) {
-        const int written =
-            fprintf(log_file.get(), "%c/%s: %s\n", level_str[0], g_log_tag.data(), msg.data());
-        (void)written;
-    }
+#ifdef __ANDROID__
+    (void)__android_log_write(android_level, g_log_tag.data(), msg.data());
+#else
+    (void)android_level;
+#endif
 
     if (!g_log_stderr_enabled)
         return;

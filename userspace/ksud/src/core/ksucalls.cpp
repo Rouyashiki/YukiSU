@@ -144,14 +144,7 @@ auto scan_driver_fd() -> DriverFd {
     return {found_fd, false};
 }
 
-auto init_driver_fd() -> int {
-    // Method 1: Check if we already have an inherited fd
-    const DriverFd driver = scan_driver_fd();
-    if (driver.fd >= 0) {
-        LOGD("Found inherited driver fd: %d", driver.fd);
-        return driver.fd;
-    }
-
+auto request_driver_fd() -> int {
     // Method 2: Try prctl to get fd (SECCOMP-safe)
     PrctlGetFdCmd prctl_cmd = {-1, -1};
     prctl(KSU_PRCTL_GET_FD, &prctl_cmd, 0, 0, 0);
@@ -185,13 +178,35 @@ auto init_driver_fd() -> int {
 
 auto get_driver_fd() -> int {
     if (!g_driver_fd_init) {
-        g_driver_fd = init_driver_fd();
+        const DriverFd driver = scan_driver_fd();
+        g_driver_fd = driver.fd >= 0 ? driver.fd : request_driver_fd();
         g_driver_fd_init = true;
     }
     return g_driver_fd;
 }
 
 }  // namespace
+
+bool has_kernelsu() {
+    const DriverFd inherited = scan_driver_fd();
+    const int fd = inherited.fd >= 0 ? inherited.fd : request_driver_fd();
+    if (fd >= 0) {
+        GetInfoCmd info{};
+        bool available = ioctl(fd, KSU_IOCTL_GET_INFO, &info) == 0 && info.version != 0;
+        if (!available) {
+            ksu_get_info_legacy_cmd legacy{};
+            available = ioctl(fd, KSU_IOCTL_GET_INFO_LEGACY, &legacy) == 0 && legacy.version != 0;
+        }
+        if (inherited.fd < 0)
+            close(fd);
+        if (available)
+            return true;
+    }
+
+    int version = 0;
+    (void)prctl(0xDEADBEEF, 2, &version, 0, 0);
+    return version != 0;
+}
 
 void setup_sigsys_handler() {
     if (g_sigsys_handler_installed != 0) {

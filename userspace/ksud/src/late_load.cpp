@@ -37,22 +37,17 @@ constexpr const char* kLateLoadTmpCandidates[] = {
     "/data/adb/kernelsu_XXXXXX",
 };
 
-bool is_kernelsu_loaded() {
-    if (access("/sys/module/kernelsu", F_OK) == 0)
-        return true;
-
-    // Release builds remove their sysfs kobject after initialization, so
-    // /sys/module alone is not a reliable one-shot guard. /proc/modules keeps
-    // the exact live module name without touching the KernelSU fd cache.
-    const auto modules = read_file("/proc/modules");
-    if (!modules)
-        return false;
-    bool loaded = false;
-    for_each_line(*modules, [&loaded](std::string_view line) {
-        if (line.rfind("kernelsu ", 0) == 0)
-            loaded = true;
-    });
-    return loaded;
+void dump_process_info(const char* stage) {
+    const auto context = read_file("/proc/self/attr/current");
+    LOGI("late-load: %s pid=%d uid=%u euid=%u gid=%u selinux=%s", stage, getpid(), getuid(),
+         geteuid(), getgid(), context ? trim(*context).c_str() : "unknown");
+    if (const auto status = read_file("/proc/self/status")) {
+        for_each_line(*status, [](std::string_view line) {
+            if (line.rfind("Groups:", 0) == 0 || line.rfind("Cap", 0) == 0 ||
+                line.rfind("Seccomp", 0) == 0 || line.rfind("NoNewPrivs:", 0) == 0)
+                LOGI("late-load: %.*s", static_cast<int>(line.size()), line.data());
+        });
+    }
 }
 
 std::string get_kernelsu_load_params(bool allow_shell) {
@@ -153,10 +148,20 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
     }
 
     LOGI("late-load command triggered");
+    dump_process_info("start");
     const auto execute = [allow_shell, &kmi, &package_name]() -> int {
-        if (!is_kernelsu_loaded() && !extract_and_load_kernelsu(allow_shell, kmi)) {
+        if (has_kernelsu()) {
+            LOGI("late-load: KernelSU already available, skipping module load");
+        } else if (!extract_and_load_kernelsu(allow_shell, kmi)) {
+            LOGE("late-load: module load failed");
             return 1;
         }
+        dump_process_info("after module load");
+        if (!has_kernelsu()) {
+            LOGE("late-load: module is not responding to the driver probe");
+            return 1;
+        }
+        LOGI("late-load: driver ready");
 
         // Loading the LKM may transition this process into the KernelSU domain.
         // Reopen standard descriptors so later Binder fd transfers carry the
@@ -172,6 +177,7 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
 
         clear_all_temp_configs();
 
+        LOGI("late-load: installing userspace");
         if (install(std::nullopt, std::nullopt) != 0) {
             LOGE("late-load: install() failed");
             return 1;
@@ -214,6 +220,7 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
         update_yukizygisk_boot_diagnostics(safe_mode, yz_supported, yz_enabled,
                                            "late-load-restored");
 
+        LOGI("late-load: running module stages");
         const auto wait = ScriptWait::until(std::chrono::steady_clock::now() + BOOT_STAGE_TIMEOUT);
         run_stage_scripts("late-load", wait);
 
@@ -242,6 +249,7 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
     };
 
     const int result = execute();
+    LOGI("late-load: finished with status %d", result);
     if (post_magica) {
         run_post_magica_cleanup();
     }

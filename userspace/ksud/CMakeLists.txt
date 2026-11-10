@@ -482,6 +482,7 @@ endif()
 
 target_link_libraries(ksud PRIVATE lua z zip liblzma mbedx509 mbedcrypto dl m)
 if(ANDROID)
+    target_link_libraries(ksud PRIVATE log)
     target_link_options(ksud PRIVATE
         "-Wl,--export-dynamic-symbol=lua_*"
         "-Wl,--export-dynamic-symbol=luaL_*"
