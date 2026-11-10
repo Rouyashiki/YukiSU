@@ -24,6 +24,8 @@ std::filesystem::path root;
 bool prepare_ok = true;
 bool deny_config_read = false;
 bool scripts_ok = true;
+bool uapi_ok = true;
+std::string expected_stage = "boot-completed";
 int runtime_enabled = 1;
 int preparations = 0;
 std::vector<std::string> callbacks;
@@ -31,7 +33,10 @@ std::vector<std::string> callbacks;
 
 namespace ksud {
 bool ensure_uapi_version_matched([[maybe_unused]] std::string* error) {
-    return true;
+    return uapi_ok;
+}
+void hide_bootloader_status() {
+    callbacks.emplace_back("bootloader");
 }
 bool is_safe_mode() {
     return false;
@@ -60,24 +65,24 @@ void on_boot_completed() {
 }  // namespace preinit
 int exec_common_scripts(const std::string& stage, ScriptWait wait,
                         [[maybe_unused]] std::string* error) {
-    assert(stage == "boot-completed.d" && wait.mode == ScriptWait::Mode::NoWait);
+    assert(stage == expected_stage + ".d" && wait.mode == ScriptWait::Mode::NoWait);
     callbacks.emplace_back("common");
     return 0;
 }
 int metamodule_exec_stage_script(const std::string& stage, ScriptWait wait,
                                  [[maybe_unused]] std::string* error) {
-    assert(stage == "boot-completed" && wait.mode == ScriptWait::Mode::NoWait);
+    assert(stage == expected_stage && wait.mode == ScriptWait::Mode::NoWait);
     callbacks.emplace_back("metamodule");
     return 0;
 }
 int exec_stage_script(const std::string& stage, ScriptWait wait,
                       [[maybe_unused]] std::string* error) {
-    assert(stage == "boot-completed" && wait.mode == ScriptWait::Mode::NoWait);
+    assert(stage == expected_stage && wait.mode == ScriptWait::Mode::NoWait);
     callbacks.emplace_back("modules");
     return scripts_ok ? 0 : 1;
 }
 bool exec_plugin_stage(const std::string& stage, bool block) {
-    assert(stage == "boot-completed" && !block);
+    assert(stage == expected_stage && !block);
     callbacks.emplace_back("plugins");
     return true;
 }
@@ -227,6 +232,21 @@ int main() {
     assert(ksud::read_file(marker.string()) == "boundary-boot\nfailed\n");
     assert(ksud::on_boot_completed() != 0 && callbacks == expected);
 
+    // Late-load still runs after a failed boot marker and without boot-event admission.
+    scripts_ok = true;
+    prepare_ok = false;
+    uapi_ok = false;
+    for (int i = 0; i < 2; ++i) {
+        callbacks.clear();
+        assert(ksud::run_boot_completed_stage() == 0 && callbacks == expected);
+        assert(ksud::read_file(marker.string()) == "boundary-boot\nfailed\n");
+        callbacks.clear();
+        expected_stage = "service";
+        assert(ksud::run_services_stage() == 0);
+        assert((callbacks == std::vector<std::string>{"bootloader", "common", "metamodule",
+                                                      "modules", "plugins"}));
+        expected_stage = "boot-completed";
+    }
     std::filesystem::remove_all(root);
     std::cout << "soft reboot boundaries: missing runtime, default config and errors passed\n";
 }

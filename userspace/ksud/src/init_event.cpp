@@ -496,9 +496,11 @@ int on_services(std::string* error) {
         return 0;
     }
 
-    LOGI("services triggered");
+    return run_services_stage(error);
+}
 
-    // Hide bootloader unlock status (soft BL hiding)
+int run_services_stage(std::string* error) {
+    LOGI("services triggered");
     hide_bootloader_status();
 
     const int result = run_stage("service", ScriptWait::no_wait(), error);
@@ -535,20 +537,23 @@ int on_boot_completed() {
     if (!reboot::write_cycle_marker(marker, "running\n"))
         return 1;
 
-    // Report to kernel
+    const int result = run_boot_completed_stage();
+    const bool recorded =
+        reboot::write_cycle_marker(marker, result == 0 ? "complete\n" : "failed\n");
+    return recorded ? result : 1;
+}
+
+int run_boot_completed_stage() {
     report_boot_complete();
     preinit::on_boot_completed();
     kagami::embedded_boot_completed();
 
     ensure_msud_running_if_enabled();
 
-    // Run boot-completed stage
     const int result = run_stage("boot-completed", ScriptWait::no_wait());
 
     LOGI("boot-completed completed");
-    const bool recorded =
-        reboot::write_cycle_marker(marker, result == 0 ? "complete\n" : "failed\n");
-    return recorded ? result : 1;
+    return result;
 }
 
 bool recover_soft_reboot(const std::string& phase, std::string& error) {

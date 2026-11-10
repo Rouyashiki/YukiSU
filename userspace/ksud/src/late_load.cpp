@@ -211,8 +211,8 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
         if (refresh_sucompat_vfs() != 0) {
             LOGW("late-load: refresh vnode-backed su after final mounts failed");
         }
-        on_services();
-        on_boot_completed();
+        run_services_stage();
+        run_boot_completed_stage();
 
         restart_manager(package_name);
 

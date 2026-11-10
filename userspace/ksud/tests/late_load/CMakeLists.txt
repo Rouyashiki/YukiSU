@@ -47,6 +47,11 @@ target_link_options(kmi_detection_test PRIVATE -Wl,--wrap=open -Wl,--wrap=opendi
 add_test(NAME kmi_detection COMMAND kmi_detection_test)
 set_tests_properties(kmi_detection PROPERTIES TIMEOUT 20)
 
+add_executable(late_load_flow_test ../late_load_flow_test.cpp ${KSUD_ROOT}/src/late_load.cpp)
+target_include_directories(late_load_flow_test PRIVATE "${KSUD_ROOT}/../..")
+add_test(NAME late_load_flow COMMAND late_load_flow_test)
+set_tests_properties(late_load_flow PROPERTIES TIMEOUT 20)
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(LibLZMA REQUIRED)
 find_package(ZLIB REQUIRED)
