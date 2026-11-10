@@ -17,6 +17,7 @@ bool fail_fork = false;
 bool fail_wait = false;
 bool detached = false;
 bool cgroups_switched = false;
+bool inherit_context = false;
 }  // namespace
 
 namespace ksud {
@@ -69,7 +70,7 @@ extern "C" pid_t __wrap_waitpid(pid_t pid, int* status, int options) {
 }
 
 extern "C" int __wrap_execl(const char*, const char* argv0, ...) {
-    assert(detached && cgroups_switched);
+    assert(detached == !inherit_context && cgroups_switched == !inherit_context);
     sigset_t mask;
     assert(sigprocmask(SIG_SETMASK, nullptr, &mask) == 0);
     assert(sigismember(&mask, SIGCHLD) == 0);
@@ -130,6 +131,36 @@ int main() {
     assert(execute(ScriptWait::forever(), ScriptExitPolicy::RequireSuccess, error) == -1);
     assert(execute(ScriptWait::forever(), ScriptExitPolicy::ObserveExit, error) == 0);
     assert(error.empty());
+
+    const auto original_cwd = std::filesystem::current_path();
+    const auto caller_cwd = root / "caller";
+    std::filesystem::create_directory(caller_cwd);
+    std::filesystem::current_path(caller_cwd);
+    setenv("MAGISK_VER", "inherited-version", 1);
+    setenv("MAGISK_VER_CODE", "inherited-code", 1);
+    std::ofstream(script) << "[ \"$PWD\" = \"$EXPECTED_CWD\" ] || exit 30\n"
+                             "[ \"$MAGISK_VER\" = \"$EXPECTED_MAGISK\" ] || exit 31\n"
+                             "[ \"$KSU_MODULE\" = hostsredirect ] || exit 32\n"
+                             "[ \"$MODULE_DIR\" = /data/adb/modules/ ] || exit 33\n"
+                             "[ \"$ZYGISK_ENABLED\" = 1 ] || exit 34\n"
+                             "[ \"$MAGISK_VER_CODE\" = \"$EXPECTED_MAGISK_CODE\" ] || exit 35\n";
+    for (const auto context :
+         {ScriptContext::Module, ScriptContext::Inherit, ScriptContext::InheritAtScriptDir}) {
+        inherit_context = context != ScriptContext::Module;
+        setenv("EXPECTED_CWD", (context == ScriptContext::Inherit ? caller_cwd : root).c_str(), 1);
+        setenv("EXPECTED_MAGISK", inherit_context ? "inherited-version" : "25.2", 1);
+        setenv("EXPECTED_MAGISK_CODE", inherit_context ? "inherited-code" : "25200", 1);
+        error.clear();
+        assert(run_script(script, ScriptWait::forever(), "hostsredirect", "MODULE_DIR",
+                          "/data/adb/modules/", false, ScriptExitPolicy::RequireSuccess, &error,
+                          context) == 0);
+        fail_exec = true;
+        assert(run_script(script, ScriptWait::no_wait(), "hostsredirect", nullptr, nullptr, false,
+                          ScriptExitPolicy::ObserveExit, &error, context) == -1);
+        assert(error.find("Cannot exec " + script) != std::string::npos);
+        fail_exec = false;
+    }
+    std::filesystem::current_path(original_cwd);
     std::filesystem::remove_all(root);
     std::cout << "boot scripts: exit status, signal, fork/exec/wait errors, environment passed\n";
 }

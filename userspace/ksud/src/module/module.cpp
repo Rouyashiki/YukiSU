@@ -1473,7 +1473,7 @@ private:
 
 int run_script(const std::string& script, ScriptWait wait, const std::string& module_id,
                const char* extra_env_name, const char* extra_env_value, bool hot_install,
-               ScriptExitPolicy exit_policy, std::string* error) {
+               ScriptExitPolicy exit_policy, std::string* error, ScriptContext context) {
     if (!file_exists(script))
         return 0;
 
@@ -1576,22 +1576,22 @@ int run_script(const std::string& script, ScriptWait wait, const std::string& mo
             }
         }
 
-        // Match upstream's Command::pre_exec setup.
-        detach_process_group(true);
-        switch_cgroups();
-
-        // Change to script directory (like Rust version)
-        if (chdir(script_dir_path) != 0) {
-            const int child_errno = errno;
-            ssize_t ignored;
-            do {
-                ignored = write(exec_status_pipe[1], &child_errno, sizeof(child_errno));
-            } while (ignored < 0 && errno == EINTR);
-            _exit(127);
+        if (context == ScriptContext::Module) {
+            detach_process_group(true);
+            switch_cgroups();
+        }
+        if (context != ScriptContext::Inherit) {
+            if (chdir(script_dir_path) != 0) {
+                const int child_errno = errno;
+                ssize_t ignored;
+                do {
+                    ignored = write(exec_status_pipe[1], &child_errno, sizeof(child_errno));
+                } while (ignored < 0 && errno == EINTR);
+                _exit(127);
+            }
         }
 
-        // Set environment variables (matching Rust version's get_common_script_envs)
-        apply_common_script_env(common_env, module_id_cstr, true);
+        apply_common_script_env(common_env, module_id_cstr, context == ScriptContext::Module);
         if (extra_env_name_cstr != nullptr && extra_env_value_cstr != nullptr) {
             setenv(extra_env_name_cstr, extra_env_value_cstr, 1);
         }

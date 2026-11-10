@@ -3,6 +3,7 @@
 #include "module_compat.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
@@ -51,12 +52,13 @@ struct ScriptWait {
 };
 
 enum class ScriptExitPolicy { RequireSuccess, ObserveExit };
+enum class ScriptContext : std::uint8_t { Module, Inherit, InheritAtScriptDir };
 
 int run_script(const std::string& script, ScriptWait wait, const std::string& module_id = "",
                const char* extra_env_name = nullptr, const char* extra_env_value = nullptr,
                bool hot_install = false,
                ScriptExitPolicy exit_policy = ScriptExitPolicy::RequireSuccess,
-               std::string* error = nullptr);
+               std::string* error = nullptr, ScriptContext context = ScriptContext::Module);
 int exec_stage_script(const std::string& stage, ScriptWait wait, std::string* error = nullptr);
 int exec_common_scripts(const std::string& stage_dir, ScriptWait wait,
                         std::string* error = nullptr);
