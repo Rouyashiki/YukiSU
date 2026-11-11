@@ -68,10 +68,10 @@ std::string resolve_module_backend(const ModuleEntry& module, const Config& conf
                                    const ModuleModeMap& modes);
 
 // Rebuild only Kasumi mappings in the init namespace. This is safe to expose
-// post-boot for the Kasumi hot-mount controls; Overlay/Magic remain boot-only.
+// post-boot for the Kasumi hot-mount controls.
 bool refresh_kasumi_modules(const Config& config);
 
-// Apply the boot-only module mount plan inside the init mount namespace.
+// Apply the boot or late-load module mount plan inside the init mount namespace.
 MountReport mount_all_enabled(const Config& config);
 
 // Tear down everything Kagami mounted (enters the init mount ns).

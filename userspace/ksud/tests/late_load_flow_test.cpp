@@ -25,6 +25,7 @@ bool driver_ready = false;
 bool load_ok = true;
 bool stdio_ok = true;
 int install_result = 0;
+int mount_result = 0;
 int cleanup = 0;
 int loads = 0;
 std::vector<std::string> stages;
@@ -96,6 +97,7 @@ int load_sepolicy_rule() {
     return 0;
 }
 int load_system_prop() {
+    stages.emplace_back("system.prop");
     return 0;
 }
 int apply_profile_sepolies() {
@@ -125,7 +127,8 @@ int exec_stage_script(const std::string&, ScriptWait, std::string*) {
     return 0;
 }
 int metamodule_exec_mount_script(std::string*) {
-    return 0;
+    stages.emplace_back("mount");
+    return mount_result;
 }
 int umount_apply_config() {
     return 0;
@@ -162,11 +165,16 @@ int main() {
     daemon_result = ProcessDaemonizeResult::Daemon;
     for (int i = 0; i < 2; ++i) {
         assert(run() == 0 && loads == 1 && cleanup == i + 2);
-        assert((stages == std::vector<std::string>{"late-load.d", "post-mount.d", "service",
-                                                   "boot-completed"}));
+        assert((stages == std::vector<std::string>{"late-load.d", "system.prop", "mount",
+                                                   "post-mount.d", "service", "boot-completed"}));
         assert(commands.size() == 2 && commands[0][1] == "force-stop" &&
                commands[1][3] == "com.anatdx.yukisu/com.anatdx.yukisu.ui.MainActivity");
     }
+    mount_result = 1;
+    assert(run(false) == 0 && cleanup == 3);
+    assert((stages == std::vector<std::string>{"late-load.d", "system.prop", "mount",
+                                               "post-mount.d", "service", "boot-completed"}));
+    mount_result = 0;
     install_result = 1;
     assert(run() == 1 && cleanup == 4 && stages.empty() && commands.empty());
     stdio_ok = false;

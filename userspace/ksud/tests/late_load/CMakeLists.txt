@@ -53,6 +53,10 @@ add_test(NAME late_load_flow COMMAND late_load_flow_test)
 set_tests_properties(late_load_flow PROPERTIES TIMEOUT 20)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME kagami_mount_gate COMMAND ${Python3_EXECUTABLE}
+    "${KSUD_ROOT}/tests/kagami_mount_gate_test.py" --cxx "${CMAKE_CXX_COMPILER}")
+set_tests_properties(kagami_mount_gate PROPERTIES TIMEOUT 20)
+
 find_package(LibLZMA REQUIRED)
 find_package(ZLIB REQUIRED)
 set(ASSET_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/assets")

@@ -4,6 +4,7 @@
 #include <chrono>
 #include "core/daemon.hpp"
 #include "core/json.hpp"
+#include "core/ksucalls.hpp"
 #include "core/log.hpp"
 #include "core/reboot_state.hpp"
 #include "core/runtime.hpp"
@@ -83,7 +84,6 @@ std::string arg_or_default(const std::vector<std::string>& args, std::size_t ind
     return index < args.size() ? args[index] : fallback;
 }
 
-// Magic/Overlay mounts are boot-only; post-boot controls replay Kasumi mappings only.
 bool system_boot_completed() {
     return ksud::getprop("sys.boot_completed") == "1";
 }
@@ -1037,10 +1037,9 @@ int handle_module(const std::vector<std::string>& args) {
             std::cerr << support_error << '\n';
             return 1;
         }
-        // Boot-only: mounting over live service namespaces is unsafe.
-        if (system_boot_completed()) {
-            std::cerr << "refusing module mount-all: magic mount only runs at boot via "
-                         "ksud; post-boot mounting breaks namespaces\n";
+        // Late-load runs the initial mount stage after Android has booted.
+        if (system_boot_completed() && !ksud::is_late_load()) {
+            std::cerr << "refusing module mount-all: mounting requires boot or late-load mode\n";
             return 1;
         }
         Config config;
