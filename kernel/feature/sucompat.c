@@ -311,17 +311,17 @@ static int resolve_exec_path(const char __user *filename_user, bool execveat,
 	return 0;
 }
 
-static bool is_vfs_su_exec(const char __user *filename_user, bool execveat,
-			   const struct pt_regs *regs)
+static unsigned long vfs_su_exec_ino(const char __user *filename_user,
+				     bool execveat, const struct pt_regs *regs)
 {
 	struct path path;
-	bool match;
+	unsigned long ino;
 
 	if (resolve_exec_path(filename_user, execveat, regs, &path))
-		return false;
-	match = ksu_sucompat_vfs_is_path(&path);
+		return 0;
+	ino = ksu_sucompat_vfs_path_ino(&path);
 	path_put(&path);
-	return match;
+	return ino;
 }
 
 static bool is_ksud_visible(void)
@@ -427,6 +427,7 @@ ksu_handle_execve_sucompat_common(const char __user **filename_user,
 	int su_fd;
 	int tmp_fd;
 	long ret;
+	unsigned long vfs_ino = 0;
 	bool vfs_match = false;
 	bool prompt_granted = false;
 	bool allowed;
@@ -440,9 +441,8 @@ ksu_handle_execve_sucompat_common(const char __user **filename_user,
 	allowed = ksu_is_allow_uid_for_current(current_uid().val);
 
 	if (ksu_sucompat_vfs_enabled()) {
-		vfs_match = is_vfs_su_exec(*filename_user, execveat, regs);
-		if (vfs_match && !ksu_sucompat_vfs_enabled())
-			vfs_match = false;
+		vfs_ino = vfs_su_exec_ino(*filename_user, execveat, regs);
+		vfs_match = ksu_sucompat_vfs_current_ino(vfs_ino);
 	}
 	if (vfs_match && !allowed) {
 		allowed = ksu_is_allow_uid_for_current(current_uid().val);
@@ -481,7 +481,7 @@ ksu_handle_execve_sucompat_common(const char __user **filename_user,
 		 ? !prompt_grant_still_valid(prompt_uid, prompt_choice,
 					     prompt_generation)
 		 : !ksu_is_allow_uid_for_current(current_uid().val)) ||
-	    (vfs_match ? !ksu_sucompat_vfs_enabled()
+	    (vfs_match ? !ksu_sucompat_vfs_current_ino(vfs_ino)
 		       : !READ_ONCE(ksu_su_compat_enabled)))
 		return -EACCES;
 
@@ -523,7 +523,7 @@ ksu_handle_execve_sucompat_common(const char __user **filename_user,
 		 ? !prompt_grant_still_valid(prompt_uid, prompt_choice,
 					     prompt_generation)
 		 : !ksu_is_allow_uid_for_current(current_uid().val)) ||
-	    (vfs_match ? !ksu_sucompat_vfs_enabled()
+	    (vfs_match ? !ksu_sucompat_vfs_current_ino(vfs_ino)
 		       : !READ_ONCE(ksu_su_compat_enabled))) {
 		ret = -EACCES;
 		ksu_sulog_emit_pending(pending_sucompat, ret, GFP_KERNEL);

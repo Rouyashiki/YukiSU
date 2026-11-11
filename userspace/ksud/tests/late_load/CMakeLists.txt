@@ -122,3 +122,7 @@ target_include_directories(storage_cleanup_test PRIVATE "${KSUD_ROOT}/kagami/src
     "${KSUD_ROOT}/kagami/include" "${KSUD_ROOT}/src" "${KSUD_ROOT}/../..")
 add_test(NAME storage_cleanup COMMAND storage_cleanup_test)
 set_tests_properties(storage_cleanup PROPERTIES TIMEOUT 20)
+
+add_test(NAME sucompat_mount COMMAND ${Python3_EXECUTABLE}
+    "${KSUD_ROOT}/../../kernel/tests/sucompat_mount_test.py" --cc "${CMAKE_C_COMPILER}")
+set_tests_properties(sucompat_mount PROPERTIES TIMEOUT 20)

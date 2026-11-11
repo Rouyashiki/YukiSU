@@ -147,7 +147,8 @@ static int kasumi_dh_iterate(struct file *file, struct dir_context *ctx,
 			     const struct file_operations *orig, void *data);
 static int kasumi_dh_set_dentry_ops(struct kasumi_dh_dir *dir,
 				    struct dentry *dentry,
-				    bool synthetic_negative);
+				    bool synthetic_negative,
+				    bool synthetic_inode);
 static void kasumi_dh_child_free(struct kasumi_dh_child *c);
 
 bool kasumi_dirhijack_enabled(void)
@@ -375,7 +376,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 			if (source.dentry)
 				path_put(&source);
 			kfree(vpath);
-			dop_ret = kasumi_dh_set_dentry_ops(dn, dentry, true);
+			dop_ret =
+			    kasumi_dh_set_dentry_ops(dn, dentry, true, false);
 			if (dop_ret) {
 				/* DEL/CLEAR won the race: resolve through the
 				 * original filesystem instead of publishing an
@@ -398,7 +400,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 			path_put(&source);
 		kfree(vpath);
 		if (vi) {
-			dop_ret = kasumi_dh_set_dentry_ops(dn, dentry, false);
+			dop_ret =
+			    kasumi_dh_set_dentry_ops(dn, dentry, false, true);
 			if (dop_ret) {
 				iput(vi);
 				if (dop_ret == -ENOENT || dop_ret == -ESHUTDOWN)
@@ -407,8 +410,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 			}
 			res = d_splice_alias(vi, dentry);
 			if (res && !IS_ERR(res)) {
-				dop_ret =
-				    kasumi_dh_set_dentry_ops(dn, res, false);
+				dop_ret = kasumi_dh_set_dentry_ops(dn, res,
+								   false, true);
 				if (dop_ret) {
 					/* The alias became visible after
 					 * DEL/CLEAR began. Unhash it so the
@@ -454,7 +457,8 @@ orig:
 		else
 			d_add(dentry, NULL);
 		if (is_child && !IS_ERR(res) &&
-		    kasumi_dh_set_dentry_ops(dn, res ? res : dentry, false))
+		    kasumi_dh_set_dentry_ops(dn, res ? res : dentry, false,
+					     false))
 			/* Do not leave an ungoverned result cached: the current
 			 * non-seeing lookup may use it, but the next observer
 			 * must resolve through our lookup gate again. */
@@ -865,10 +869,13 @@ out:
 
 static int kasumi_dh_set_dentry_ops(struct kasumi_dh_dir *dir,
 				    struct dentry *dentry,
-				    bool synthetic_negative)
+				    bool synthetic_negative,
+				    bool synthetic_inode)
 {
 	struct kasumi_dh_dop_meta *m, *existing;
 	const struct dentry_operations *orig;
+	const unsigned int backing_inode_flags =
+	    DCACHE_OP_REVALIDATE | DCACHE_OP_WEAK_REVALIDATE | DCACHE_OP_REAL;
 	const char *name;
 	u32 hash;
 	u16 len;
@@ -917,9 +924,17 @@ static int kasumi_dh_set_dentry_ops(struct kasumi_dh_dir *dir,
 		    existing->name_len != len ||
 		    memcmp(existing->name, name, len))
 			ret = -EBUSY;
-		else
+		else {
 			WRITE_ONCE(existing->synthetic_negative,
 				   synthetic_negative);
+			if (synthetic_inode) {
+				existing->orig_op_flags &= ~backing_inode_flags;
+				WRITE_ONCE(dentry->d_flags,
+					   (READ_ONCE(dentry->d_flags) &
+					    ~backing_inode_flags) |
+					       DCACHE_OP_REVALIDATE);
+			}
+		}
 		spin_unlock(&dentry->d_lock);
 		goto out_unlock;
 	}
@@ -931,13 +946,17 @@ static int kasumi_dh_set_dentry_ops(struct kasumi_dh_dir *dir,
 		m->shadow_dop = *orig;
 	m->shadow_dop.d_revalidate = kasumi_dh_revalidate;
 	m->orig_op_flags = READ_ONCE(dentry->d_flags) & KASUMI_DH_DOP_FLAGS;
+	/* Backing-inode callbacks cannot operate on synthetic inodes. */
+	if (synthetic_inode)
+		m->orig_op_flags &= ~backing_inode_flags;
 	hash_add_rcu(kasumi_dh_dops, &m->node, (unsigned long)dentry);
 	/* Publish the initialized/hash-visible meta before pathwalk can observe
 	 * DCACHE_OP_REVALIDATE and enter the shadow callback. */
 	smp_wmb();
 	WRITE_ONCE(dentry->d_op, &m->shadow_dop);
 	WRITE_ONCE(dentry->d_flags,
-		   READ_ONCE(dentry->d_flags) | DCACHE_OP_REVALIDATE);
+		   (READ_ONCE(dentry->d_flags) & ~KASUMI_DH_DOP_FLAGS) |
+		       m->orig_op_flags | DCACHE_OP_REVALIDATE);
 	spin_unlock(&dentry->d_lock);
 	mutex_unlock(&kasumi_dh_lock);
 	return 0;
@@ -1569,7 +1588,7 @@ static KASUMI_NOCFI int kasumi_dh_register(const char *visible_path,
 
 		ret = kern_path(visible_path, 0, &existing);
 		if (!ret) {
-			bool is_su = ksu_sucompat_vfs_is_path(&existing);
+			bool is_su = ksu_sucompat_vfs_path_ino(&existing) != 0;
 
 			path_put(&existing);
 			if (!is_su)
@@ -1685,6 +1704,21 @@ int kasumi_dirhijack_match_su(const char *visible_path,
 	}
 	rcu_read_unlock();
 	srcu_read_unlock(&kasumi_dh_srcu, idx);
+	/* A file bind mount can replace su while its parent stays the same. */
+	if (ret > 0) {
+		struct path target;
+		struct inode *inode;
+
+		ret = kern_path(visible_path, 0, &target);
+		if (!ret) {
+			inode = d_inode(target.dentry);
+			ret = ksu_sucompat_vfs_is_inode(inode) &&
+			      inode->i_ino == v_ino;
+			path_put(&target);
+		} else if (ret == -ENOENT) {
+			ret = 0;
+		}
+	}
 out_path:
 	path_put(&resolved);
 out:

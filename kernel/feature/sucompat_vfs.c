@@ -1,5 +1,6 @@
 #include <linux/compat.h>
 #include <linux/cred.h>
+#include <linux/dcache.h>
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -77,10 +78,19 @@ bool ksu_sucompat_vfs_is_inode(const struct inode *inode)
 	return inode && inode->i_op == &su_inode_ops;
 }
 
-bool ksu_sucompat_vfs_is_path(const struct path *path)
+unsigned long ksu_sucompat_vfs_path_ino(const struct path *path)
 {
-	return path && path->dentry &&
-	       ksu_sucompat_vfs_is_inode(d_inode(path->dentry));
+	const struct inode *inode;
+
+	if (!path || !path->dentry)
+		return 0;
+	inode = d_inode(path->dentry);
+	if (!inode)
+		return 0;
+	/* Module overlays can wrap an earlier su binding. */
+	if (!ksu_sucompat_vfs_is_inode(inode))
+		inode = d_real_inode(path->dentry);
+	return ksu_sucompat_vfs_is_inode(inode) ? inode->i_ino : 0;
 }
 
 bool ksu_sucompat_vfs_is_file(const struct file *file)

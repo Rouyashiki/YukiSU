@@ -27,7 +27,7 @@ bool ksu_sucompat_vfs_visible(void);
 int ksu_sucompat_vfs_setup_inode(struct inode *inode);
 
 bool ksu_sucompat_vfs_is_inode(const struct inode *inode);
-bool ksu_sucompat_vfs_is_path(const struct path *path);
+unsigned long ksu_sucompat_vfs_path_ino(const struct path *path);
 bool ksu_sucompat_vfs_is_file(const struct file *file);
 
 #endif // __KSU_H_SUCOMPAT_VFS
