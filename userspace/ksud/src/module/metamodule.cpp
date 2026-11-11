@@ -98,6 +98,8 @@ int metamodule_exec_uninstall_script(const std::string& module_id) {
     std::string metamodule_id;
     const std::string script =
         get_enabled_metamodule_script_path(METAMODULE_METAUNINSTALL_SCRIPT, &metamodule_id);
+    if (script.empty() && metamodule_mount_owner().empty())
+        return kagami::embedded_command({"module", "metauninstall", module_id});
     return run_script(script, ScriptWait::forever(), metamodule_id, "MODULE_ID", module_id.c_str(),
                       false, ScriptExitPolicy::RequireSuccess, nullptr,
                       ScriptContext::InheritAtScriptDir);

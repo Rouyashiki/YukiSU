@@ -240,6 +240,23 @@ std::string current_mirror_dir(const Config& config) {
     return mirror_is_auto(config.mirror_dir) ? std::string{} : config.mirror_dir;
 }
 
+bool remove_module_content(const Config& config, const std::string& module_id) {
+    if (module_id.empty() || module_id.front() == '.' || module_id == "lost+found" ||
+        fs::path(module_id).filename() != module_id) {
+        errno = EINVAL;
+        return false;
+    }
+    const auto mirror = owned_mirror(config);
+    if (mirror.empty())
+        return true;
+    std::error_code error;
+    fs::remove_all(fs::path(mirror) / module_id, error);
+    if (error)
+        mlog("storage: remove module content " + module_id + ": " + error.message(),
+             logging::Level::Error);
+    return !error;
+}
+
 // Reuse this boot's committed mirror path, or choose a fresh mountpoint.
 namespace {
 std::string acquire_mirror_dir(const Config& config) {

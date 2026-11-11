@@ -393,7 +393,7 @@ std::map<std::string, std::vector<std::string>> plan_overlays(
                     continue;
                 }
                 const std::string child = sysroot + "/" + e->d_name;
-                if (!fs::is_directory(child, ec)) {
+                if (!fs::is_directory(fs::symlink_status(child, ec))) {
                     continue;
                 }
                 if (is_sub_partition(e->d_name, parts)) {
@@ -501,6 +501,18 @@ bool validate_partition_tree(const fs::path& path, const std::vector<std::string
         const auto status = it->symlink_status(ec);
         if (ec)
             return false;
+        const auto name = it->path().filename();
+        // Older installers link system/<part> to the module's top-level tree.
+        if (system && is_sub_partition(name.string(), parts) && fs::is_symlink(status)) {
+            const auto link = fs::read_symlink(it->path(), ec);
+            if (ec)
+                return false;
+            const auto partition = path.parent_path() / name;
+            const auto destination = (path / link).lexically_normal();
+            if (destination == partition.lexically_normal() &&
+                fs::is_directory(fs::symlink_status(partition, ec)) && !ec)
+                continue;
+        }
         if (!fs::is_directory(status)) {
             mlog("overlay: partition-root file or whiteout requires Magic Mount: " +
                      it->path().string(),
@@ -512,6 +524,25 @@ bool validate_partition_tree(const fs::path& path, const std::vector<std::string
             return false;
     }
     return !ec;
+}
+
+bool prune_removed_content(const fs::path& mirror) {
+    std::error_code error;
+    for (fs::directory_iterator it(mirror, error), end; it != end && !error; it.increment(error)) {
+        const auto id = it->path().filename().string();
+        if (id.front() == '.' || id == "lost+found")
+            continue;
+        const bool installed = fs::exists(runtime_modules_dir() / id, error);
+        if (error)
+            return false;
+        if (!installed)
+            fs::remove_all(it->path(), error);
+        if (error)
+            break;
+    }
+    if (error)
+        mlog("overlay: prune removed module content: " + error.message(), logging::Level::Error);
+    return !error;
 }
 
 // Rebuild the selected modules before publishing any overlay, including on ext4.
@@ -559,6 +590,9 @@ bool sync_content(const std::vector<ModuleEntry>& modules, const storage::Handle
     ec.clear();
     fs::create_directories(base.content_dir, ec);
     if (ec)
+        return false;
+    // Boot-time module removal runs before the persistent mirror is mounted.
+    if (!prune_removed_content(base.content_dir))
         return false;
     for (const auto& module : modules) {
         if (!component_name(module.id) || module.id == ".rw" || module.id == "lost+found")

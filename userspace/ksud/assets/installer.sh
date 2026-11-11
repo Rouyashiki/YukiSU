@@ -339,6 +339,18 @@ handle_partition() {
 
 # Require OUTFD, ZIPFILE to be set
 install_module() {
+  if [ "${1:-}" = kagami ]; then
+    export KSU_HAS_METAMODULE=true
+    export KSU_METAMODULE=kagami
+
+    # Kagami resolves partition trees when building the mount plan.
+    handle_partition() { return 0; }
+    mark_replace() {
+      mkdir -p "$1" && setfattr -n trusted.overlay.opaque -v y "$1"
+    }
+    ui_print "- Using Kagami metainstall"
+  fi
+
   rm -rf $TMPDIR
   mkdir -p $TMPDIR
   chcon u:object_r:system_file:s0 $TMPDIR

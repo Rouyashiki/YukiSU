@@ -97,7 +97,7 @@ add_test(NAME restorecon COMMAND restorecon_test)
 set_tests_properties(restorecon PROPERTIES TIMEOUT 20)
 
 add_executable(module_lifecycle_test ../module_lifecycle_test.cpp
-    ${KSUD_ROOT}/src/module/module.cpp ${KSUD_ROOT}/src/module/metamodule.cpp
+    ${KSUD_ROOT}/src/module/metamodule.cpp
     ${KSUD_ROOT}/src/module/module_config.cpp ${KSUD_ROOT}/src/utils.cpp)
 target_include_directories(module_lifecycle_test PRIVATE "${KSUD_ROOT}/../..")
 target_compile_definitions(module_lifecycle_test PRIVATE RESETPROP_ALONE_AVAILABLE=1)
@@ -105,3 +105,20 @@ target_link_options(module_lifecycle_test PRIVATE -Wl,--wrap=fork -Wl,--wrap=exe
     -Wl,--wrap=rename -Wl,--wrap=readdir)
 add_test(NAME module_lifecycle COMMAND module_lifecycle_test)
 set_tests_properties(module_lifecycle PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+
+add_test(NAME module_install_hook COMMAND ${Python3_EXECUTABLE}
+    "${KSUD_ROOT}/tests/module_install_hook_test.py" "${KSUD_ROOT}/assets/installer.sh")
+set_tests_properties(module_install_hook PROPERTIES TIMEOUT 20)
+
+add_executable(overlay_partition_test ../overlay_partition_test.cpp)
+target_include_directories(overlay_partition_test PRIVATE "${KSUD_ROOT}/kagami/src"
+    "${KSUD_ROOT}/kagami/include" "${KSUD_ROOT}/../..")
+add_test(NAME overlay_partition COMMAND overlay_partition_test)
+set_tests_properties(overlay_partition PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+
+add_executable(storage_cleanup_test ../storage_cleanup_test.cpp
+    "${KSUD_ROOT}/kagami/src/mount/storage.cpp")
+target_include_directories(storage_cleanup_test PRIVATE "${KSUD_ROOT}/kagami/src"
+    "${KSUD_ROOT}/kagami/include" "${KSUD_ROOT}/src" "${KSUD_ROOT}/../..")
+add_test(NAME storage_cleanup COMMAND storage_cleanup_test)
+set_tests_properties(storage_cleanup PROPERTIES TIMEOUT 20)

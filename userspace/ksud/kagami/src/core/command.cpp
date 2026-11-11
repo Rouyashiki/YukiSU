@@ -69,7 +69,7 @@ void print_usage() {
               << "  ksud kagami module "
                  "list|add|delete|set-mode|set-bypass|apply|add-rule|remove-rule|hot-mount|hot-"
                  "unmount|check-"
-                 "conflicts|mount-all|unmount|normalize\n"
+                 "conflicts|mount-all|unmount|normalize|metauninstall\n"
               << "  ksud kagami recovery status|reset\n"
               << "  ksud kagami hide list|apply|add|remove\n"
               << "  ksud kagami kasumi "
@@ -720,6 +720,21 @@ bool save_bypass(const std::string& key, bool enabled, const char* file) {
 
 int handle_module(const std::vector<std::string>& args) {
     const auto sub = arg_or_default(args, 1, "");
+    if (sub == "metauninstall") {
+        const auto id = arg_or_default(args, 2, "");
+        if (args.size() != 3 || !valid_module_id(id))
+            return 1;
+        Config config;
+        std::string error;
+        if (!read_config_file(config, error, MissingConfig::UseDefaults)) {
+            std::cerr << error << '\n';
+            return 1;
+        }
+        return mount::fsutil::run_in_init_mount_ns(
+                   [&]() { return mount::storage::remove_module_content(config, id); })
+                   ? 0
+                   : 1;
+    }
     if (sub == "apply") {
         const auto id = arg_or_default(args, 2, "");
         if (args.size() != 3 || !valid_module_id(id))

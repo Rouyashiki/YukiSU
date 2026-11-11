@@ -36,6 +36,9 @@ Handle setup(const Config& config);
 // "" when no mirror is active. Read-only; never generates a path.
 std::string current_mirror_dir(const Config& config);
 
+// Called in the init mount namespace after the module is marked for removal.
+bool remove_module_content(const Config& config, const std::string& module_id);
+
 // Detach the one shared mirror after every backend has released it. Magic Mount
 // never calls setup(), so an all-Magic configuration does not create this mount.
 bool teardown_shared(const Config& config);

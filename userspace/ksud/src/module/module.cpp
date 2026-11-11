@@ -464,6 +464,11 @@ std::string build_install_wrapper_script(bool installing_metamodule, bool& custo
             script += "\nexit 0\n";
             return script;
         }
+        if (metamodule_mount_owner().empty()) {
+            LOGI("Using built-in Kagami metainstall");
+            script += "install_module kagami\nexit $?\n";
+            return script;
+        }
     }
 
     script += "install_module\nexit 0\n";

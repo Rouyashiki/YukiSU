@@ -1,6 +1,7 @@
 #include "../src/core/ksucalls.hpp"
 #include "../src/defs.hpp"
 #include "../src/module/metamodule.hpp"
+#include "../src/module/module.cpp"
 #include "../src/module/module.hpp"
 #include "../src/module/module_config.hpp"
 #include "../src/utils.hpp"
@@ -24,6 +25,8 @@ int forks = 0;
 int renames = 0;
 int prop_writes = 0;
 int builtin_mounts = 0;
+int builtin_uninstall_result = 0;
+std::vector<std::string> builtin_uninstalls;
 pid_t caller_group;
 
 void put(const fs::path& path, const std::string& contents = "") {
@@ -47,6 +50,8 @@ void reset_modules() {
     put("/launched");
     fail_fork = fail_rename = fail_props = false;
     forks = renames = prop_writes = 0;
+    builtin_uninstall_result = 0;
+    builtin_uninstalls.clear();
 }
 }  // namespace
 
@@ -73,6 +78,11 @@ int set_init_pgrp() {
 }  // namespace ksud
 
 namespace kagami {
+int embedded_command(const std::vector<std::string>& args) {
+    assert(args.size() == 3 && args[0] == "module" && args[1] == "metauninstall");
+    builtin_uninstalls.push_back(args[2]);
+    return builtin_uninstall_result;
+}
 int embedded_mount() {
     ++builtin_mounts;
     return 0;
@@ -150,6 +160,7 @@ void check_metamodule_paths() {
     caller_group = getpgrp();
     assert(metamodule_exec_mount_script() == 0 && builtin_mounts == 0);
     assert(metamodule_exec_uninstall_script("removed-module") == 0);
+    assert(builtin_uninstalls.empty());
     assert(launched().size() == 4);
     fs::current_path("/");
 
@@ -157,6 +168,69 @@ void check_metamodule_paths() {
     fs::remove_all(fs::path(MODULE_DIR) / "meta");
     put(external / "module.prop", "id=meta\nmetamodule=1\n");
     assert(get_metamodule_path() == std::string(MODULE_DIR) + "alias");
+}
+
+void check_install_wrappers() {
+    using namespace ksud;
+    reset_modules();
+    bool custom = true;
+    const std::string builtin = "install_module kagami\nexit $?\n";
+    assert(build_install_wrapper_script(false, custom).find(builtin) != std::string::npos);
+    assert(!custom);
+    assert(build_install_wrapper_script(true, custom).find(builtin) == std::string::npos);
+    assert(!custom);
+
+    const auto meta = fs::path(MODULE_DIR) / "meta";
+    put(meta / "module.prop", "id=meta\nmetamodule=1\n");
+    put(meta / "metamount.sh");
+    assert(build_install_wrapper_script(false, custom).find(builtin) == std::string::npos);
+    assert(!custom);
+
+    put(meta / "metainstall.sh");
+    const auto external = ". " + (meta / "metainstall.sh").string() + "\n";
+    const auto script = build_install_wrapper_script(false, custom);
+    assert(custom && script.find(external) != std::string::npos);
+    assert(script.find(builtin) == std::string::npos);
+    assert(build_install_wrapper_script(true, custom).find(external) == std::string::npos);
+    assert(!custom);
+
+    put(meta / "disable");
+    assert(build_install_wrapper_script(false, custom).find(builtin) != std::string::npos);
+    assert(!custom);
+    fs::remove(meta / "disable");
+    fs::remove(meta / "metainstall.sh");
+    fs::remove(meta / "metamount.sh");
+    assert(build_install_wrapper_script(false, custom).find(builtin) != std::string::npos);
+    assert(!custom);
+}
+
+void check_uninstall_hooks() {
+    using namespace ksud;
+    reset_modules();
+    assert(metamodule_exec_uninstall_script("removed-module") == 0);
+    assert((builtin_uninstalls == std::vector<std::string>{"removed-module"}));
+    builtin_uninstall_result = 7;
+    assert(metamodule_exec_uninstall_script("removed-module") == 7);
+    builtin_uninstall_result = 0;
+    builtin_uninstalls.clear();
+
+    const auto meta = fs::path(MODULE_DIR) / "meta";
+    put(meta / "module.prop", "id=meta\nmetamodule=1\n");
+    put(meta / "metamount.sh");
+    assert(metamodule_exec_uninstall_script("removed-module") == 0);
+    assert(builtin_uninstalls.empty());
+    put(meta / "metauninstall.sh");
+    assert(metamodule_exec_uninstall_script("removed-module") == 0);
+    assert(builtin_uninstalls.empty());
+    put(meta / "disable");
+    assert(metamodule_exec_uninstall_script("removed-module") == 0);
+    assert(builtin_uninstalls.size() == 1);
+
+    reset_modules();
+    put(fs::path(MODULE_DIR) / "removed-module/remove");
+    assert(prune_modules() == 0);
+    assert((builtin_uninstalls == std::vector<std::string>{"removed-module"}));
+    assert(!fs::exists(fs::path(MODULE_DIR) / "removed-module"));
 }
 
 void check_batch_errors() {
@@ -258,6 +332,8 @@ int main() {
     if (pid == 0) {
         assert(chroot(directory) == 0 && chdir("/") == 0 && chmod("/", 0755) == 0);
         check_metamodule_paths();
+        check_install_wrappers();
+        check_uninstall_hooks();
         check_batch_errors();
         check_prune_errors();
         check_temp_configs();
