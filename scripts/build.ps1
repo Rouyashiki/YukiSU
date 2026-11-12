@@ -15,7 +15,7 @@ Usage:
 
 Options:
   -k, --kmi KMI                 Build only one KMI (default: all supported KMIs)
-  --clean                       Delete Native CMake build directories first
+  --clean                       Clean Native and Manager outputs; disable build cache
   --skip-lkm                    Reuse existing out\<KMI>_kernelsu.ko files
   --yukizygisk                  Enable YukiZygisk kernel support (default)
   --yukizygisk-off              Disable YukiZygisk kernel hooks
@@ -511,7 +511,14 @@ try {
     $releaseSigned = $presentSigningValues -eq $signingMap.Count
 
     $gradleWrapper = Join-Path $managerDirectory 'gradlew.bat'
-    Invoke-Native -FilePath $gradleWrapper -ArgumentList @('assembleRelease', '--build-cache', '--no-daemon', "-PABI=$script:AndroidAbi") -WorkingDirectory $managerDirectory
+    $gradleArguments = if ($script:CleanBuild) {
+        @(':app:clean', 'assembleRelease', '--no-build-cache', '--rerun-tasks')
+    }
+    else {
+        @('assembleRelease', '--build-cache')
+    }
+    $gradleArguments += @('--no-daemon', "-PABI=$script:AndroidAbi")
+    Invoke-Native -FilePath $gradleWrapper -ArgumentList $gradleArguments -WorkingDirectory $managerDirectory
 
     $apkDirectory = Join-Path $managerDirectory 'app\build\outputs\renamed_apk\release'
     $apk = Get-ChildItem -LiteralPath $apkDirectory -File -Filter '*.apk' -ErrorAction SilentlyContinue |
