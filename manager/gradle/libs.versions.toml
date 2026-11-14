@@ -23,7 +23,7 @@ libsu = "6.0.0"
 cmaker = "1.5"
 compose-material3 = "1.5.0-rc01"
 compose-ui = "1.12.1"
-robolectric = "4.17"
+robolectric = "4.18"
 documentfile = "1.1.0"
 mmrl = "v34242"
 # JitPack publishes v438 (1cd1e76d9438) under the version without the v prefix.
