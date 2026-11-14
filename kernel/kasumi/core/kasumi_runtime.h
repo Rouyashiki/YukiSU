@@ -2,6 +2,8 @@
 #define _KASUMI_RUNTIME_H
 
 #include "kasumi_base.h"
+#include "kasumi_identity.h"
+
 #include "infra/symbol_resolver.h"
 #include <linux/namei.h>
 #include <linux/file.h>
@@ -30,6 +32,7 @@ int vfs_path_lookup(struct dentry *dentry, struct vfsmount *mnt,
 #include <linux/vmalloc.h>
 
 #include "kasumi_base.h"
+#include "kasumi_identity.h"
 #include "kasumi_types.h"
 
 extern bool kasumi_enabled;
@@ -50,18 +53,6 @@ struct kasumi_hook_stats {
 
 extern struct kasumi_hook_stats kasumi_hook_stats;
 
-struct kasumi_percpu {
-	int in_populate_inject;
-};
-
-extern struct kasumi_percpu *kasumi_percpu_base;
-
-static inline struct kasumi_percpu *kasumi_this_cpu(void)
-{
-	return kasumi_percpu_base + smp_processor_id();
-}
-
-extern char *kasumi_iterate_buf_base;
 extern atomic_long_t kasumi_ioctl_tgid;
 extern struct kmem_cache *kasumi_filldir_cache;
 
@@ -74,9 +65,6 @@ static inline unsigned long kasumi_lookup_callable(const char *name)
 }
 #define kasumi_lookup_callable_quiet kasumi_lookup_callable
 dev_t kasumi_vnode_device(void);
-unsigned long kasumi_vnode_source_ino(dev_t source_dev, u64 source_ino);
-unsigned long kasumi_vnode_vpath_ino(const char *vpath);
-unsigned long kasumi_vnode_ino_alloc(dev_t src_dev, u64 src_ino);
 dev_t kasumi_vnode_visible_dev(const char *visible_path);
 u64 kasumi_vnode_allocated(void);
 unsigned int kasumi_vnode_live(void);
@@ -105,7 +93,30 @@ extern int (*kasumi_notify_change)(struct dentry *, struct iattr *,
 #endif
 int kasumi_vfs_getattr_unprojected(const struct path *path, struct kstat *stat,
 				   u32 request_mask, unsigned int query_flags);
+struct kasumi_internal_vfs_guard {
+	struct task_struct *task;
+	struct hlist_node node;
+};
+
+void kasumi_vfs_internal_enter(struct kasumi_internal_vfs_guard *guard);
+void kasumi_vfs_internal_leave(struct kasumi_internal_vfs_guard *guard);
 bool kasumi_vfs_internal_current(void);
+u64 kasumi_rules_generation(void);
+int kasumi_rule_sequence_alloc(u64 *sequence);
+bool kasumi_config_enabled(void);
+u32 kasumi_config_features(void);
+bool kasumi_config_stealth(void);
+void kasumi_rules_changed(void);
+void kasumi_rules_publish(u64 generation);
+
+static inline bool kasumi_rule_visible(const struct kasumi_rule_lifetime *life,
+				      u64 generation)
+{
+	u64 last = READ_ONCE(life->last_generation);
+
+	return generation >= READ_ONCE(life->first_generation) &&
+	       (!last || generation <= last);
+}
 /*
  * Resolved get_vfs_caps_from_disk (security/commoncap.c).  Its leading
  * idmap/user_namespace argument varies by version exactly like notify_change;
@@ -129,6 +140,9 @@ int kasumi_source_vfs_caps(const struct path *src,
 /* Data-plane delegates for a char/blk/fifo source wrapper's special fops.
  * Stable signatures across all supported KMIs; NULL disables special read/write
  * (the op returns -EINVAL). */
+extern int (*kasumi_rw_verify_area)(int, struct file *, const loff_t *, size_t);
+extern typeof(security_file_permission) *kasumi_security_file_permission;
+extern void (*kasumi_fput_sync)(struct file *);
 extern ssize_t (*kasumi_vfs_read)(struct file *, char __user *, size_t,
 				  loff_t *);
 extern ssize_t (*kasumi_vfs_write)(struct file *, const char __user *, size_t,
@@ -148,11 +162,13 @@ extern void *kasumi_mnt_drop_write_addr;
  * leading idmap/user_namespace argument varies by version exactly like
  * notify_change; vfs_link takes the idmap as its SECOND argument.  Any may be
  * NULL (resolved quietly) — the vnode op returns -EOPNOTSUPP then.
- * lookup_one_len manufactures the source-side child dentry (caller holds the
- * source dir i_rwsem); its signature is stable across all supported KMIs.
+ * The child lookup uses the source mount's idmap where supported.
  */
-extern struct dentry *(*kasumi_lookup_one_len)(const char *, struct dentry *,
-					       int);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+extern typeof(lookup_one) *kasumi_lookup_one;
+#else
+extern typeof(lookup_one_len) *kasumi_lookup_one;
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
 extern int (*kasumi_vfs_create)(struct mnt_idmap *, struct inode *,
 				struct dentry *, umode_t, bool);
@@ -214,6 +230,11 @@ extern int (*kasumi_vfs_rename)(struct inode *, struct dentry *, struct inode *,
 /* Public LSM secctx round-trip: copy a source inode's security context onto a
  * synthetic vnode's in-core SID without touching SELinux blob internals.  Both
  * may be NULL when the LSM/symbols are unavailable — callers must check. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+extern typeof(security_inode_getlsmprop) *kasumi_security_inode_getlsmprop;
+#else
+extern typeof(security_inode_getsecid) *kasumi_security_inode_getsecid;
+#endif
 extern typeof(security_inode_getsecctx) *kasumi_security_inode_getsecctx;
 extern typeof(security_inode_notifysecctx) *kasumi_security_inode_notifysecctx;
 extern typeof(security_release_secctx) *kasumi_security_release_secctx;

@@ -1,3 +1,4 @@
+#include "kasumi/internal/kasumi_entrypoints.h"
 #include "infra/task_work.h"
 #include "infra/mount_policy.h"
 #include <asm/unistd.h>
@@ -500,6 +501,7 @@ static long anon_ksu_compat_ioctl(struct file *filp, unsigned int cmd,
 // File release handler
 static int anon_ksu_release(struct inode *inode, struct file *filp)
 {
+	kasumi_transaction_release(filp);
 	kfree(filp->private_data);
 	pr_info("ksu fd released\n");
 	return 0;

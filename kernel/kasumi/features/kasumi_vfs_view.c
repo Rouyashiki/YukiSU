@@ -1,10 +1,11 @@
-#include "infra/mount_policy.h"
 #include "kasumi_vfs_view.h"
+#include "kasumi_batch.h"
 #include "kasumi_entrypoints.h"
-#include "kasumi_fake_mountinfo.h"
+#include "kasumi_mount_view.h"
 #include "kasumi_runtime.h"
 #include "kasumi_store.h"
 #include "kasumi_xattr_filter.h"
+#include "kasumi_vnode.h"
 
 #include <linux/cred.h>
 #include <linux/fs_struct.h>
@@ -15,7 +16,9 @@
 #include <linux/nsproxy.h>
 #include <linux/rcupdate.h>
 #include <linux/rwsem.h>
+#include <linux/sched/signal.h>
 #include <linux/seq_file.h>
+#include <linux/security.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/statfs.h>
@@ -27,53 +30,72 @@
 #include <uapi/linux/magic.h>
 #include <fs/mount.h>
 
-#define KASUMI_VIEW_LINE_MAX 65536
-#define KASUMI_VIEW_MAX_DEPTH 256
-
 struct kasumi_view_guard {
 	struct task_struct *task;
 	struct hlist_node node;
 };
 
 static DEFINE_HASHTABLE(kasumi_view_guards, 6);
-static DEFINE_SPINLOCK(kasumi_view_guard_lock);
+static spinlock_t kasumi_view_guard_locks[HASH_SIZE(kasumi_view_guards)] = {
+	[0 ... HASH_SIZE(kasumi_view_guards) - 1] =
+		__SPIN_LOCK_UNLOCKED(kasumi_view_guard_locks),
+};
 static atomic_t kasumi_view_active = ATOMIC_INIT(0);
 static atomic_t kasumi_xattr_owned = ATOMIC_INIT(0);
 static DECLARE_WAIT_QUEUE_HEAD(kasumi_view_wait);
 static bool kasumi_view_stopped = true;
-static bool kasumi_view_drained;
+static void (*kasumi_view_tasks_barrier)(void);
 static bool kasumi_xattr_ready;
+static bool kasumi_source_xattr_ready;
 static bool kasumi_statfs_ready;
 static struct workqueue_struct *kasumi_xattr_wq;
-static struct rw_semaphore *kasumi_namespace_sem;
-static int (*kasumi_view_follow_up)(struct path *);
+static struct rw_semaphore *kasumi_statfs_namespace_lock;
 static int (*kasumi_view_statfs_orig)(const struct path *, struct kstatfs *);
 static ssize_t (*kasumi_view_listxattr_orig)(struct dentry *, char *, size_t);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-static ssize_t (*kasumi_view_getxattr_orig)(struct mnt_idmap *, struct dentry *,
-					    const char *, void *, size_t);
+#define KASUMI_XATTR_IDMAP_ARG struct mnt_idmap *idmap,
+#define KASUMI_XATTR_IDMAP_CALL idmap,
+#define KASUMI_XATTR_SOURCE_IDMAP(mnt) mnt_idmap(mnt),
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
-static ssize_t (*kasumi_view_getxattr_orig)(struct user_namespace *,
-					    struct dentry *, const char *,
-					    void *, size_t);
+#define KASUMI_XATTR_IDMAP_ARG struct user_namespace *idmap,
+#define KASUMI_XATTR_IDMAP_CALL idmap,
+#define KASUMI_XATTR_SOURCE_IDMAP(mnt) mnt_user_ns(mnt),
 #else
-static ssize_t (*kasumi_view_getxattr_orig)(struct dentry *, const char *,
-					    void *, size_t);
+#define KASUMI_XATTR_IDMAP_ARG
+#define KASUMI_XATTR_IDMAP_CALL
+#define KASUMI_XATTR_SOURCE_IDMAP(mnt)
 #endif
+static typeof(vfs_getxattr) *kasumi_view_getxattr_orig;
+static typeof(vfs_setxattr) *kasumi_view_setxattr_orig;
+static typeof(vfs_removexattr) *kasumi_view_removexattr_orig;
+static typeof(mnt_want_write) *kasumi_view_want_write;
+static typeof(mnt_drop_write) *kasumi_view_drop_write;
+static int (*kasumi_view_xattr_permission)(KASUMI_XATTR_IDMAP_ARG
+	struct inode *, const char *, int);
+static typeof(security_inode_getxattr) *kasumi_view_security_get;
+static typeof(security_inode_listxattr) *kasumi_view_security_list;
+static typeof(security_inode_setxattr) *kasumi_view_security_set;
+static typeof(security_inode_removexattr) *kasumi_view_security_remove;
 static struct kprobe kasumi_view_get_probe;
 static struct kprobe kasumi_view_list_probe;
+static struct kprobe kasumi_view_set_probe;
+static struct kprobe kasumi_view_remove_probe;
 static struct kprobe kasumi_view_statfs_probe;
 static bool kasumi_view_get_registered;
 static bool kasumi_view_list_registered;
+static bool kasumi_view_set_registered;
+static bool kasumi_view_remove_registered;
 static bool kasumi_view_statfs_registered;
 
 static bool kasumi_view_guarded(void)
 {
+	spinlock_t *lock = &kasumi_view_guard_locks[
+		hash_min((unsigned long)current, HASH_BITS(kasumi_view_guards))];
 	struct kasumi_view_guard *guard;
 	unsigned long flags;
 	bool found = false;
 
-	spin_lock_irqsave(&kasumi_view_guard_lock, flags);
+	spin_lock_irqsave(lock, flags);
 	hash_for_each_possible(kasumi_view_guards, guard, node,
 			       (unsigned long)current)
 	{
@@ -82,27 +104,31 @@ static bool kasumi_view_guarded(void)
 			break;
 		}
 	}
-	spin_unlock_irqrestore(&kasumi_view_guard_lock, flags);
+	spin_unlock_irqrestore(lock, flags);
 	return found;
 }
 
 static void kasumi_view_enter(struct kasumi_view_guard *guard)
 {
+	spinlock_t *lock = &kasumi_view_guard_locks[
+		hash_min((unsigned long)current, HASH_BITS(kasumi_view_guards))];
 	unsigned long flags;
 
 	guard->task = current;
-	spin_lock_irqsave(&kasumi_view_guard_lock, flags);
+	spin_lock_irqsave(lock, flags);
 	hash_add(kasumi_view_guards, &guard->node, (unsigned long)current);
-	spin_unlock_irqrestore(&kasumi_view_guard_lock, flags);
+	spin_unlock_irqrestore(lock, flags);
 }
 
 static void kasumi_view_leave(struct kasumi_view_guard *guard)
 {
+	spinlock_t *lock = &kasumi_view_guard_locks[
+		hash_min((unsigned long)guard->task, HASH_BITS(kasumi_view_guards))];
 	unsigned long flags;
 
-	spin_lock_irqsave(&kasumi_view_guard_lock, flags);
+	spin_lock_irqsave(lock, flags);
 	hash_del(&guard->node);
-	spin_unlock_irqrestore(&kasumi_view_guard_lock, flags);
+	spin_unlock_irqrestore(lock, flags);
 	if (atomic_dec_and_test(&kasumi_view_active))
 		wake_up_all(&kasumi_view_wait);
 }
@@ -111,6 +137,7 @@ static bool kasumi_xattr_target(struct dentry *dentry)
 {
 	struct kasumi_xattr_sb_entry *entry;
 	bool found = false;
+	u64 generation = kasumi_rules_generation();
 
 	if (!READ_ONCE(kasumi_xattr_ready) || !dentry || !dentry->d_sb ||
 	    !kasumi_policy_current_is_spoof_target())
@@ -119,7 +146,8 @@ static bool kasumi_xattr_target(struct dentry *dentry)
 	hash_for_each_possible_rcu(kasumi_xattr_sbs, entry, node,
 				   (unsigned long)dentry->d_sb)
 	{
-		if (entry->sb == dentry->d_sb) {
+		if (entry->sb == dentry->d_sb &&
+		    kasumi_rule_visible(&entry->life, generation)) {
 			found = true;
 			break;
 		}
@@ -128,34 +156,122 @@ static bool kasumi_xattr_target(struct dentry *dentry)
 	return found;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-static KASUMI_NOCFI ssize_t kasumi_view_getxattr(struct mnt_idmap *idmap,
-						 struct dentry *dentry,
-						 const char *name, void *value,
-						 size_t size)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
-static KASUMI_NOCFI ssize_t kasumi_view_getxattr(struct user_namespace *idmap,
-						 struct dentry *dentry,
-						 const char *name, void *value,
-						 size_t size)
-#else
-static KASUMI_NOCFI ssize_t kasumi_view_getxattr(struct dentry *dentry,
-						 const char *name, void *value,
-						 size_t size)
-#endif
+static KASUMI_NOCFI ssize_t kasumi_view_getxattr(KASUMI_XATTR_IDMAP_ARG
+	struct dentry *dentry, const char *name, void *value, size_t size)
 {
 	struct kasumi_view_guard guard;
+	struct kasumi_internal_vfs_guard source_guard;
+	struct path source = {};
+	struct dentry *data = dentry;
 	ssize_t ret;
+	int handled;
 
 	kasumi_view_enter(&guard);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
-	ret = kasumi_view_getxattr_orig(idmap, dentry, name, value, size);
-#else
-	ret = kasumi_view_getxattr_orig(dentry, name, value, size);
-#endif
+	handled = READ_ONCE(kasumi_source_xattr_ready) ?
+		kasumi_vnode_source_path(dentry, &source) : 0;
+	if (handled < 0) {
+		ret = handled;
+		goto out;
+	}
+	if (handled) {
+		ret = kasumi_view_xattr_permission(KASUMI_XATTR_IDMAP_CALL
+			d_inode(dentry), name, MAY_READ);
+		if (!ret)
+			ret = kasumi_view_security_get(dentry, name);
+		if (ret)
+			goto out;
+		data = source.dentry;
+		kasumi_vfs_internal_enter(&source_guard);
+		ret = kasumi_view_getxattr_orig(KASUMI_XATTR_SOURCE_IDMAP(source.mnt)
+			data, name, value, size);
+		kasumi_vfs_internal_leave(&source_guard);
+	} else {
+		ret = kasumi_view_getxattr_orig(KASUMI_XATTR_IDMAP_CALL
+			dentry, name, value, size);
+	}
 	if ((ret >= 0 || ret == -ERANGE) && kasumi_overlay_name(name) &&
-	    kasumi_xattr_target(dentry))
+	    (kasumi_xattr_target(dentry) || (handled && kasumi_xattr_target(data))))
 		ret = -ENODATA;
+out:
+	if (source.dentry)
+		path_put(&source);
+	kasumi_view_leave(&guard);
+	return ret;
+}
+
+static KASUMI_NOCFI int kasumi_view_setxattr(KASUMI_XATTR_IDMAP_ARG
+	struct dentry *dentry, const char *name, const void *value, size_t size, int flags)
+{
+	struct kasumi_view_guard guard;
+	struct kasumi_internal_vfs_guard source_guard;
+	struct path source = {};
+	int handled, ret;
+
+	kasumi_view_enter(&guard);
+	handled = kasumi_vnode_source_path(dentry, &source);
+	if (handled <= 0) {
+		ret = handled ?: kasumi_view_setxattr_orig(KASUMI_XATTR_IDMAP_CALL
+			dentry, name, value, size, flags);
+		goto out;
+	}
+	ret = kasumi_view_xattr_permission(KASUMI_XATTR_IDMAP_CALL
+		d_inode(dentry), name, MAY_WRITE);
+	if (!ret)
+		ret = kasumi_view_security_set(KASUMI_XATTR_IDMAP_CALL
+			dentry, name, value, size, flags);
+	if (ret)
+		goto out;
+	ret = kasumi_view_want_write(source.mnt);
+	if (ret)
+		goto out;
+	kasumi_vfs_internal_enter(&source_guard);
+	ret = kasumi_view_setxattr_orig(KASUMI_XATTR_SOURCE_IDMAP(source.mnt)
+		source.dentry, name, value, size, flags);
+	kasumi_vfs_internal_leave(&source_guard);
+	kasumi_view_drop_write(source.mnt);
+	if (!ret && !strcmp(name, "security.selinux"))
+		ret = kasumi_vnode_refresh_label(dentry);
+out:
+	if (source.dentry)
+		path_put(&source);
+	kasumi_view_leave(&guard);
+	return ret;
+}
+
+static KASUMI_NOCFI int kasumi_view_removexattr(KASUMI_XATTR_IDMAP_ARG
+	struct dentry *dentry, const char *name)
+{
+	struct kasumi_view_guard guard;
+	struct kasumi_internal_vfs_guard source_guard;
+	struct path source = {};
+	int handled, ret;
+
+	kasumi_view_enter(&guard);
+	handled = kasumi_vnode_source_path(dentry, &source);
+	if (handled <= 0) {
+		ret = handled ?: kasumi_view_removexattr_orig(KASUMI_XATTR_IDMAP_CALL
+			dentry, name);
+		goto out;
+	}
+	ret = kasumi_view_xattr_permission(KASUMI_XATTR_IDMAP_CALL
+		d_inode(dentry), name, MAY_WRITE);
+	if (!ret)
+		ret = kasumi_view_security_remove(KASUMI_XATTR_IDMAP_CALL dentry, name);
+	if (ret)
+		goto out;
+	ret = kasumi_view_want_write(source.mnt);
+	if (ret)
+		goto out;
+	kasumi_vfs_internal_enter(&source_guard);
+	ret = kasumi_view_removexattr_orig(KASUMI_XATTR_SOURCE_IDMAP(source.mnt)
+		source.dentry, name);
+	kasumi_vfs_internal_leave(&source_guard);
+	kasumi_view_drop_write(source.mnt);
+	if (!ret && !strcmp(name, "security.selinux"))
+		ret = kasumi_vnode_refresh_label(dentry);
+out:
+	if (source.dentry)
+		path_put(&source);
 	kasumi_view_leave(&guard);
 	return ret;
 }
@@ -164,30 +280,68 @@ static KASUMI_NOCFI ssize_t kasumi_view_listxattr(struct dentry *dentry,
 						  char *list, size_t size)
 {
 	struct kasumi_view_guard guard;
-	char *buffer;
+	struct kasumi_internal_vfs_guard source_guard;
+	struct path source = {};
+	struct dentry *data = dentry;
+	char *buffer = NULL;
 	size_t output;
-	ssize_t ret;
+	ssize_t needed, ret;
+	unsigned int attempt;
+	int handled;
+	bool filter, source_active = false;
 
 	kasumi_view_enter(&guard);
-	if (in_atomic() || irqs_disabled()) {
-		ret = kasumi_view_listxattr_orig(dentry, list, size);
+	handled = READ_ONCE(kasumi_source_xattr_ready) ?
+		kasumi_vnode_source_path(dentry, &source) : 0;
+	if (handled < 0) {
+		ret = handled;
 		goto out;
 	}
-	buffer = kvmalloc(XATTR_LIST_MAX, GFP_KERNEL);
-	if (!buffer) {
-		ret = -ENOMEM;
+	if (handled) {
+		ret = kasumi_view_security_list(dentry);
+		if (ret)
+			goto out;
+		data = source.dentry;
+	}
+	filter = kasumi_xattr_target(dentry) || (handled && kasumi_xattr_target(data));
+	if (handled) {
+		kasumi_vfs_internal_enter(&source_guard);
+		source_active = true;
+	}
+	if (!filter) {
+		ret = kasumi_view_listxattr_orig(data, list, size);
 		goto out;
 	}
-	ret = kasumi_view_listxattr_orig(dentry, buffer, XATTR_LIST_MAX);
+	for (attempt = 0; attempt < 3; attempt++) {
+		needed = kasumi_view_listxattr_orig(data, NULL, 0);
+		if (needed <= 0) {
+			ret = needed;
+			goto out;
+		}
+		if (needed > XATTR_LIST_MAX) {
+			ret = -E2BIG;
+			goto out;
+		}
+		buffer = kvmalloc(needed, GFP_KERNEL);
+		if (!buffer) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		ret = kasumi_view_listxattr_orig(data, buffer, needed);
+		if (ret != -ERANGE)
+			break;
+		kvfree(buffer);
+		buffer = NULL;
+	}
 	if (ret < 0)
-		goto out_free;
-	if (ret > XATTR_LIST_MAX) {
+		goto out;
+	if (ret > needed) {
 		ret = -EOVERFLOW;
-		goto out_free;
+		goto out;
 	}
 	ret = kasumi_xattr_filter_list(buffer, ret);
 	if (ret < 0)
-		goto out_free;
+		goto out;
 	output = ret;
 	if (size) {
 		if (output > size)
@@ -197,354 +351,80 @@ static KASUMI_NOCFI ssize_t kasumi_view_listxattr(struct dentry *dentry,
 		else if (output)
 			ret = -EFAULT;
 	}
-out_free:
-	kvfree(buffer);
 out:
+	kvfree(buffer);
+	if (source_active)
+		kasumi_vfs_internal_leave(&source_guard);
+	if (source.dentry)
+		path_put(&source);
 	kasumi_view_leave(&guard);
 	return ret;
 }
 
-static inline bool is_digit(char c)
+static bool kasumi_statfs_projection_active(void)
 {
-	return c >= '0' && c <= '9';
-}
-
-#define FAKE_MI_MAX_PROP_FIELDS 8
-
-enum fake_mi_prop_kind {
-	FAKE_MI_PROP_SHARED = 0,
-	FAKE_MI_PROP_MASTER,
-	FAKE_MI_PROP_PROPAGATE_FROM,
-};
-
-struct fake_mi_prop_ref {
-	size_t value_start;
-	size_t value_end;
-	int old_id;
-	enum fake_mi_prop_kind kind;
-};
-
-static bool parse_decimal_token(const char *line, size_t start, size_t end,
-				int *out)
-{
-	long v;
-	char tmp[32];
-	size_t len;
-
-	if (!out || start >= end)
-		return false;
-
-	len = end - start;
-	if (len >= sizeof(tmp))
-		return false;
-
-	memcpy(tmp, line + start, len);
-	tmp[len] = 0;
-	if (kstrtol(tmp, 10, &v))
-		return false;
-
-	*out = (int)v;
-	return true;
-}
-
-static bool token_has_prefix(const char *line, size_t start, size_t end,
-			     const char *prefix)
-{
-	size_t plen = strlen(prefix);
-
-	return end >= start + plen && memcmp(line + start, prefix, plen) == 0;
-}
-
-/* Parse the identity fields rendered by the statfs view. */
-static bool parse_line(const char *line, size_t len, int *mnt_id,
-		       int *parent_id, size_t *mi_start, size_t *mi_end,
-		       size_t *pi_start, size_t *pi_end,
-		       struct fake_mi_prop_ref *prop_refs, size_t *prop_count,
-		       bool *is_hidden, bool *is_namespace_root,
-		       size_t *mountpoint_start_out, size_t *mountpoint_end_out)
-{
-	size_t i = 0, token_start, token_end;
-	size_t mount_root_start = 0, mount_root_end = 0;
-	size_t mountpoint_start = 0, mountpoint_end = 0;
-	size_t j;
-	struct ksu_mount_fields fields = {.escaped = true};
-
-	*is_hidden = false;
-	*is_namespace_root = false;
-	if (prop_count)
-		*prop_count = 0;
-
-	/* mnt_id */
-	*mi_start = i;
-	while (i < len && is_digit(line[i]))
-		i++;
-	if (i == *mi_start || i >= len || line[i] != ' ')
-		return false;
-	*mi_end = i;
-	if (!parse_decimal_token(line, *mi_start, *mi_end, mnt_id))
-		return false;
-	i++;
-
-	/* parent_id */
-	*pi_start = i;
-	while (i < len && is_digit(line[i]))
-		i++;
-	if (i == *pi_start || i >= len || line[i] != ' ')
-		return false;
-	*pi_end = i;
-	if (!parse_decimal_token(line, *pi_start, *pi_end, parent_id))
-		return false;
-	i++;
-
-	/* Parse major:minor, root, mountpoint, mount opts. A self-parent entry
-	 * is only a legitimate graph terminator when it is mounted at namespace
-	 * /.
-	 */
-	for (j = 0; j < 4; j++) {
-		token_start = i;
-		while (i < len && line[i] != ' ')
-			i++;
-		token_end = i;
-		if (token_start == token_end || i >= len || line[i] != ' ')
-			return false;
-		i++;
-		if (j == 0)
-			fields.dev = (struct ksu_mount_field){
-			    line + token_start, token_end - token_start};
-		if (j == 1) {
-			mount_root_start = token_start;
-			mount_root_end = token_end;
-		} else if (j == 2) {
-			mountpoint_start = token_start;
-			mountpoint_end = token_end;
-		}
-		if (j == 2 && token_end == token_start + 1 &&
-		    line[token_start] == '/')
-			*is_namespace_root = true;
-	}
-
-	fields.root = (struct ksu_mount_field){
-	    line + mount_root_start, mount_root_end - mount_root_start};
-	fields.target = (struct ksu_mount_field){
-	    line + mountpoint_start, mountpoint_end - mountpoint_start};
-	if (mountpoint_start_out)
-		*mountpoint_start_out = mountpoint_start;
-	if (mountpoint_end_out)
-		*mountpoint_end_out = mountpoint_end;
-
-	while (i < len) {
-		int value;
-
-		token_start = i;
-		while (i < len && line[i] != ' ')
-			i++;
-		token_end = i;
-		if (token_start == token_end)
-			return false;
-
-		if (token_end == token_start + 1 && line[token_start] == '-') {
-			if (i < len && line[i] == ' ')
-				i++;
-			break;
-		}
-
-		if (prop_refs && prop_count &&
-		    *prop_count < FAKE_MI_MAX_PROP_FIELDS) {
-			size_t value_start = 0;
-			const char *prefix = NULL;
-			enum fake_mi_prop_kind kind = FAKE_MI_PROP_SHARED;
-
-			if (token_has_prefix(line, token_start, token_end,
-					     "shared:")) {
-				prefix = "shared:";
-			} else if (token_has_prefix(line, token_start,
-						    token_end, "master:")) {
-				prefix = "master:";
-				kind = FAKE_MI_PROP_MASTER;
-			} else if (token_has_prefix(line, token_start,
-						    token_end,
-						    "propagate_from:")) {
-				prefix = "propagate_from:";
-				kind = FAKE_MI_PROP_PROPAGATE_FROM;
-			}
-
-			if (prefix) {
-				value_start = token_start + strlen(prefix);
-				if (value_start < token_end &&
-				    parse_decimal_token(line, value_start,
-							token_end, &value)) {
-					prop_refs[*prop_count].value_start =
-					    value_start;
-					prop_refs[*prop_count].value_end =
-					    token_end;
-					prop_refs[*prop_count].old_id = value;
-					prop_refs[*prop_count].kind = kind;
-					(*prop_count)++;
-				}
-			}
-		}
-
-		if (i < len && line[i] == ' ')
-			i++;
-	}
-
-	/* Read filesystem identity after the optional fields. */
-	token_start = i;
-	while (i < len && line[i] != ' ')
-		i++;
-	if (i == token_start || i == len)
-		return false;
-	fields.fstype =
-	    (struct ksu_mount_field){line + token_start, i - token_start};
-	i++;
-
-	/* source */
-	token_start = i;
-	while (i < len && line[i] != ' ')
-		i++;
-	token_end = i;
-	if (token_start == token_end)
-		return false;
-	fields.source = (struct ksu_mount_field){line + token_start,
-						 token_end - token_start};
-	while (i < len && line[i] == ' ')
-		i++;
-	fields.super = (struct ksu_mount_field){line + i, len - i};
-	*is_hidden = ksu_mount_is_module(&fields);
-
-	return true;
-}
-
-static int kasumi_view_classify_mount(const char *line, size_t len,
-				      bool *hidden)
-{
-	int mount_id, parent_id;
-	u64 policy_generation = ksu_mount_policy_generation();
-
-	if (policy_generation & 1)
-		return -EAGAIN;
-	size_t mi_start, mi_end, pi_start, pi_end;
-	bool namespace_root;
-
-	if (!line || !hidden ||
-	    !parse_line(line, len, &mount_id, &parent_id, &mi_start, &mi_end,
-			&pi_start, &pi_end, NULL, NULL, hidden, &namespace_root,
-			NULL, NULL))
-		return -EINVAL;
-	return policy_generation == ksu_mount_policy_generation() ? 0 : -EAGAIN;
-}
-
-/* Render just the identity fields used by the mountinfo classifier. No proc
- * file is opened, and filesystem option printers are deliberately not called.
- * namespace_sem pins the topology while follow_up selects a visible ancestor.
- */
-static KASUMI_NOCFI int kasumi_view_mount_hidden(struct seq_file *seq,
-						 const struct path *path,
-						 const struct path *root,
-						 bool *hidden)
-{
-	struct mount *mnt = real_mount(path->mnt);
-	struct super_block *sb = path->mnt->mnt_sb;
-	struct path mount_root = {.mnt = path->mnt,
-				  .dentry = path->mnt->mnt_root};
-	int ret;
-
-	seq->count = 0;
-	seq_printf(seq, "%i %i %u:%u ", mnt->mnt_id, mnt->mnt_parent->mnt_id,
-		   MAJOR(sb->s_dev), MINOR(sb->s_dev));
-	if (sb->s_op->show_path) {
-		ret = sb->s_op->show_path(seq, mount_root.dentry);
-		if (ret)
-			return ret;
-	} else if (seq_dentry(seq, mount_root.dentry, " \t\n\\") < 0) {
-		return -EOVERFLOW;
-	}
-	seq_putc(seq, ' ');
-	ret = seq_path_root(seq, &mount_root, root, " \t\n\\");
-	if (ret)
-		return ret;
-	seq_puts(seq, " rw - ");
-	seq_puts(seq, sb->s_type->name);
-	seq_putc(seq, ' ');
-	if (sb->s_op->show_devname) {
-		ret = sb->s_op->show_devname(seq, mount_root.dentry);
-		if (ret)
-			return ret;
-	} else {
-		seq_escape(seq, mnt->mnt_devname ? mnt->mnt_devname : "none",
-			   " \t\n\\");
-	}
-	seq_puts(seq, " rw\n");
-	if (seq_has_overflowed(seq))
-		return -EOVERFLOW;
-	return kasumi_view_classify_mount(seq->buf, seq->count, hidden);
+	return kasumi_mount_projection_active() ||
+		(kasumi_mount_view_available() && kasumi_statfs_view_available() &&
+		 kasumi_config_enabled() &&
+		 (kasumi_config_features() & KSM_FEATURE_STATFS_SPOOF) &&
+		 kasumi_policy_current_is_spoof_target());
 }
 
 static KASUMI_NOCFI int kasumi_view_statfs(const struct path *path,
 					   struct kstatfs *buf)
 {
 	struct kasumi_view_guard guard;
-	struct path root, projected;
+	struct kasumi_mount_view *view = NULL;
+	const struct kasumi_mount_record *record, *alias;
+	struct path projected = {};
 	struct kstatfs backing;
-	struct file file = {.f_cred = current_cred()};
-	struct seq_file seq = {.file = &file, .size = KASUMI_VIEW_LINE_MAX};
-	struct proc_mounts view = {};
-	bool hidden = false, changed = false;
-	int ret, depth;
+	unsigned int attempt;
+	int ret;
 
 	kasumi_view_enter(&guard);
 	ret = kasumi_view_statfs_orig(path, buf);
-	if (ret || in_atomic() || irqs_disabled() || !current->fs ||
-	    !current->nsproxy)
+	if (ret || !kasumi_statfs_projection_active())
 		goto out;
-	seq.buf = kvmalloc(seq.size, GFP_KERNEL);
-	if (!seq.buf) {
-		ret = -ENOMEM;
-		goto out;
-	}
-	get_fs_root(current->fs, &root);
-	projected = *path;
-	path_get(&projected);
-	view.ns = current->nsproxy->mnt_ns;
-	view.root = root;
-	seq.private = &view;
-	/* Try-lock also makes nested callers holding namespace_sem safe when a
-	 * writer is pending: never recursively block behind that writer.
-	 */
-	if (!down_read_trylock(kasumi_namespace_sem)) {
-		ret = -EAGAIN;
-		goto out_paths;
-	}
-	for (depth = 0; depth < KASUMI_VIEW_MAX_DEPTH; depth++) {
-		if (real_mount(projected.mnt)->mnt_ns != view.ns)
-			break;
-		ret =
-		    kasumi_view_mount_hidden(&seq, &projected, &root, &hidden);
-		if (ret == SEQ_SKIP) {
-			ret = 0;
-			break;
+	for (attempt = 0; attempt < KASUMI_MOUNT_VIEW_ATTEMPTS; attempt++) {
+		if (fatal_signal_pending(current)) {
+			ret = -EINTR;
+			goto out;
 		}
-		if (ret || !hidden)
-			break;
-		if (!kasumi_view_follow_up(&projected))
-			break;
-		changed = true;
+		ret = kasumi_mount_view_get_current(&view);
+		if (ret && ret != -EAGAIN)
+			goto out;
+		if (!ret) {
+			down_read(kasumi_statfs_namespace_lock);
+			if (kasumi_mount_view_current(view))
+				break;
+			up_read(kasumi_statfs_namespace_lock);
+			kasumi_mount_view_put(view);
+			view = NULL;
+		}
+		cond_resched();
 	}
-	up_read(kasumi_namespace_sem);
-	if (depth == KASUMI_VIEW_MAX_DEPTH)
-		ret = -ELOOP;
-	if (!ret && changed && !hidden) {
+	if (!view) {
+		ret = -EAGAIN;
+		goto out;
+	}
+	record = kasumi_mount_view_find(view, real_mount(path->mnt)->mnt_id, false);
+	alias = kasumi_mount_view_representative(view, record);
+	if (alias && alias != record) {
+		projected.mnt = alias->mount;
+		projected.dentry = alias->mount->mnt_root;
+		path_get(&projected);
+	}
+	up_read(kasumi_statfs_namespace_lock);
+	if (projected.mnt) {
 		ret = kasumi_view_statfs_orig(&projected, &backing);
 		if (!ret) {
-			buf->f_type = backing.f_type;
+			*buf = backing;
 			atomic64_inc(&kasumi_hook_stats.statfs_spoofs);
 		}
+		path_put(&projected);
 	}
-out_paths:
-	path_put(&projected);
-	path_put(&root);
-	kvfree(seq.buf);
 out:
+	kasumi_mount_view_put(view);
 	kasumi_view_leave(&guard);
 	return ret;
 }
@@ -559,6 +439,7 @@ static int kasumi_view_pre(struct kprobe *probe, struct pt_regs *regs)
 	const char *name;
 
 	if (READ_ONCE(kasumi_view_stopped) || !current->mm ||
+	    kasumi_vfs_internal_current() ||
 	    kasumi_view_guarded())
 		return 0;
 #if defined(CONFIG_ARM64)
@@ -566,16 +447,14 @@ static int kasumi_view_pre(struct kprobe *probe, struct pt_regs *regs)
 		return 0;
 	if (probe == &kasumi_view_statfs_probe) {
 		if (!READ_ONCE(kasumi_statfs_ready) ||
-		    (READ_ONCE(kasumi_feature_enabled_mask) &
-		     (KSM_FEATURE_STATFS_SPOOF | KSM_FEATURE_MOUNT_HIDE)) !=
-			(KSM_FEATURE_STATFS_SPOOF | KSM_FEATURE_MOUNT_HIDE) ||
-		    !kasumi_policy_current_is_spoof_target())
+		    !kasumi_statfs_projection_active())
 			return 0;
 		atomic64_inc(&kasumi_hook_stats.statfs_entries);
 		target = (unsigned long)kasumi_view_statfs;
 	} else if (probe == &kasumi_view_list_probe) {
 		dentry = (void *)regs->regs[0];
-		if (!kasumi_xattr_target(dentry))
+		if (!(READ_ONCE(kasumi_source_xattr_ready) &&
+		      kasumi_vnode_is_ours(d_inode(dentry))) && !kasumi_xattr_target(dentry))
 			return 0;
 		target = (unsigned long)kasumi_view_listxattr;
 	} else {
@@ -586,9 +465,20 @@ static int kasumi_view_pre(struct kprobe *probe, struct pt_regs *regs)
 		dentry = (void *)regs->regs[0];
 		name = (void *)regs->regs[1];
 #endif
-		if (!kasumi_overlay_name(name) || !kasumi_xattr_target(dentry))
-			return 0;
-		target = (unsigned long)kasumi_view_getxattr;
+		if (probe == &kasumi_view_set_probe || probe == &kasumi_view_remove_probe) {
+			if (!READ_ONCE(kasumi_source_xattr_ready) ||
+			    !kasumi_vnode_is_ours(d_inode(dentry)))
+				return 0;
+			target = probe == &kasumi_view_set_probe ?
+				(unsigned long)kasumi_view_setxattr :
+				(unsigned long)kasumi_view_removexattr;
+		} else {
+			if (!(READ_ONCE(kasumi_source_xattr_ready) &&
+			      kasumi_vnode_is_ours(d_inode(dentry))) &&
+			    (!kasumi_overlay_name(name) || !kasumi_xattr_target(dentry)))
+				return 0;
+			target = (unsigned long)kasumi_view_getxattr;
+		}
 	}
 	atomic_inc(&kasumi_view_active);
 	instruction_pointer_set(regs, target);
@@ -614,7 +504,7 @@ void kasumi_overlay_xattr_retire(struct kasumi_xattr_sb_entry *entry)
 	queue_work(kasumi_xattr_wq, &entry->free_work);
 }
 
-KASUMI_NOCFI int kasumi_overlay_xattr_mark(const char *name)
+KASUMI_NOCFI int kasumi_overlay_xattr_mark_at(const char *name, u64 generation)
 {
 	struct kasumi_xattr_sb_entry *entry, *existing;
 	struct hlist_node *tmp;
@@ -627,8 +517,10 @@ KASUMI_NOCFI int kasumi_overlay_xattr_mark(const char *name)
 		mutex_lock(&kasumi_config_mutex);
 		hash_for_each_safe(kasumi_xattr_sbs, bucket, tmp, entry, node)
 		{
-			hash_del_rcu(&entry->node);
-			call_rcu(&entry->rcu, kasumi_xattr_sb_entry_free_rcu);
+			if (kasumi_rule_visible(&entry->life, generation)) {
+				kasumi_batch_track(&entry->life, KASUMI_BATCH_XATTR);
+				WRITE_ONCE(entry->life.last_generation, generation - 1);
+			}
 		}
 		mutex_unlock(&kasumi_config_mutex);
 		return 0;
@@ -647,6 +539,7 @@ KASUMI_NOCFI int kasumi_overlay_xattr_mark(const char *name)
 		ret = -ENOMEM;
 		goto out_path;
 	}
+	entry->life.first_generation = generation;
 	entry->sb = path.dentry->d_sb;
 	INIT_WORK(&entry->free_work, kasumi_xattr_free_work);
 	mutex_lock(&kasumi_config_mutex);
@@ -657,13 +550,15 @@ KASUMI_NOCFI int kasumi_overlay_xattr_mark(const char *name)
 	hash_for_each_possible(kasumi_xattr_sbs, existing, node,
 			       (unsigned long)entry->sb)
 	{
-		if (existing->sb == entry->sb)
+		if (existing->sb == entry->sb &&
+		    kasumi_rule_visible(&existing->life, generation))
 			goto out_unlock;
 	}
 	if (!atomic_inc_not_zero(&entry->sb->s_active)) {
 		ret = -ESHUTDOWN;
 		goto out_unlock;
 	}
+	kasumi_batch_track(&entry->life, KASUMI_BATCH_XATTR);
 	atomic_inc(&kasumi_xattr_owned);
 	hash_add_rcu(kasumi_xattr_sbs, &entry->node, (unsigned long)entry->sb);
 	mutex_unlock(&kasumi_config_mutex);
@@ -677,9 +572,19 @@ out_path:
 	return ret;
 }
 
+int kasumi_overlay_xattr_mark(const char *name)
+{
+	return kasumi_overlay_xattr_mark_at(name, kasumi_rules_generation());
+}
+
 bool kasumi_overlay_xattr_available(void)
 {
 	return READ_ONCE(kasumi_xattr_ready);
+}
+
+bool kasumi_source_xattr_available(void)
+{
+	return READ_ONCE(kasumi_source_xattr_ready);
 }
 
 bool kasumi_statfs_view_available(void)
@@ -694,63 +599,6 @@ static int kasumi_view_register(struct kprobe *probe, const char *name)
 	return register_kprobe(probe);
 }
 
-static KASUMI_NOCFI bool kasumi_view_mount_layout_valid(void)
-{
-	long (*read_kernel)(void *dst, const void *src, size_t size);
-	int (*show_mount)(struct seq_file *seq, struct vfsmount *mnt);
-	struct path root;
-	struct mnt_namespace *ns;
-	struct mount *mnt;
-	struct file file = {.f_cred = current_cred()};
-	struct seq_file seq = {.file = &file, .size = KASUMI_VIEW_LINE_MAX};
-	struct proc_mounts view = {};
-	char token[16];
-	size_t len = 0;
-	int mount_id, expected_id, ret;
-	bool valid = false;
-
-	if (!current->fs || !current->nsproxy)
-		return false;
-	read_kernel =
-	    (void *)kasumi_lookup_callable_quiet("copy_from_kernel_nofault");
-	show_mount = (void *)kasumi_lookup_callable_quiet("show_mountinfo");
-	if (!read_kernel || !show_mount)
-		return false;
-	seq.buf = kvmalloc(seq.size, GFP_KERNEL);
-	if (!seq.buf)
-		return false;
-	get_fs_root(current->fs, &root);
-	mnt = real_mount(root.mnt);
-	view.ns = current->nsproxy->mnt_ns;
-	view.root = root;
-	seq.private = &view;
-	if (!down_read_trylock(kasumi_namespace_sem))
-		goto out;
-	/* The kernel formatter validates the private mount layout without
-	 * opening a proc file. vfs_getattr() does not populate statx mount IDs.
-	 */
-	ret = show_mount(&seq, root.mnt);
-	if (ret || seq_has_overflowed(&seq))
-		goto out_unlock;
-	while (len < seq.count && len + 1 < sizeof(token) &&
-	       seq.buf[len] >= '0' && seq.buf[len] <= '9')
-		len++;
-	if (!len || len >= seq.count || seq.buf[len] != ' ')
-		goto out_unlock;
-	memcpy(token, seq.buf, len);
-	token[len] = '\0';
-	if (!kstrtoint(token, 10, &expected_id) &&
-	    !read_kernel(&mount_id, &mnt->mnt_id, sizeof(mount_id)) &&
-	    !read_kernel(&ns, &mnt->mnt_ns, sizeof(ns)))
-		valid = expected_id == mount_id && ns == view.ns;
-out_unlock:
-	up_read(kasumi_namespace_sem);
-out:
-	path_put(&root);
-	kvfree(seq.buf);
-	return valid;
-}
-
 int kasumi_vfs_view_init(void)
 {
 	int ret;
@@ -758,17 +606,34 @@ int kasumi_vfs_view_init(void)
 #ifndef CONFIG_ARM64
 	return -EOPNOTSUPP;
 #endif
+	kasumi_view_tasks_barrier =
+		(void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	if (!kasumi_view_tasks_barrier)
+		return -ENOENT;
 	kasumi_xattr_wq = alloc_workqueue("kasumi_xattr_free",
 					  WQ_UNBOUND | WQ_MEM_RECLAIM, 1);
 	if (!kasumi_xattr_wq)
 		return -ENOMEM;
 	kasumi_view_getxattr_orig = kasumi_vfs_getxattr_addr;
 	kasumi_view_listxattr_orig = kasumi_vfs_listxattr_addr;
+	kasumi_view_setxattr_orig = kasumi_vfs_setxattr_addr;
+	kasumi_view_removexattr_orig = kasumi_vfs_removexattr_addr;
+	kasumi_view_want_write = kasumi_mnt_want_write_addr;
+	kasumi_view_drop_write = kasumi_mnt_drop_write_addr;
+	kasumi_view_xattr_permission =
+		(void *)kasumi_lookup_callable_quiet("xattr_permission");
+	kasumi_view_security_get =
+		(void *)kasumi_lookup_callable_quiet("security_inode_getxattr");
+	kasumi_view_security_list =
+		(void *)kasumi_lookup_callable_quiet("security_inode_listxattr");
+	kasumi_view_security_set =
+		(void *)kasumi_lookup_callable_quiet("security_inode_setxattr");
+	kasumi_view_security_remove =
+		(void *)kasumi_lookup_callable_quiet("security_inode_removexattr");
 	kasumi_view_statfs_orig =
 	    (void *)kasumi_lookup_callable_quiet("vfs_statfs");
-	kasumi_view_follow_up =
-	    (void *)kasumi_lookup_callable_quiet("follow_up");
-	kasumi_namespace_sem = (void *)kasumi_lookup_name("namespace_sem");
+	kasumi_statfs_namespace_lock =
+		(void *)kasumi_lookup_name_quiet("namespace_sem");
 	WRITE_ONCE(kasumi_view_stopped, false);
 	if (kasumi_view_getxattr_orig && kasumi_view_listxattr_orig) {
 		ret = kasumi_view_register(&kasumi_view_get_probe,
@@ -781,13 +646,31 @@ int kasumi_vfs_view_init(void)
 		}
 		WRITE_ONCE(kasumi_xattr_ready, !ret);
 	}
-	if (kasumi_view_statfs_orig && kasumi_view_follow_up &&
-	    kasumi_namespace_sem && kasumi_proc_proxy_registered &&
-	    kasumi_fake_mi_active() && kasumi_view_mount_layout_valid()) {
+	if (kasumi_xattr_ready && kasumi_view_setxattr_orig &&
+	    kasumi_view_removexattr_orig && kasumi_view_want_write &&
+	    kasumi_view_drop_write && kasumi_view_xattr_permission &&
+	    kasumi_view_security_get && kasumi_view_security_list &&
+	    kasumi_view_security_set && kasumi_view_security_remove) {
+		ret = kasumi_view_register(&kasumi_view_set_probe, "vfs_setxattr");
+		kasumi_view_set_registered = !ret;
+		if (!ret) {
+			ret = kasumi_view_register(&kasumi_view_remove_probe, "vfs_removexattr");
+			kasumi_view_remove_registered = !ret;
+			if (ret) {
+				unregister_kprobe(&kasumi_view_set_probe);
+				kasumi_view_set_registered = false;
+			}
+		}
+		WRITE_ONCE(kasumi_source_xattr_ready, !ret);
+	}
+	if (kasumi_view_statfs_orig && kasumi_statfs_namespace_lock &&
+	    kasumi_mount_view_available()) {
 		ret = kasumi_view_register(&kasumi_view_statfs_probe,
 					   "vfs_statfs");
 		kasumi_view_statfs_registered = !ret;
 		WRITE_ONCE(kasumi_statfs_ready, !ret);
+		if (!ret)
+			kasumi_mount_view_publish_capabilities(KASUMI_MOUNT_CAP_STATFS, 0);
 	}
 	pr_info("kasumi: VFS views: overlay xattrs=%d statfs=%d\n",
 		kasumi_xattr_ready, kasumi_statfs_ready);
@@ -796,8 +679,10 @@ int kasumi_vfs_view_init(void)
 
 void kasumi_vfs_view_stop(void)
 {
+	kasumi_mount_view_publish_capabilities(0, KASUMI_MOUNT_CAP_STATFS);
 	WRITE_ONCE(kasumi_view_stopped, true);
 	WRITE_ONCE(kasumi_xattr_ready, false);
+	WRITE_ONCE(kasumi_source_xattr_ready, false);
 	WRITE_ONCE(kasumi_statfs_ready, false);
 	if (kasumi_view_get_registered) {
 		unregister_kprobe(&kasumi_view_get_probe);
@@ -807,16 +692,25 @@ void kasumi_vfs_view_stop(void)
 		unregister_kprobe(&kasumi_view_list_probe);
 		kasumi_view_list_registered = false;
 	}
+	if (kasumi_view_set_registered) {
+		unregister_kprobe(&kasumi_view_set_probe);
+		kasumi_view_set_registered = false;
+	}
+	if (kasumi_view_remove_registered) {
+		unregister_kprobe(&kasumi_view_remove_probe);
+		kasumi_view_remove_registered = false;
+	}
 	if (kasumi_view_statfs_registered) {
 		unregister_kprobe(&kasumi_view_statfs_probe);
 		kasumi_view_statfs_registered = false;
 	}
 }
 
-void kasumi_vfs_view_drain(void)
+KASUMI_NOCFI void kasumi_vfs_view_drain(void)
 {
 	wait_event(kasumi_view_wait, !atomic_read(&kasumi_view_active));
-	synchronize_rcu_tasks();
+	if (kasumi_view_tasks_barrier)
+		kasumi_view_tasks_barrier();
 }
 
 void kasumi_vfs_view_exit(void)

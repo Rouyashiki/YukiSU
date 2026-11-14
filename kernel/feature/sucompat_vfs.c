@@ -14,6 +14,7 @@
 #include "feature/sucompat_vfs.h"
 #include "kasumi_bootstrap.h"
 #include "kasumi_dirhijack.h"
+#include "kasumi_iop_override.h"
 #include "kasumi_vnode.h"
 #include "ksu.h"
 #include "policy/allowlist.h"
@@ -75,7 +76,7 @@ bool ksu_sucompat_vfs_visible(void)
 
 bool ksu_sucompat_vfs_is_inode(const struct inode *inode)
 {
-	return inode && inode->i_op == &su_inode_ops;
+	return inode && kasumi_iop_original_iops(inode) == &su_inode_ops;
 }
 
 unsigned long ksu_sucompat_vfs_path_ino(const struct path *path)

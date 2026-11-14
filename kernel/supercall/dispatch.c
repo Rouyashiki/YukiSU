@@ -2013,7 +2013,7 @@ long ksu_supercall_handle_ioctl(const struct file *filp, unsigned int cmd,
 		if (in_compat_syscall())
 			return -EOPNOTSUPP;
 #endif
-		return kasumi_handle_ioctl(cmd, argp);
+		return kasumi_handle_ioctl(filp, cmd, argp);
 	}
 
 	for (i = 0; ksu_ioctl_handlers[i].handler; i++) {

@@ -20,6 +20,13 @@
 #include "kasumi_entrypoints.h"
 #include "kasumi_vfs_hooks.h"
 #include "kasumi_vfs_view.h"
+#include "kasumi_exec_view.h"
+#include "kasumi_notify_view.h"
+#include "kasumi_io_notify.h"
+#include "kasumi_file_lock.h"
+#include "kasumi_vnode.h"
+#include "kasumi_rename_view.h"
+#include "kasumi_live_rules.h"
 #include "kasumi_iop_override.h"
 #include "kasumi_dirhijack.h"
 #include "kasumi_hide_rules.h"
@@ -85,7 +92,11 @@ static void kasumi_resolve_runtime_symbols(void)
 	    (void *)ksu_lookup_symbol("mnt_want_write");
 	kasumi_mnt_drop_write_addr =
 	    (void *)ksu_lookup_symbol("mnt_drop_write");
-	kasumi_lookup_one_len = (void *)ksu_lookup_symbol("lookup_one_len");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	kasumi_lookup_one = (void *)ksu_lookup_symbol("lookup_one");
+#else
+	kasumi_lookup_one = (void *)ksu_lookup_symbol("lookup_one_len");
+#endif
 	kasumi_vfs_create = (void *)ksu_lookup_symbol("vfs_create");
 	kasumi_vfs_mkdir = (void *)ksu_lookup_symbol("vfs_mkdir");
 	kasumi_vfs_mknod = (void *)ksu_lookup_symbol("vfs_mknod");
@@ -95,9 +106,20 @@ static void kasumi_resolve_runtime_symbols(void)
 	kasumi_vfs_link = (void *)ksu_lookup_symbol("vfs_link");
 	kasumi_vfs_rename = (void *)ksu_lookup_symbol("vfs_rename");
 	kasumi_vfs_read = (void *)ksu_lookup_symbol("vfs_read");
+	kasumi_rw_verify_area = (void *)kasumi_lookup_callable_quiet("rw_verify_area");
+	kasumi_security_file_permission =
+		(void *)kasumi_lookup_callable_quiet("security_file_permission");
+	kasumi_fput_sync = (void *)kasumi_lookup_callable_quiet("__fput_sync");
 	kasumi_vfs_write = (void *)ksu_lookup_symbol("vfs_write");
 	kasumi_get_vfs_caps_from_disk =
 	    (void *)ksu_lookup_symbol("get_vfs_caps_from_disk");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+	kasumi_security_inode_getlsmprop =
+		(void *)ksu_lookup_symbol("security_inode_getlsmprop");
+#else
+	kasumi_security_inode_getsecid =
+		(void *)ksu_lookup_symbol("security_inode_getsecid");
+#endif
 	kasumi_security_inode_getsecctx =
 	    (void *)ksu_lookup_symbol("security_inode_getsecctx");
 	kasumi_security_inode_notifysecctx =
@@ -133,15 +155,6 @@ static int kasumi_start_views(void)
 	hash_init(kasumi_xattr_sbs);
 	hash_init(kasumi_merge_dirs);
 
-	kasumi_percpu_base = vmalloc(nr_cpu_ids * sizeof(struct kasumi_percpu));
-	kasumi_iterate_buf_base = vmalloc(nr_cpu_ids * KASUMI_ITERATE_PATH_BUF);
-	if (!kasumi_percpu_base || !kasumi_iterate_buf_base) {
-		ret = -ENOMEM;
-		pr_err("kasumi: failed to allocate per-CPU buffers\n");
-		goto err_buffers;
-	}
-	memset(kasumi_percpu_base, 0,
-	       nr_cpu_ids * sizeof(struct kasumi_percpu));
 
 	kasumi_resolve_system_dev();
 
@@ -158,6 +171,24 @@ static int kasumi_start_views(void)
 		       ret);
 		goto err_fop_bridge;
 	}
+	ret = kasumi_vnode_handle_init();
+	if (ret) {
+		pr_err("kasumi: vnode file handle guard unavailable: %d\n", ret);
+		goto err_fop_bridge;
+	}
+	ret = kasumi_io_notify_init();
+	if (ret) {
+		pr_err("kasumi: I/O notification relay unavailable: %d\n", ret);
+		goto err_fop_bridge;
+	}
+	ret = kasumi_vnode_aio_init();
+	if (ret) {
+		pr_err("kasumi: asynchronous I/O bridge unavailable: %d\n", ret);
+		goto err_fop_bridge;
+	}
+	ret = kasumi_file_lock_init();
+	if (ret)
+		pr_warn("kasumi: source file lock bridge unavailable: %d\n", ret);
 	(void)kasumi_fop_override_init();
 	(void)kasumi_sop_shadow_init();
 	(void)kasumi_dirhijack_init();
@@ -170,20 +201,31 @@ static int kasumi_start_views(void)
 	WRITE_ONCE(kasumi_unload_pin_held, true);
 	(void)kasumi_fake_selinuxfs_access_init();
 	(void)kasumi_vfs_view_init();
+	ret = kasumi_exec_view_init();
+	if (ret)
+		pr_warn("kasumi: source exec bridge unavailable: %d\n", ret);
+	ret = kasumi_notify_view_init();
+	if (ret)
+		pr_warn("kasumi: source notification bridge unavailable: %d\n", ret);
+	ret = kasumi_rename_view_init();
+	if (ret)
+		pr_warn("kasumi: source rename bridge unavailable: %d\n", ret);
+	ret = kasumi_live_rules_init();
+	if (ret)
+		pr_warn("kasumi: live rule updates unavailable: %d\n", ret);
 	pr_info("kasumi: ready; control via KSU fd\n");
 	return 0;
 
 err_fop_bridge:
+	kasumi_vnode_aio_exit();
+	kasumi_io_notify_exit();
+	kasumi_vnode_handle_exit();
 	kasumi_fop_bridge_exit();
 	kasumi_iop_override_exit();
 	kasumi_proc_read_hooks_exit();
 	kasumi_fake_mi_exit();
 	goto err_buffers;
 err_buffers:
-	vfree(kasumi_percpu_base);
-	vfree(kasumi_iterate_buf_base);
-	kasumi_percpu_base = NULL;
-	kasumi_iterate_buf_base = NULL;
 	if (kasumi_filldir_cache) {
 		kmem_cache_destroy(kasumi_filldir_cache);
 		kasumi_filldir_cache = NULL;
@@ -194,9 +236,15 @@ err_buffers:
 static void kasumi_stop_views(void)
 {
 	pr_info("kasumi: shutting down\n");
+	kasumi_live_rules_stop();
 	mutex_lock(&kasumi_mutation_mutex);
 	kasumi_hide_rules_stop();
 	mutex_unlock(&kasumi_mutation_mutex);
+	kasumi_io_notify_stop();
+	kasumi_file_lock_exit();
+	kasumi_notify_view_stop();
+	kasumi_exec_view_stop();
+	kasumi_rename_view_stop();
 	kasumi_vfs_view_stop();
 	kasumi_vfs_view_drain();
 
@@ -224,14 +272,18 @@ static void kasumi_stop_views(void)
 	kasumi_cleanup_locked();
 	mutex_unlock(&kasumi_config_mutex);
 
+	kasumi_exec_view_exit();
+	kasumi_notify_view_exit();
+	kasumi_rename_view_exit();
+	kasumi_live_rules_exit();
 	kasumi_vfs_view_exit();
-	rcu_barrier();
+	kasumi_store_drain();
+	kasumi_vnode_aio_exit();
+	kasumi_io_notify_exit();
+	kasumi_vnode_handle_exit();
+	kasumi_vnode_fops_exit();
 	if (kasumi_filldir_cache)
 		kmem_cache_destroy(kasumi_filldir_cache);
-	vfree(kasumi_percpu_base);
-	vfree(kasumi_iterate_buf_base);
-	kasumi_percpu_base = NULL;
-	kasumi_iterate_buf_base = NULL;
 	pr_info("kasumi: stopped\n");
 	if (READ_ONCE(kasumi_unload_pin_held))
 		kasumi_bootstrap_release_unload_pin();

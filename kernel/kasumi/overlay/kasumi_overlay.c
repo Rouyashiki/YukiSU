@@ -38,112 +38,104 @@
 #endif
 #include <asm/unistd.h>
 #include "kasumi_runtime.h"
+#include "kasumi_live_rules.h"
+#include "kasumi_batch.h"
 #include "kasumi_store.h"
 #include "kasumi_path_policy.h"
 #include "kasumi_overlay.h"
 #include "kasumi_iop_override.h"
 #include "kasumi_dirhijack.h"
+#include "kasumi_dir_view.h"
 #include "kasumi_vnode.h"
 #include "kasumi_fop_override.h"
 /* ======================================================================
  * Part 10: Inject Rule Helper
  * ====================================================================== */
 
-void kasumi_add_inject_rule(char *dir)
+int kasumi_add_inject_rule(char *dir)
 {
-	struct kasumi_inject_entry *ie;
-	u32 hash;
-	bool found = false;
+	struct kasumi_inject_entry *entry, *existing;
 	struct path path;
-	struct inode *inode = NULL;
+	u64 generation = kasumi_batch_generation();
+	u32 hash;
+	int ret = 0;
 
 	if (!dir)
-		return;
-	if (!kern_path(dir, LOOKUP_FOLLOW, &path)) {
-		inode = d_inode(path.dentry);
-		if (!inode || kasumi_fop_get(inode, true))
-			inode = NULL;
-		path_put(&path);
+		return -ENOMEM;
+	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
+	if (!entry) {
+		kfree(dir);
+		return -ENOMEM;
 	}
+	entry->dir = dir;
+	entry->life.first_generation = generation;
+	if (!kern_path(dir, LOOKUP_FOLLOW, &path)) {
+		struct inode *inode = d_inode(path.dentry);
 
+		if (inode) {
+			ret = kasumi_fop_get(inode, true);
+			if (!ret)
+				entry->fop_inode = inode;
+		}
+		path_put(&path);
+		if (ret) {
+			kfree(entry->dir);
+			kfree(entry);
+			return ret;
+		}
+	}
 	hash = full_name_hash(NULL, dir, strlen(dir));
 	mutex_lock(&kasumi_config_mutex);
-	hlist_for_each_entry(
-	    ie, &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node)
-	{
-		if (strcmp(ie->dir, dir) == 0) {
-			struct inode *old = ie->fop_inode;
-
-			ie->fop_inode = inode;
-			inode = old;
-			found = true;
-			break;
-		}
-	}
-	if (!found) {
-		ie = kmalloc(sizeof(*ie), GFP_KERNEL);
-		if (ie) {
-			ie->dir = dir;
-			ie->fop_inode = inode;
-			inode = NULL;
-			hlist_add_head_rcu(&ie->node,
-					   &kasumi_inject_dirs[hash_min(
-					       hash, KASUMI_HASH_BITS)]);
-			atomic_inc(&kasumi_rule_count);
+	hlist_for_each_entry(existing,
+		&kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node) {
+		if (strcmp(existing->dir, dir))
+			continue;
+		if (generation) {
+			if (kasumi_rule_visible(&existing->life, generation))
+				kasumi_batch_expire(&existing->life, KASUMI_BATCH_INJECT);
 		} else {
-			kfree(dir);
+			struct inode *old = existing->fop_inode;
+
+			existing->fop_inode = entry->fop_inode;
+			mutex_unlock(&kasumi_config_mutex);
+			kasumi_fop_put(old, true);
+			kfree(entry->dir);
+			kfree(entry);
+			return 0;
 		}
-	} else {
-		kfree(dir);
 	}
+	kasumi_batch_track(&entry->life, KASUMI_BATCH_INJECT);
+	hlist_add_head_rcu(&entry->node,
+		&kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)]);
+	atomic_inc(&kasumi_rule_count);
 	mutex_unlock(&kasumi_config_mutex);
-	kasumi_fop_put(inode, true);
+	return 0;
 }
 
-void kasumi_prune_inject_parent(const char *deleted_path)
+void kasumi_prune_inject_dir(const char *parent)
 {
-	struct kasumi_entry *entry;
-	struct kasumi_merge_entry *merge;
 	struct kasumi_inject_entry *inject;
-	char *parent, *slash;
 	size_t len;
 	u32 hash;
-	int bkt;
+	u64 staged = kasumi_batch_generation();
+	u64 generation = staged ? staged : kasumi_rules_generation();
 
-	parent = kstrdup(deleted_path, GFP_KERNEL);
-	if (!parent)
-		return;
-	slash = strrchr(parent, '/');
-	if (!slash)
-		goto free_parent;
-	slash[slash == parent ? 1 : 0] = '\0';
 	len = strlen(parent);
 	mutex_lock(&kasumi_config_mutex);
-	hash_for_each(kasumi_paths, bkt, entry, node)
-	{
-		const char *child;
-
-		if (strncmp(entry->src, parent, len))
-			continue;
-		child = entry->src + len;
-		if (len != 1 && *child++ != '/')
-			continue;
-		if (*child && !strchr(child, '/'))
-			goto unlock;
-	}
-	hash_for_each(kasumi_merge_dirs, bkt, merge, node)
-	{
-		if (!strcmp(merge->src, parent) ||
-		    (merge->resolved_src &&
-		     !strcmp(merge->resolved_src, parent)))
-			goto unlock;
-	}
+	if (kasumi_rule_directory_has_injects(parent, generation))
+		goto unlock;
 	hash = full_name_hash(NULL, parent, len);
 	hlist_for_each_entry(
 	    inject, &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node)
 	{
+		if (!kasumi_rule_visible(&inject->life, generation))
+			continue;
 		if (strcmp(inject->dir, parent))
 			continue;
+		if (staged) {
+			kasumi_batch_expire(&inject->life, KASUMI_BATCH_INJECT);
+			continue;
+		}
 		hlist_del_rcu(&inject->node);
 		atomic_dec(&kasumi_rule_count);
 		kasumi_fop_put(inject->fop_inode, true);
@@ -153,7 +145,20 @@ void kasumi_prune_inject_parent(const char *deleted_path)
 	}
 unlock:
 	mutex_unlock(&kasumi_config_mutex);
-free_parent:
+}
+
+void kasumi_prune_inject_parent(const char *deleted_path)
+{
+	char *parent = kstrdup(deleted_path, GFP_KERNEL);
+	char *slash;
+
+	if (!parent)
+		return;
+	slash = strrchr(parent, '/');
+	if (slash) {
+		slash[slash == parent ? 1 : 0] = '\0';
+		kasumi_prune_inject_dir(parent);
+	}
 	kfree(parent);
 }
 
@@ -161,6 +166,7 @@ free_parent:
  */
 static int kasumi_merge_path_visible(const char *dir, const char *name, int len)
 {
+	u64 generation = kasumi_rules_generation();
 	struct kasumi_entry *entry;
 	char *path;
 	u32 hash;
@@ -174,6 +180,8 @@ static int kasumi_merge_path_visible(const char *dir, const char *name, int len)
 	hlist_for_each_entry_rcu(
 	    entry, &kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)], node)
 	{
+		if (!kasumi_rule_visible(&entry->life, generation))
+			continue;
 		if (entry->src_hash == hash && !strcmp(entry->src, path)) {
 			visible = kasumi_rule_current_sees(entry->rule_flags);
 			break;
@@ -186,6 +194,7 @@ static int kasumi_merge_path_visible(const char *dir, const char *name, int len)
 bool kasumi_merge_child_visible(struct inode *parent, const char *dir,
 				const char *name, int len)
 {
+	u64 generation;
 	struct kasumi_merge_entry *merge;
 	int visible, bkt;
 
@@ -196,10 +205,13 @@ bool kasumi_merge_child_visible(struct inode *parent, const char *dir,
 		return visible > 0;
 
 	rcu_read_lock();
+	generation = kasumi_rules_generation();
 	visible = kasumi_merge_path_visible(dir, name, len);
 	if (visible == -ENOENT) {
 		hash_for_each_rcu(kasumi_merge_dirs, bkt, merge, node)
 		{
+			if (!kasumi_rule_visible(&merge->life, generation))
+				continue;
 			if (!merge->resolved_src ||
 			    strcmp(merge->resolved_src, dir) ||
 			    !strcmp(merge->src, dir))
@@ -317,6 +329,7 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 						struct dentry *parent,
 						struct list_head *head)
 {
+	u64 generation;
 	struct kasumi_entry *entry;
 	struct kasumi_inject_entry *inject_entry;
 	struct kasumi_merge_entry *merge_entry;
@@ -337,7 +350,7 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 	size_t dpath_dir_len = 0;
 	u32 dpath_hash = 0;
 
-	if (unlikely(!kasumi_enabled || !dir_path ||
+	if (unlikely(!kasumi_config_enabled() || !dir_path ||
 		     !kasumi_rule_scope_active()))
 		return;
 	if (atomic_read(&kasumi_rule_count) == 0)
@@ -373,12 +386,15 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 	}
 
 	rcu_read_lock();
+	generation = kasumi_rules_generation();
 
 	/* Try both d_absolute_path form and d_path form for inject_dirs */
 	hlist_for_each_entry_rcu(
 	    inject_entry, &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)],
 	    node)
 	{
+		if (!kasumi_rule_visible(&inject_entry->life, generation))
+			continue;
 		if (strcmp(inject_entry->dir, dir_path) == 0) {
 			should_inject = true;
 			break;
@@ -390,6 +406,8 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 		    &kasumi_inject_dirs[hash_min(dpath_hash, KASUMI_HASH_BITS)],
 		    node)
 		{
+			if (!kasumi_rule_visible(&inject_entry->life, generation))
+				continue;
 			if (strcmp(inject_entry->dir, dpath_dir) == 0) {
 				should_inject = true;
 				break;
@@ -401,6 +419,8 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 	 * both path forms. */
 	hash_for_each_rcu(kasumi_merge_dirs, bkt, merge_entry, node)
 	{
+		if (!kasumi_rule_visible(&merge_entry->life, generation))
+			continue;
 		if (!kasumi_rule_current_sees(merge_entry->rule_flags))
 			continue;
 		if (strcmp(merge_entry->src, dir_path) == 0 ||
@@ -435,6 +455,8 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 			struct kasumi_name_list *pos;
 			bool duplicate = false;
 
+			if (!kasumi_rule_visible(&entry->life, generation))
+				continue;
 			if (!kasumi_rule_current_sees(entry->rule_flags))
 				continue;
 			name = kasumi_direct_child_name(entry->src, dir_path,
@@ -456,8 +478,13 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 			if (!item)
 				continue;
 			item->name = kstrdup(name, GFP_ATOMIC);
-			item->ino = entry->visible_ino;
-			item->type = entry->source_stat_valid
+			item->ino = entry->source_nofollow_path_valid
+					? entry->nofollow_visible_ino
+					: entry->visible_ino;
+			item->type = entry->source_nofollow_stat_valid
+					 ? (unsigned char)((entry->source_nofollow_mode &
+							    S_IFMT) >> 12)
+					 : entry->source_stat_valid
 					 ? (unsigned char)((entry->source_mode &
 							    S_IFMT) >>
 							   12)
@@ -482,6 +509,7 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 					    &path, O_RDONLY | O_DIRECTORY,
 					    cred);
 					if (!IS_ERR(f)) {
+						struct kasumi_internal_vfs_guard guard;
 						struct kasumi_merge_ctx mctx = {
 						    .visible_dir = dir_path,
 						    .visible_parent =
@@ -500,11 +528,9 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 								  ->i_sb->s_dev
 							    : 0,
 						};
-						kasumi_this_cpu()
-						    ->in_populate_inject = 1;
+						kasumi_vfs_internal_enter(&guard);
 						iterate_dir(f, &mctx.ctx);
-						kasumi_this_cpu()
-						    ->in_populate_inject = 0;
+						kasumi_vfs_internal_leave(&guard);
 						fput(f);
 					}
 					put_cred(cred);
@@ -561,11 +587,18 @@ static KASUMI_NOCFI int kasumi_add_path_entry(const char *src, const char *tgt,
 			flags = KASUMI_VNODE_F_SPECIAL;
 	}
 	path_get(&source);
-	kasumi_store_upsert(entry);
-	(void)kasumi_iop_mark_spoof(d_inode(source.dentry));
+	ret = kasumi_store_upsert(entry);
+	if (ret < 0) {
+		path_put(&source);
+		goto fail;
+	}
 	if (rule_flags & KSM_RULE_BYPASS_POLICY)
 		flags |= KASUMI_VNODE_F_BYPASS;
-	ret = kasumi_dirhijack_add_shadow(src, &source, ino, flags);
+	if (kasumi_batch_dir())
+		ret = kasumi_dirhijack_batch_add(kasumi_batch_dir(), src,
+					       &source, ino, flags, true);
+	else
+		ret = kasumi_dirhijack_add_shadow(src, &source, ino, flags);
 	path_put(&source);
 	if (!ret)
 		ret = kasumi_forget_hide_rule(src, false);
@@ -611,7 +644,7 @@ int kasumi_check_merge_target(const char *target)
  * contrast, keeps the real subdir intact and only performs iterate_dir-time
  * injection of the module's contents on top.
  */
-static KASUMI_NOCFI bool kasumi_register_nested_merge(const char *src_str,
+static KASUMI_NOCFI int kasumi_register_nested_merge(const char *src_str,
 						      const char *target_str,
 						      u32 rule_flags)
 {
@@ -621,9 +654,11 @@ static KASUMI_NOCFI bool kasumi_register_nested_merge(const char *src_str,
 	struct path mpath;
 	u32 hash;
 	bool created = false;
+	u64 generation = kasumi_batch_generation();
+	int ret = -ENOMEM;
 
 	if (!src_str || !target_str)
-		return false;
+		return -EINVAL;
 
 	if (kern_path(src_str, LOOKUP_FOLLOW, &mpath) == 0) {
 		char *rbuf = kmalloc(PATH_MAX, GFP_KERNEL);
@@ -648,22 +683,30 @@ static KASUMI_NOCFI bool kasumi_register_nested_merge(const char *src_str,
 	    node)
 	{
 		if (strcmp(existing->src, src_str) == 0 &&
-		    strcmp(existing->target, target_str) == 0) {
+		    strcmp(existing->target, target_str) == 0 &&
+		    kasumi_rule_visible(&existing->life,
+			generation ? generation : kasumi_rules_generation())) {
+			if (generation && existing->rule_flags != rule_flags) {
+				kasumi_batch_expire(&existing->life, KASUMI_BATCH_MERGE);
+				continue;
+			}
 			mutex_unlock(&kasumi_config_mutex);
 			kfree(resolved_src);
 			if (tgt_dentry)
 				dput(tgt_dentry);
-			return false;
+			return 0;
 		}
 	}
-	me = kmalloc(sizeof(*me), GFP_KERNEL);
+	me = kzalloc(sizeof(*me), GFP_KERNEL);
 	if (me) {
 		me->src = kstrdup(src_str, GFP_KERNEL);
 		me->target = kstrdup(target_str, GFP_KERNEL);
 		me->resolved_src = resolved_src;
 		me->target_dentry = tgt_dentry;
 		me->rule_flags = rule_flags;
+		me->life.first_generation = generation;
 		if (me->src && me->target) {
+			kasumi_batch_track(&me->life, KASUMI_BATCH_MERGE);
 			hlist_add_head_rcu(&me->node,
 					   &kasumi_merge_dirs[hash_min(
 					       hash, KASUMI_HASH_BITS)]);
@@ -679,20 +722,21 @@ static KASUMI_NOCFI bool kasumi_register_nested_merge(const char *src_str,
 	mutex_unlock(&kasumi_config_mutex);
 
 	if (created) {
-		kasumi_add_inject_rule(kstrdup(src_str, GFP_KERNEL));
-		if (me->resolved_src)
-			kasumi_add_inject_rule(
-			    kstrdup(me->resolved_src, GFP_KERNEL));
+		ret = kasumi_add_inject_rule(kstrdup(src_str, GFP_KERNEL));
+		if (!ret && me->resolved_src)
+			ret = kasumi_add_inject_rule(kstrdup(me->resolved_src,
+							      GFP_KERNEL));
 	}
 
 	kfree(resolved_src);
 	if (tgt_dentry)
 		dput(tgt_dentry);
-	return created;
+	return ret;
 }
 
 struct kasumi_mat_ctx {
 	struct dir_context ctx;
+	struct list_head entries;
 	const char *src_prefix;
 	const char *target_dir;
 	int depth;
@@ -700,24 +744,19 @@ struct kasumi_mat_ctx {
 	int error;
 };
 
-static KASUMI_NOCFI KASUMI_FILLDIR_RET_TYPE
-kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
-		   loff_t offset, u64 ino, unsigned int d_type)
+static void KASUMI_NOCFI kasumi_materialize_child(struct kasumi_mat_ctx *mc,
+	const char *name, int namlen, unsigned int d_type)
 {
-	struct kasumi_mat_ctx *mc =
-	    container_of(ctx, struct kasumi_mat_ctx, ctx);
 	char *src_path, *tgt_path, *inj_dir;
 
-	(void)offset;
-	(void)ino;
 
 	if (namlen <= 2 && name[0] == '.') {
 		if (namlen == 1 || (namlen == 2 && name[1] == '.'))
-			return KASUMI_FILLDIR_CONTINUE;
+			return;
 	}
 	if (namlen == 8 && memcmp(name, ".replace", 8) == 0) {
 		mc->error = -EOPNOTSUPP;
-		return KASUMI_FILLDIR_STOP;
+		return;
 	}
 
 	src_path =
@@ -728,7 +767,24 @@ kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
 		kfree(src_path);
 		kfree(tgt_path);
 		mc->error = -ENOMEM;
-		return KASUMI_FILLDIR_STOP;
+		return;
+	}
+
+	if (d_type == DT_UNKNOWN) {
+		struct path path;
+		struct inode *inode;
+
+		mc->error = kern_path(tgt_path, 0, &path);
+		if (mc->error)
+			goto out;
+		inode = d_inode(path.dentry);
+		if (inode)
+			d_type = (inode->i_mode & S_IFMT) >> 12;
+		else
+			mc->error = -ENOENT;
+		path_put(&path);
+		if (mc->error)
+			goto out;
 	}
 
 	/* For DT_DIR: register a nested merge_entry and recurse. Do NOT add a
@@ -763,10 +819,11 @@ kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
 			mc->error = kasumi_add_path_entry(src_path, tgt_path,
 							  mc->rule_flags);
 		} else if (mc->depth < 8) {
-			kasumi_register_nested_merge(src_path, tgt_path,
-						     mc->rule_flags);
-			mc->error = kasumi_materialize_merge(
-			    src_path, tgt_path, mc->depth + 1, mc->rule_flags);
+			mc->error = kasumi_register_nested_merge(src_path, tgt_path,
+							  mc->rule_flags);
+			if (!mc->error)
+				mc->error = kasumi_materialize_merge(
+				    src_path, tgt_path, mc->depth + 1, mc->rule_flags);
 		} else {
 			mc->error = -ELOOP;
 		}
@@ -775,13 +832,37 @@ kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
 		    kasumi_add_path_entry(src_path, tgt_path, mc->rule_flags);
 	}
 
-	inj_dir = kstrdup(mc->src_prefix, GFP_KERNEL);
-	if (inj_dir)
-		kasumi_add_inject_rule(inj_dir);
+	if (!mc->error) {
+		inj_dir = kstrdup(mc->src_prefix, GFP_KERNEL);
+		mc->error = kasumi_add_inject_rule(inj_dir);
+	}
 
+out:
 	kfree(src_path);
 	kfree(tgt_path);
-	return mc->error ? KASUMI_FILLDIR_STOP : KASUMI_FILLDIR_CONTINUE;
+	return;
+}
+
+static KASUMI_NOCFI KASUMI_FILLDIR_RET_TYPE
+kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
+	loff_t offset, u64 ino, unsigned int d_type)
+{
+	struct kasumi_mat_ctx *mc = container_of(ctx, struct kasumi_mat_ctx, ctx);
+	struct kasumi_dir_entry *entry;
+
+	(void)offset;
+	(void)ino;
+	if ((namlen == 1 && name[0] == '.') ||
+	    (namlen == 2 && name[0] == '.' && name[1] == '.'))
+		return KASUMI_FILLDIR_CONTINUE;
+	entry = kasumi_dir_entry_alloc(name, namlen, GFP_ATOMIC);
+	if (!entry) {
+		mc->error = -ENOMEM;
+		return KASUMI_FILLDIR_STOP;
+	}
+	entry->type = d_type;
+	list_add_tail(&entry->list, &mc->entries);
+	return KASUMI_FILLDIR_CONTINUE;
 }
 
 KASUMI_NOCFI int kasumi_materialize_merge(const char *src_prefix,
@@ -791,10 +872,15 @@ KASUMI_NOCFI int kasumi_materialize_merge(const char *src_prefix,
 	struct path path;
 	struct file *f;
 	struct kasumi_mat_ctx mctx = {};
+	struct kasumi_dir_entry *entry;
+	loff_t before;
 	int ret;
 
 	if (depth > 8)
 		return -ELOOP;
+	ret = kasumi_live_rules_watch_merge_dir(target_dir);
+	if (ret)
+		return ret;
 	ret = kasumi_check_merge_target(target_dir);
 	if (ret)
 		return ret;
@@ -815,6 +901,7 @@ KASUMI_NOCFI int kasumi_materialize_merge(const char *src_prefix,
 		return ret;
 	}
 
+	INIT_LIST_HEAD(&mctx.entries);
 	mctx.ctx.actor = kasumi_mat_filldir;
 	mctx.ctx.pos = 0;
 	mctx.src_prefix = src_prefix;
@@ -822,9 +909,23 @@ KASUMI_NOCFI int kasumi_materialize_merge(const char *src_prefix,
 	mctx.depth = depth;
 	mctx.rule_flags = rule_flags;
 
-	ret = iterate_dir(f, &mctx.ctx);
+	do {
+		before = f->f_pos;
+		ret = iterate_dir(f, &mctx.ctx);
+		cond_resched();
+	} while (ret >= 0 && !mctx.error && f->f_pos != before);
 
 	fput(f);
 	path_put(&path);
+	if (ret >= 0 && !mctx.error) {
+		list_for_each_entry(entry, &mctx.entries, list) {
+			kasumi_materialize_child(&mctx, entry->name, entry->name_len,
+				entry->type);
+			if (mctx.error)
+				break;
+			cond_resched();
+		}
+	}
+	kasumi_dir_entries_free(&mctx.entries);
 	return mctx.error ? mctx.error : ret;
 }

@@ -1,17 +1,27 @@
 # Imported from Kasumi e648702b42d6068206a5cbc2fffae25d71dc067b.
 kernelsu-objs += $(addprefix kasumi/, \
  core/kasumi_bootstrap.o core/kasumi_config_guard.o \
- core/kasumi_runtime.o core/kasumi_fop_bridge.o \
- core/kasumi_vnode.o core/kasumi_dirhijack.o core/kasumi_sop_shadow.o \
+ core/kasumi_runtime.o core/kasumi_identity.o core/kasumi_batch.o core/kasumi_fop_bridge.o \
+ core/kasumi_live_rules.o \
+ core/kasumi_vnode.o core/kasumi_vnode_handle.o core/kasumi_dirhijack.o core/kasumi_sop_shadow.o \
  core/kasumi_hide_events.o core/kasumi_hide_rules.o \
- control/kasumi_ioctl.o control/kasumi_conflict.o \
+ control/kasumi_ioctl.o control/kasumi_transaction.o control/kasumi_conflict.o \
  policy/kasumi_path_policy.o overlay/kasumi_overlay.o \
- hooks/kasumi_proc_read_hooks.o \
+ hooks/kasumi_proc_read_hooks.o hooks/kasumi_proc_seq.o \
  hooks/kasumi_vfs_hooks.o \
- features/kasumi_iop_override.o \
+ features/kasumi_iop_override.o features/kasumi_maps_rules.o \
+ features/kasumi_exec_view.o features/kasumi_notify_view.o \
+ features/kasumi_notify_rules.o features/kasumi_notify_watch.o \
+ features/kasumi_notify_fanotify.o \
+ features/kasumi_io_notify.o \
+ features/kasumi_io_notify_unlink.o \
+ features/kasumi_file_lock.o \
+ features/kasumi_rename_view.o \
  features/kasumi_fop_override.o features/kasumi_fake_mountinfo.o \
  features/kasumi_fake_selinuxfs_access.o \
- features/kasumi_vfs_view.o features/kasumi_owner.o)
+ features/kasumi_vfs_view.o features/kasumi_mount_view.o \
+ features/kasumi_mount_query.o features/kasumi_mount_stat.o \
+ features/kasumi_dir_view.o)
 ccflags-y += -DKASUMI_EMBEDDED
 ccflags-y += -I$(srctree)
 ccflags-y += $(addprefix -I$(MDIR)/kasumi/,internal core control policy overlay hooks features)
