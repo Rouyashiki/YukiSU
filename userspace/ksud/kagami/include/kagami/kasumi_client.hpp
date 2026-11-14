@@ -28,6 +28,83 @@ struct FeatureCapabilities {
     int bitmask = 0;
 };
 
+struct ControlCapabilities {
+    bool ok = false;
+    int last_errno = 0;
+    int protocol = 0;
+    std::uint64_t capabilities = 0;
+    std::uint64_t generation = 0;
+    std::uint64_t operations = 0;
+    std::uint32_t max_stage = 0;
+    std::uint32_t max_operations = 0;
+    std::uint32_t max_bytes = 0;
+};
+
+enum class PathOperation : std::uint32_t {
+    Redirect = 1,
+    Merge = 2,
+    Hide = 3,
+    Delete = 4,
+    HideXattrs = 5,
+};
+
+struct PathRule {
+    PathOperation operation;
+    std::string path;
+    std::string source;
+    std::uint32_t flags = 0;
+};
+
+struct TransactionMapsRule {
+    std::uint64_t target_ino = 0;
+    std::uint64_t target_dev = 0;
+    std::uint64_t spoofed_ino = 0;
+    std::uint64_t spoofed_dev = 0;
+    std::string spoofed_path;
+    std::uint32_t fields = 7;
+    std::uint32_t match_flags = 0;
+};
+
+struct TransactionKstatRule {
+    std::uint32_t fields = 0;
+    std::uint32_t match_flags = 0;
+    std::uint64_t target_ino = 0;
+    std::uint64_t target_dev = 0;
+    std::uint64_t spoofed_ino = 0;
+    std::uint64_t spoofed_dev = 0;
+    std::uint64_t spoofed_nlink = 0;
+    std::uint64_t spoofed_size = 0;
+    std::uint64_t spoofed_atime_sec = 0;
+    std::uint64_t spoofed_atime_nsec = 0;
+    std::uint64_t spoofed_mtime_sec = 0;
+    std::uint64_t spoofed_mtime_nsec = 0;
+    std::uint64_t spoofed_ctime_sec = 0;
+    std::uint64_t spoofed_ctime_nsec = 0;
+    std::uint64_t spoofed_blksize = 0;
+    std::uint64_t spoofed_blocks = 0;
+    std::string target_path;
+};
+
+struct TransactionConfiguration {
+    std::uint32_t fields = 0;
+    bool enabled = false;
+    std::uint32_t features = 0;
+    bool stealth = false;
+    bool debug = false;
+    std::uint32_t policy_owner = 0;
+    std::uint32_t policy_flags = 0;
+    std::vector<std::uint32_t> allow_uids;
+    std::vector<std::uint32_t> deny_uids;
+    std::vector<TransactionMapsRule> maps;
+    std::vector<TransactionKstatRule> kstat;
+};
+
+bool commit_transaction(const std::vector<PathRule>& rules,
+                        const TransactionConfiguration& configuration, std::uint32_t flags);
+
+ControlCapabilities control_capabilities();
+bool replace_path_rules(const std::vector<PathRule>& rules);
+
 struct UserHideRule {
     std::uint64_t id = 0;
     std::uint64_t generation = 0;

@@ -23,6 +23,7 @@ bool unmount_all(const Config& config);
 // Must run inside the init mount namespace. This is idempotent and does not
 // remount or otherwise migrate a live backend.
 bool restore_xattr_hiding(const Config& config);
+bool xattr_hiding_paths(const Config& config, std::vector<std::string>& paths);
 
 std::vector<std::string> active_mounts(const Config& config);
 bool is_active(const Config& config);

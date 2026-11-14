@@ -27,6 +27,8 @@ void retry_pending_hide_rules();
 
 // Disable Kasumi and clear path rules without requiring an active mirror.
 bool deactivate(std::string& error);
+bool prepare_rebuild(const Config& config, std::string& error, bool& atomic);
+bool apply_atomic_config(const Config& config, std::string& error, bool& applied);
 
 // Compiles each enabled module's /data/adb/modules tree into ADD/MERGE/HIDE
 // Kasumi rules that redirect straight to the source inode (no mirror; the vnode

@@ -107,3 +107,7 @@ std::string embedded_external_mount_owner() {
 extern "C" int ksu_kasumi_ioctl(unsigned long cmd, void* arg) {
     return ksud::ksuctl(static_cast<int>(cmd), arg);
 }
+
+extern "C" int ksu_kasumi_open_fd() {
+    return ksud::open_driver_fd();
+}

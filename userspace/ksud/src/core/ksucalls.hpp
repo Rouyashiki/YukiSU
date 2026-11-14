@@ -60,6 +60,8 @@ void setup_sigsys_handler();
 // Probe without caching an absent driver before late-load installs it.
 bool has_kernelsu();
 int ksuctl(int request, void* arg);
+// A fresh file description keeps fd-owned control transactions independent.
+int open_driver_fd();
 // Claim the scoped fd installed after sucompat's exec; it is already CLOEXEC
 // for the target shell. Call only during fresh-exec, single-threaded su startup.
 // Returns 1 when claimed, 0 when absent, or -errno.

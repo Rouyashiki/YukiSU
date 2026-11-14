@@ -1,5 +1,7 @@
 #pragma once
 
+#include "uapi/kasumi.h"
+
 #include <string>
 #include <vector>
 
@@ -21,6 +23,7 @@ struct Config {
     bool verbose = false;
     bool builtin_mount_enabled = true;
     bool kasumi_enabled = true;
+    std::vector<kasumi_transaction_kstat_rule> kasumi_kstat_rules;
     bool enable_kernel_debug = false;
     bool enable_stealth = true;
     bool enable_overlay_xattr_hide = false;

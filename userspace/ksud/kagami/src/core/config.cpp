@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cerrno>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -75,6 +76,7 @@ std::string default_config_json() {
   "enable_statfs_spoof": false,
   "enable_selinux_fix": false,
   "kasumi_enabled": true,
+  "kasumi_kstat_rules": [],
   "overlayfs_enabled": true,
   "magic_mount_enabled": true,
   "mount_backend": "auto",
@@ -92,6 +94,112 @@ void prune_config_fields(json::Value& config) {
             ++it;
     }
 }
+
+namespace {
+bool parse_kstat_rule(const JsonValue& value, kasumi_transaction_kstat_rule& rule,
+                      std::string& error) {
+    const auto reject = [&error](const std::string& reason) {
+        error = "kasumi_kstat_rules " + reason;
+        return false;
+    };
+    if (!value.is_object())
+        return reject("entries must be objects");
+    struct IntegerField {
+        const char* name;
+        __u64* destination;
+    };
+    const IntegerField integers[] = {
+        {"target_ino", &rule.target_ino},
+        {"target_dev", &rule.target_dev},
+        {"spoofed_ino", &rule.spoofed_ino},
+        {"spoofed_dev", &rule.spoofed_dev},
+        {"spoofed_nlink", &rule.spoofed_nlink},
+        {"spoofed_size", &rule.spoofed_size},
+        {"spoofed_atime_sec", &rule.spoofed_atime_sec},
+        {"spoofed_atime_nsec", &rule.spoofed_atime_nsec},
+        {"spoofed_mtime_sec", &rule.spoofed_mtime_sec},
+        {"spoofed_mtime_nsec", &rule.spoofed_mtime_nsec},
+        {"spoofed_ctime_sec", &rule.spoofed_ctime_sec},
+        {"spoofed_ctime_nsec", &rule.spoofed_ctime_nsec},
+        {"spoofed_blksize", &rule.spoofed_blksize},
+        {"spoofed_blocks", &rule.spoofed_blocks},
+    };
+    for (const auto& [key, item] : value.o) {
+        if (key == "fields" || key == "match_flags") {
+            const auto number = item.is_number() ? item.n : -1;
+            if (!item.is_number() || !std::isfinite(number) || number < 0 || number > UINT32_MAX ||
+                std::floor(number) != number)
+                return reject(std::string(key) + " must be a uint32 integer");
+            if (key == "fields")
+                rule.fields = static_cast<__u32>(number);
+            else
+                rule.match_flags = static_cast<__u32>(number);
+            continue;
+        }
+        if (key == "target_path") {
+            const auto path = item.string_or("");
+            if (!item.is_string() || path.size() >= KSM_MAX_LEN_PATHNAME ||
+                path.find('\0') != std::string::npos)
+                return reject(
+                    "target_path must be a NUL-free pathname shorter than the UAPI limit");
+            std::memcpy(rule.target_pathname, path.data(), path.size());
+            continue;
+        }
+        bool matched = false;
+        for (const auto& integer : integers) {
+            if (key != integer.name)
+                continue;
+            matched = true;
+            const auto text = item.string_or("");
+            if (!item.is_string() || text.empty())
+                return reject(std::string(key) + " must be an unsigned decimal string");
+            const auto parsed =
+                std::from_chars(text.data(), text.data() + text.size(), *integer.destination, 10);
+            if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+                return reject(std::string(key) + " must be an unsigned decimal uint64 string");
+            break;
+        }
+        if (!matched)
+            return reject("contains unknown field '" + std::string(key) + "'");
+    }
+    if (!value.find("fields"))
+        return reject("requires an explicit fields mask");
+    if ((!rule.target_pathname[0] && !rule.target_ino) ||
+        (rule.target_pathname[0] && rule.target_pathname[0] != '/') ||
+        (rule.fields & ~KSM_KSTAT_FIELDS_ALL) || (rule.match_flags & ~KSM_MATCH_ANY_DEVICE) ||
+        rule.target_dev > UINT32_MAX || rule.spoofed_dev > UINT32_MAX ||
+        rule.spoofed_nlink > UINT32_MAX || rule.spoofed_blksize > UINT32_MAX ||
+        ((rule.fields & KSM_KSTAT_FIELD_ATIME) && rule.spoofed_atime_nsec >= 1000000000) ||
+        ((rule.fields & KSM_KSTAT_FIELD_MTIME) && rule.spoofed_mtime_nsec >= 1000000000) ||
+        ((rule.fields & KSM_KSTAT_FIELD_CTIME) && rule.spoofed_ctime_nsec >= 1000000000))
+        return reject("contains an invalid target, field mask, device, link count, block size or "
+                      "nanosecond value");
+    return true;
+}
+bool prepare_kstat_config(const JsonValue* value, std::vector<kasumi_transaction_kstat_rule>& rules,
+                          std::string& error) {
+    if (!value)
+        return true;
+    if (!value->is_array()) {
+        error = "kasumi_kstat_rules must be an array";
+        return false;
+    }
+    const auto count = value->a.size();
+    if (count > KSM_TX_MAX_OPERATIONS || count > static_cast<std::size_t>(KSM_TX_MAX_BYTES) /
+                                                     sizeof(kasumi_transaction_kstat_rule)) {
+        error = "kasumi_kstat_rules exceeds the transaction budget";
+        return false;
+    }
+    rules.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        kasumi_transaction_kstat_rule rule{};
+        if (!parse_kstat_rule(value->a[i], rule, error))
+            return false;
+        rules.push_back(rule);
+    }
+    return true;
+}
+}  // namespace
 
 bool validate_config_patch(const json::Value& patch, std::string& error) {
     if (!patch.is_object()) {
@@ -114,7 +222,7 @@ bool validate_config_patch(const json::Value& patch, std::string& error) {
             else if (expected->is_string())
                 type = "must be a string";
             else if (expected->is_array())
-                type = "must be an array of partition names";
+                type = "must be an array";
             return reject(key, type);
         }
         if (value.is_string() && value.s.find('\0') != std::string::npos)
@@ -131,6 +239,11 @@ bool validate_config_patch(const json::Value& patch, std::string& error) {
         if (key == "mount_backend" && !value.s.empty() && value.s != "auto" &&
             value.s != "kasumi" && value.s != "overlay" && value.s != "magic" && value.s != "none")
             return reject(key, "must be auto, kasumi, overlay, magic or none");
+        if (key == "kasumi_kstat_rules") {
+            std::vector<kasumi_transaction_kstat_rule> rules;
+            if (!prepare_kstat_config(&value, rules, error))
+                return false;
+        }
         if (key == "partitions") {
             for (const auto& partition : value.a) {
                 if (!partition.is_string() || partition.s.empty() || partition.s == "." ||
@@ -227,6 +340,10 @@ bool parse_config_json(const std::string& json, Config& config, std::string& err
         return false;
     }
 
+    std::vector<kasumi_transaction_kstat_rule> kstat_rules;
+    if (!prepare_kstat_config(root.find("kasumi_kstat_rules"), kstat_rules, error))
+        return false;
+
     config.mount_source = json_string_or(&root, "mountsource", config.mount_source);
     config.work_dir = json_string_or(&root, "work_dir", config.work_dir);
     config.mirror_dir = json_string_or(&root, "mirror_dir", config.mirror_dir);
@@ -255,6 +372,7 @@ bool parse_config_json(const std::string& json, Config& config, std::string& err
         json_bool_or(&root, "magic_mount_enabled", config.magic_mount_enabled);
     config.mount_backend = json_string_or(&root, "mount_backend", config.mount_backend);
     config.partitions = json_string_array_or_empty(root.find("partitions"));
+    config.kasumi_kstat_rules = std::move(kstat_rules);
 
     return true;
 }
@@ -308,6 +426,9 @@ bool merge_config_json(const std::string& updates, std::string& error) {
     for (const auto& [key, value] : patch.o) {
         root.o[key] = value;
     }
+    std::vector<kasumi_transaction_kstat_rule> kstat_rules;
+    if (!prepare_kstat_config(root.find("kasumi_kstat_rules"), kstat_rules, error))
+        return false;
     const bool saved = save_config(stringify_json(root, 2) + "\n", error);
     if (saved)
         logging::set_debug_enabled(json_bool_or(&root, "debug", false) ||

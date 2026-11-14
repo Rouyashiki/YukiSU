@@ -241,6 +241,10 @@ int claim_inherited_su_driver_fd() {
     return 1;
 }
 
+int open_driver_fd() {
+    return request_driver_fd();
+}
+
 int ksuctl(int request, void* arg) {
     const int fd = get_driver_fd();
     if (fd < 0) {

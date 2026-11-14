@@ -377,6 +377,16 @@ int apply_config_file(bool force_enable = false) {
         return print_kasumi_snapshot_json();
     }
 
+    bool atomic_applied = false;
+    if (!mount::kasumi::apply_atomic_config(config, error, atomic_applied)) {
+        std::cerr << error << "\n";
+        return 1;
+    }
+    if (atomic_applied) {
+        (void)mount::kasumi::restore_persisted_hide_rules(error);
+        return print_kasumi_snapshot_json();
+    }
+
     if (!kasumi::set_enabled(false)) {
         error = std::string("failed to disable Kasumi: ") + std::strerror(errno);
         std::string cleanup_error;
@@ -1373,9 +1383,11 @@ int run_command(const std::vector<std::string>& args) {
             return 0;
         }
         if (args[1] == "restore-hide") {
+            bool atomic_applied = false;
             if (config.kasumi_enabled && kasumi::is_available() &&
-                (!mount::kasumi::apply_feature_config(config, error) ||
-                 !kasumi::set_enabled(true))) {
+                (!mount::kasumi::apply_atomic_config(config, error, atomic_applied) ||
+                 (!atomic_applied && (!mount::kasumi::apply_feature_config(config, error) ||
+                                      !kasumi::set_enabled(true))))) {
                 std::cerr << (error.empty() ? "cannot enable restored Kasumi state" : error)
                           << '\n';
                 return 1;
