@@ -14,6 +14,7 @@
 #include "kasumi_bootstrap.h"
 #include "kasumi_config_guard.h"
 #include "kasumi_runtime.h"
+#include "kasumi_rwsem_compat.h"
 #include "kasumi_path_policy.h"
 #include "kasumi_store.h"
 #include "kasumi_fop_bridge.h"
@@ -82,6 +83,7 @@ static noinline KASUMI_NOCFI void kasumi_resolve_system_dev(void)
 
 static void kasumi_resolve_runtime_symbols(void)
 {
+	kasumi_rwsem_compat_init();
 	kasumi_notify_change = (void *)ksu_lookup_symbol("notify_change");
 	kasumi_vfs_getxattr_addr = (void *)ksu_lookup_symbol("vfs_getxattr");
 	kasumi_vfs_listxattr_addr = (void *)ksu_lookup_symbol("vfs_listxattr");
