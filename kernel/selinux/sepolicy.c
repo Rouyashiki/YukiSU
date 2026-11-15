@@ -11,6 +11,7 @@
 #include "klog.h" // IWYU pragma: keep
 #include "sepolicy.h"
 #include "ss/services.h"
+#include "policydb_cleanup.h"
 #include "ss/symtab.h"
 
 #define KSU_SUPPORT_ADD_TYPE
@@ -1183,6 +1184,8 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
 	return new_pol;
 
 out_free_policy:
+	if (policydb_read_needs_destroy(&new_pol->policydb))
+		policydb_destroy(&new_pol->policydb);
 	kfree(new_pol);
 out_free_data:
 	kvfree(data);

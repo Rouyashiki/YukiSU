@@ -481,9 +481,11 @@ bool send_module_image(int client, int fd) {
   cmd.dirfd = fd;
   // Older kernels lack image authorization; unadvertised backports may have it.
   const int ret = ksud::ksuctl(KSU_IOCTL_YZ_ALLOW_MODULE_LOAD_POLICY, &cmd);
+  const int policy_errno = ret == 0 ? 0 : errno;
   if (ret != 0 &&
       (runtime.capabilities & YZ_RUNTIME_CAP_MODULE_IMAGE_POLICY) != 0) {
-    DLOGE("module image policy: pid=%d fd=%d ret=%d", peer.pid, fd, ret);
+    DLOGE("module image policy: pid=%d fd=%d ret=%d errno=%d (%s)", peer.pid,
+          fd, ret, policy_errno, strerror(policy_errno));
     return send_fd(client, -1);
   }
   const bool sent = send_fd(client, fd);
@@ -1776,9 +1778,11 @@ void handle_client(int client) {
       cmd.pid = static_cast<uint32_t>(cr.pid);
       cmd.dirfd = fd;
       int ret = ksud::ksuctl(KSU_IOCTL_YZ_ALLOW_MODULE_LOAD_POLICY, &cmd);
+      const int policy_errno = ret == 0 ? 0 : errno;
       policy_armed = ret == 0;
-      DLOGI("module dir policy: module=%s pid=%d ret=%d",
-            g_modules[idx].name.c_str(), cr.pid, ret);
+      DLOGI("module dir policy: module=%s pid=%d ret=%d errno=%d (%s)",
+            g_modules[idx].name.c_str(), cr.pid, ret, policy_errno,
+            strerror(policy_errno));
       if (!policy_armed) {
         close(fd);
         fd = -1;
@@ -2001,7 +2005,9 @@ void handle_client(int client) {
       yz_native_load_policy_cmd cmd{};
       cmd.pid = static_cast<uint32_t>(cr.pid);
       int ret = ksud::ksuctl(KSU_IOCTL_YZ_RESTORE_NATIVE_LOAD_POLICY, &cmd);
-      DLOGI("load policy restore: pid=%d ret=%d", cr.pid, ret);
+      const int policy_errno = ret == 0 ? 0 : errno;
+      DLOGI("load policy restore: pid=%d ret=%d errno=%d (%s)", cr.pid, ret,
+            policy_errno, strerror(policy_errno));
       ok = ret == 0 ? 1 : 0;
     }
     write_exact(client, &ok, sizeof(ok));

@@ -301,6 +301,10 @@ enum yz_runtime_abi {
 };
 
 #define YZ_RUNTIME_F_EARLY_NATIVE (1U << 0)
+#define YZ_RUNTIME_F_MODULE_SUCCESS (1U << 1)
+#define YZ_RUNTIME_F_MODULE_FAILURE (1U << 2)
+#define YZ_RUNTIME_F_MODULE_OUTCOMES                                           \
+  (YZ_RUNTIME_F_MODULE_SUCCESS | YZ_RUNTIME_F_MODULE_FAILURE)
 /* Saved pre-exit state; meaningful with YZ_RUNTIME_CAP_INJECTION_STATE. */
 #define YZ_RUNTIME_F_INJECTION_STATE_SHIFT 8
 #define YZ_RUNTIME_F_INJECTION_STATE_MASK                                      \
@@ -313,6 +317,7 @@ enum yz_runtime_abi {
 #define YZ_RUNTIME_CAP_HEALTH (1U << 4)
 #define YZ_RUNTIME_CAP_ENDPOINT_STATE (1U << 5)
 #define YZ_RUNTIME_CAP_NATIVE_LIBC_BOOTSTRAP_V1 (1U << 6)
+#define YZ_RUNTIME_CAP_ZYGOTE_MODULE_OUTCOMES (1U << 7)
 
 #define YZ_HEALTH_VERSION 1
 #define YZ_HEALTH_POLICY_NONE 0

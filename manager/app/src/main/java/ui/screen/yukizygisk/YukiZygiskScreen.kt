@@ -3,6 +3,7 @@ package ui.screen.yukizygisk
 import com.anatdx.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import com.anatdx.yukisu.ui.component.YukiLargeTopAppBar
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -196,7 +197,7 @@ private data class ZygoteMonitorEntry(
     val abi: String,
     val state: MonitorState,
     val generation: Int = 0,
-    val modules: List<String> = emptyList(),
+    val modules: List<ZygoteModuleEntry> = emptyList(),
     val moduleMonitorAvailable: Boolean = false,
 )
 
@@ -369,6 +370,11 @@ private data class YzStatus(
     val suspendedModules: Set<String>,
 )
 
+private data class ZygoteModuleEntry(
+    val name: String,
+    val outcome: ZygiskLoadOutcome,
+)
+
 private data class ModuleDisplayEntry(
     val name: String,
     val id: String,
@@ -376,6 +382,8 @@ private data class ModuleDisplayEntry(
     val state: MonitorState,
     val crashEvidence: List<CrashEvidence> = emptyList(),
     val suspended: Boolean = false,
+    val coreFailed: Boolean = false,
+    val outcome: ZygiskLoadOutcome = ZygiskLoadOutcome(),
 )
 
 private data class RuntimeMonitorEntry(
@@ -386,6 +394,7 @@ private data class RuntimeMonitorEntry(
     val module: String,
     val state: MonitorState,
     val processState: ProcessState,
+    val outcome: ZygiskLoadOutcome,
 )
 
 private fun zygoteModules(
@@ -393,12 +402,14 @@ private fun zygoteModules(
     pid: Int,
     generation: Int,
     abi: String,
-): List<String> = runtime.filter {
+): List<ZygoteModuleEntry> = runtime.filter {
     it.kind == "zygote" && it.pid == pid && it.generation == generation &&
         pid > 0 && generation != 0 && it.abi == abi &&
-        it.module.isNotBlank() && it.state == MonitorState.Injected &&
+        it.module.isNotBlank() &&
         it.processState != ProcessState.Exited
-}.map { it.module }.distinct()
+}.groupBy { it.module }.map { (id, records) ->
+    ZygoteModuleEntry(id, records.map { it.outcome }.reduce(ZygiskLoadOutcome::merge))
+}
 
 private fun parseYzStatus(json: String): YzStatus? = runCatching {
     val o = JSONObject(json)
@@ -413,6 +424,15 @@ private fun parseYzStatus(json: String): YzStatus? = runCatching {
                 module = r.optString("module", ""),
                 state = parseInjectionState(r),
                 processState = parseProcessState(r),
+                outcome = ZygiskLoadOutcome.fromRecord(
+                    r.optString("injection_state", r.optString("state", "unknown")),
+                    r.opt("load_success_seen").takeIf {
+                        o.optBoolean("zygisk_module_outcomes", false)
+                    } as? Boolean,
+                    r.opt("load_failure_seen").takeIf {
+                        o.optBoolean("zygisk_module_outcomes", false)
+                    } as? Boolean,
+                ),
             )
         }
     } ?: emptyList()
@@ -549,40 +569,36 @@ private fun readModuleArchitectures(moduleId: String): List<String> =
 private fun readModuleArchitectures(moduleIds: Collection<String>): Map<String, List<String>> =
     moduleIds.distinct().associateWith(::readModuleArchitectures)
 
-private fun zygiskModuleState(
+private fun zygiskModuleRecords(
     moduleId: String,
     abis: List<String>,
     zygotes: List<ZygoteMonitorEntry>,
     runtime: List<RuntimeMonitorEntry>,
-): MonitorState {
-    var injected = false
-    var failed = false
-    for (abi in abis.filter { it in YZ_MODULE_ABIS }) {
-        val matchingZygotes = zygotes.filter { it.abi == abi && it.pid > 0 }
-        if (matchingZygotes.isEmpty()) continue
-        if (matchingZygotes.any { it.state == MonitorState.Crashed || it.state == MonitorState.Failed }) {
-            failed = true
-            continue
+): List<RuntimeMonitorEntry> = runtime.filter { record ->
+    record.kind == "zygote" && record.module == moduleId && record.abi in abis &&
+        record.abi in YZ_MODULE_ABIS && record.processState != ProcessState.Exited &&
+        zygotes.any { z ->
+            z.moduleMonitorAvailable && z.pid > 0 && z.generation != 0 &&
+                z.pid == record.pid && z.generation == record.generation && z.abi == record.abi
         }
-        val records = runtime.filter {
-            it.kind == "zygote" && it.module == moduleId && it.abi == abi &&
-                it.processState != ProcessState.Exited &&
-                matchingZygotes.any { z ->
-                    z.moduleMonitorAvailable && z.generation != 0 &&
-                        z.pid == it.pid && z.generation == it.generation
-                }
-        }
-        if (records.any { it.state == MonitorState.Crashed || it.state == MonitorState.Failed }) {
-            failed = true
-        } else if (records.any { it.state == MonitorState.Injected }) {
-            injected = true
-        }
-    }
-    return when {
-        failed -> MonitorState.Failed
-        injected -> MonitorState.Injected
-        else -> MonitorState.Unknown
-    }
+}
+
+private fun zygiskModuleState(
+    abis: List<String>,
+    zygotes: List<ZygoteMonitorEntry>,
+    records: List<RuntimeMonitorEntry>,
+): MonitorState = aggregateMonitorState(
+    records.map { it.state } + zygotes.filter { it.abi in abis && it.pid > 0 }
+        .map { if (it.state == MonitorState.Injected) MonitorState.Unknown else it.state },
+)
+
+@StringRes
+private fun zygiskOutcomeLabel(outcome: ZygiskLoadOutcome): Int = when {
+    outcome.partial -> R.string.yukizygisk_load_partial
+    outcome.success -> R.string.yukizygisk_load_success
+    outcome.failure && outcome.complete -> R.string.yukizygisk_load_failed
+    outcome.failure -> R.string.yukizygisk_load_legacy_failure
+    else -> R.string.yukizygisk_load_unknown
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -614,27 +630,36 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
                 val st = getYukiZygiskStatusJson()?.let(::parseYzStatus)
                     ?: return@withContext null
                 val moduleIds = st.modules + st.nativeModules.map { it.id } +
-                    st.zygotes.flatMap { it.modules }
+                    st.zygotes.flatMap { z -> z.modules.map { it.name } }
                 val missingModuleIds = moduleIds.distinct().filterNot(moduleNameCache::containsKey)
                 if (missingModuleIds.isNotEmpty()) {
                     moduleNameCache.putAll(readModuleDisplayNames(missingModuleIds))
                     moduleAbiCache.putAll(readModuleArchitectures(missingModuleIds))
                 }
                 val moduleEntries = st.modules.map { id ->
+                    val records = zygiskModuleRecords(
+                        id, moduleAbiCache[id].orEmpty(), st.zygotes, st.runtime,
+                    )
                     ModuleDisplayEntry(
                         name = moduleNameCache[id] ?: id,
                         id = id,
                         abis = moduleAbiCache[id].orEmpty(),
                         state = zygiskModuleState(
-                            id, moduleAbiCache[id].orEmpty(), st.zygotes, st.runtime,
+                            moduleAbiCache[id].orEmpty(), st.zygotes, records,
                         ),
                         crashEvidence = st.crashEvidence.filter { it.module == id },
                         suspended = id in st.suspendedModules,
+                        coreFailed = st.zygotes.any {
+                            it.pid > 0 && it.abi in moduleAbiCache[id].orEmpty() &&
+                                it.state in setOf(MonitorState.Crashed, MonitorState.Failed)
+                        },
+                        outcome = records.map { it.outcome }.reduceOrNull(ZygiskLoadOutcome::merge)
+                            ?: ZygiskLoadOutcome(),
                     )
                 }
                 val zygotes = st.zygotes.map { zygote ->
                     zygote.copy(
-                        modules = zygote.modules.map { moduleNameCache[it] ?: it },
+                        modules = zygote.modules.map { it.copy(name = moduleNameCache[it.name] ?: it.name) },
                     )
                 }
                 YzSnapshot(
@@ -977,6 +1002,12 @@ private fun ZygiskModuleRow(module: ModuleDisplayEntry, onStatusClick: () -> Uni
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelMedium,
                 )
+            } else {
+                Text(
+                    stringResource(zygiskOutcomeLabel(module.outcome)),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
         trailingContent = {
@@ -986,6 +1017,13 @@ private fun ZygiskModuleRow(module: ModuleDisplayEntry, onStatusClick: () -> Uni
                     tint = MaterialTheme.colorScheme.error,
                     onClick = onStatusClick,
                     contentDescription = stringResource(R.string.yukizygisk_module_suspended),
+                )
+            } else if (module.outcome.partial && !module.coreFailed && module.state != MonitorState.Crashed) {
+                MonitorStatusButton(
+                    icon = Icons.Outlined.Warning,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    onClick = onStatusClick,
+                    contentDescription = stringResource(R.string.yukizygisk_load_partial),
                 )
             } else {
                 MonitorStateButton(
@@ -1187,7 +1225,9 @@ private fun zygoteDialog(zygote: ZygoteMonitorEntry): MonitorDialogState {
     } else resources.getString(
         R.string.yukizygisk_zygote_modules_detail,
         zygote.modules.size,
-        zygote.modules.joinToString("\n").ifBlank {
+        zygote.modules.joinToString("\n") {
+            "${it.name}: ${resources.getString(zygiskOutcomeLabel(it.outcome))}"
+        }.ifBlank {
             resources.getString(R.string.yukizygisk_zygote_no_modules_detail)
         },
     )
@@ -1225,6 +1265,7 @@ private fun zygiskModuleDialog(module: ModuleDisplayEntry): MonitorDialogState {
         module.name,
         listOf(
             resources.getString(R.string.yukizygisk_module_supported_abis, abis),
+            resources.getString(zygiskOutcomeLabel(module.outcome)),
             if (module.suspended) resources.getString(R.string.yukizygisk_module_suspended_detail)
                 else "",
             crash,

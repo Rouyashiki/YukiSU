@@ -458,6 +458,8 @@ json::Value build_status_json(const RuntimeSnapshot& snapshot, const ModuleInven
     root["safe_mode"] = json::Value(snapshot.safe_mode);
     root["zygisk_module_monitor"] =
         json::Value((snapshot.capabilities & YZ_RUNTIME_CAP_ZYGOTE_MODULE_REPORT) != 0);
+    root["zygisk_module_outcomes"] =
+        json::Value((snapshot.capabilities & YZ_RUNTIME_CAP_ZYGOTE_MODULE_OUTCOMES) != 0);
     root["zygote_crashes"] = number(snapshot.zygote_crashes);
     root["safe_mode_zygote"] = json::Value(
         snapshot.safe_mode_zygote.empty() ? std::string("zygote") : snapshot.safe_mode_zygote);
@@ -510,6 +512,13 @@ json::Value build_status_json(const RuntimeSnapshot& snapshot, const ModuleInven
         raw["target_type"] = json::Value(target_type_name(record.target_type));
         raw["target_type_id"] = number(record.target_type);
         raw["flags"] = number(record.flags);
+        if ((snapshot.capabilities & YZ_RUNTIME_CAP_ZYGOTE_MODULE_OUTCOMES) &&
+            record.kind == YZ_RUNTIME_KIND_ZYGOTE && record.module_id[0]) {
+            raw["load_success_seen"] =
+                json::Value((record.flags & YZ_RUNTIME_F_MODULE_SUCCESS) != 0);
+            raw["load_failure_seen"] =
+                json::Value((record.flags & YZ_RUNTIME_F_MODULE_FAILURE) != 0);
+        }
         raw["process"] = json::Value(bounded_string(record.process));
         raw["target"] = json::Value(bounded_string(record.target));
         raw["module"] = json::Value(bounded_string(record.module_id));

@@ -869,8 +869,8 @@
     <string name="yukizygisk_zygote_crashed_message" tools:ignore="MissingTranslation">Zygote crashed repeatedly; safe mode stopped injection for this boot.</string>
     <string name="yukizygisk_zygote_failed_message" tools:ignore="MissingTranslation">Safe mode enabled; not injected.</string>
     <string name="yukizygisk_zygote_unknown_message" tools:ignore="MissingTranslation">No active Zygote observation is available.</string>
-    <string name="yukizygisk_zygote_modules_detail" tools:ignore="MissingTranslation">Zygisk modules loaded through this Zygote (%1$d):\n%2$s</string>
-    <string name="yukizygisk_zygote_no_modules_detail" tools:ignore="MissingTranslation">None</string>
+    <string name="yukizygisk_zygote_modules_detail" tools:ignore="MissingTranslation">Module injection records for children of this Zygote generation (%1$d):\n%2$s</string>
+    <string name="yukizygisk_zygote_no_modules_detail" tools:ignore="MissingTranslation">No injection records yet</string>
     <string name="yukizygisk_zygote_modules_unavailable" tools:ignore="MissingTranslation">Module injection details are unavailable on this runtime.</string>
     <string name="yukizygisk_module_supported_abis" tools:ignore="MissingTranslation">Supported ABIs: %1$s</string>
     <string name="yukizygisk_module_no_supported_abis" tools:ignore="MissingTranslation">No supported ABI</string>
@@ -1140,4 +1140,9 @@
     <string name="motion_collapsed" tools:ignore="MissingTranslation">Collapsed</string>
     <string name="webui_download_saved" tools:ignore="MissingTranslation">Saved %1$s to Downloads</string>
     <string name="webui_download_failed" tools:ignore="MissingTranslation">Could not save %1$s. Try downloading again.</string>
+    <string name="yukizygisk_load_success" tools:ignore="MissingTranslation">Successful injection observed</string>
+    <string name="yukizygisk_load_failed" tools:ignore="MissingTranslation">Only failed injections observed</string>
+    <string name="yukizygisk_load_partial" tools:ignore="MissingTranslation">Some injections failed; others succeeded</string>
+    <string name="yukizygisk_load_legacy_failure" tools:ignore="MissingTranslation">Failure recorded; this version cannot report whether other injections succeeded</string>
+    <string name="yukizygisk_load_unknown" tools:ignore="MissingTranslation">No injection outcome available</string>
 </resources>
