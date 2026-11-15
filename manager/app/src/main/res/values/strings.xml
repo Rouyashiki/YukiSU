@@ -175,6 +175,7 @@
     <string name="su_compat_off" tools:ignore="MissingTranslation">Off</string>
     <string name="su_compat_traditional" tools:ignore="MissingTranslation">Traditional</string>
     <string name="su_compat_magisk_summary" tools:ignore="MissingTranslation">Authorization prompt</string>
+    <string name="su_compat_magisk_umount_warning" tools:ignore="MissingTranslation">“%1$s” is enabled. Apps without root access that use the default profile may not find su or trigger an authorization prompt. Turn this setting off, or disable “%2$s” in the affected app profile.</string>
     <string name="settings_uts_view" tools:ignore="MissingTranslation">UTS View</string>
     <string name="settings_uts_view_summary" tools:ignore="MissingTranslation">Manage boot, runtime-global, and denylist-scoped kernel identities.</string>
     <string name="uts_view_title" tools:ignore="MissingTranslation">UTS View</string>

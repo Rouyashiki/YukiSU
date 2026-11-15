@@ -13,6 +13,7 @@ import androidx.compose.material.icons.rounded.EnhancedEncryption
 import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.anatdx.yukisu.Natives
 import com.anatdx.yukisu.R
 import com.anatdx.yukisu.ui.component.KsuIsValid
+import com.anatdx.yukisu.ui.component.YukiAlertDialog
 import com.anatdx.yukisu.ui.component.YukiIcon
 import com.anatdx.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import com.anatdx.yukisu.ui.util.rememberSnackbarController
@@ -167,6 +169,7 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
     val adbRoot = rememberFeatureToggleState(Natives.FEATURE_ADB_ROOT)
     val shellSuAdbOnly = rememberFeatureToggleState(Natives.FEATURE_SHELL_SU_ADB_ONLY)
     val magiskCompat = rememberFeatureToggleState(Natives.FEATURE_MAGISK_COMPAT)
+    var showMagiskUmountWarning by rememberSaveable { mutableStateOf(false) }
     val defaultNoNewPrivs = rememberFeatureToggleState(Natives.FEATURE_DEFAULT_NO_NEW_PRIVS)
     LaunchedEffect(Unit) {
         defaultNoNewPrivs.saving = true
@@ -206,8 +209,34 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     requestedSuCompat = null
                 }
             }
-            if (!success) snackbarHost.showSnackbar(failedMessage)
+            if (!success) {
+                snackbarHost.showSnackbar(failedMessage)
+            } else if (magisk == true && Natives.isDefaultUmountModules()) {
+                showMagiskUmountWarning = true
+            }
         }
+    }
+
+    if (showMagiskUmountWarning) {
+        YukiAlertDialog(
+            onDismissRequest = { showMagiskUmountWarning = false },
+            icon = { Icon(Icons.Filled.WarningAmber, contentDescription = null) },
+            title = { Text(stringResource(R.string.su_compat_magisk_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.su_compat_magisk_umount_warning,
+                        stringResource(R.string.settings_umount_modules_default),
+                        stringResource(R.string.profile_umount_modules),
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showMagiskUmountWarning = false }) {
+                    Text(stringResource(R.string.confirm))
+                }
+            },
+        )
     }
 
     Scaffold(

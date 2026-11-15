@@ -171,6 +171,7 @@
     <string name="su_compat_traditional">传统</string>
     <string name="su_compat_ksm">Kasumi（实验性功能）</string>
     <string name="su_compat_magisk_summary">授权弹窗</string>
+    <string name="su_compat_magisk_umount_warning">「%1$s」已开启。使用默认配置的未授权应用可能无法找到 su 或触发授权弹窗。请关闭此设置，或在对应应用的配置中关闭「%2$s」。</string>
     <string name="settings_uts_view">UTS 视图</string>
     <string name="settings_uts_view_summary">管理早启动、运行时全局及 denylist 作用域的内核身份。</string>
     <string name="uts_view_title">UTS 视图</string>
