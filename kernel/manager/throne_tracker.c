@@ -18,9 +18,11 @@
 
 uid_t ksu_manager_uid = KSU_INVALID_UID;
 uid_t ksu_manager_appid = KSU_INVALID_UID;
-uid_t ksu_manager_appids[KSU_MAX_MANAGER_KEYS] = {KSU_INVALID_UID};
+uid_t ksu_manager_appids[KSU_MAX_MANAGER_KEYS] = {
+    [0 ... KSU_MAX_MANAGER_KEYS - 1] = KSU_INVALID_UID};
 
-static uid_t locked_manager_appids[KSU_MAX_MANAGER_KEYS] = {KSU_INVALID_UID};
+static uid_t locked_manager_appids[KSU_MAX_MANAGER_KEYS] = {
+    [0 ... KSU_MAX_MANAGER_KEYS - 1] = KSU_INVALID_UID};
 
 static void update_primary_manager(void)
 {

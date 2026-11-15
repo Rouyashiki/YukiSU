@@ -33,6 +33,7 @@ struct sdesc {
 
 static apk_sign_key_t apk_sign_keys[] = {
     {EXPECTED_SIZE, EXPECTED_HASH, APK_SIGN_FLAG_TRUSTED, "YukiSU"},
+    {LEGACY_SIZE, LEGACY_HASH, APK_SIGN_FLAG_TRUSTED, "YukiSU (legacy)"},
     {PRESET_SIZE_OFFICIAL, PRESET_HASH_OFFICIAL, 0, "KernelSU"},
     {PRESET_SIZE_MKSU, PRESET_HASH_MKSU, 0, "MKSU"},
     {PRESET_SIZE_RKSU, PRESET_HASH_RKSU, 0, "RKSU"},

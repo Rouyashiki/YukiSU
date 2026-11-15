@@ -30,7 +30,7 @@ static void ksu_track_throne_tw_func(struct callback_head *cb)
 	kfree(cb);
 	// Exit task_work runs after exit_fs().
 	if (!(current->flags & PF_EXITING))
-		track_throne(false);
+		ksu_request_manager_rescan();
 	module_put(THIS_MODULE);
 }
 
@@ -55,7 +55,7 @@ static void ksu_defer_track_throne(void)
 		}
 	}
 	pr_warn("defer track_throne failed, run it inline\n");
-	track_throne(false);
+	ksu_request_manager_rescan();
 }
 
 static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask,

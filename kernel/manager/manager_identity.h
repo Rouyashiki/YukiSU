@@ -78,8 +78,8 @@ static inline void ksu_invalidate_manager_appid(void)
 }
 #else
 
-/* One release manager signature is trusted. */
-#define KSU_MAX_MANAGER_KEYS 1
+/* Static trusted signatures occupy the first slots in apk_sign_keys. */
+#define KSU_MAX_MANAGER_KEYS 2
 
 extern uid_t
     ksu_manager_uid; // primary full uid (first valid, for backward compat)

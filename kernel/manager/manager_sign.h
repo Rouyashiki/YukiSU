@@ -1,9 +1,13 @@
 #ifndef MANAGER_SIGN_H
 #define MANAGER_SIGN_H
 
-// Release Manager of YukiSU
-#define EXPECTED_SIZE 0x29c
+// Release manager signing certificates.
+#define EXPECTED_SIZE 0x2c6
 #define EXPECTED_HASH                                                          \
+	"45bd30fe301b6a6ff798e0ae930606d5f443c16f078a95ec9d82d326498ed1c3"
+
+#define LEGACY_SIZE 0x29c
+#define LEGACY_HASH                                                            \
 	"39559b380d4c0191eed81b7eba61533b6a2f247bc55bceba4259e983673f58b7"
 
 #define APK_SIGN_FLAG_TRUSTED 0x1
