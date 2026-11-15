@@ -8,7 +8,8 @@
 #include "kasumi_types.h"
 
 struct file;
-long kasumi_handle_ioctl(const struct file *file, unsigned int cmd, void __user *arg);
+long kasumi_handle_ioctl(const struct file *file, unsigned int cmd,
+			 void __user *arg);
 void kasumi_transaction_release(const struct file *file);
 
 bool kasumi_policy_current_is_view_target(void);

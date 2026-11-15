@@ -158,8 +158,7 @@ void kasumi_dir_entries_free(struct list_head *entries)
 {
 	struct kasumi_dir_entry *entry, *next;
 
-	list_for_each_entry_safe(entry, next, entries, list)
-	{
+	list_for_each_entry_safe (entry, next, entries, list) {
 		list_del(&entry->list);
 		dput(entry->name_dentry);
 		kasumi_identity_put(entry->identity);
@@ -304,8 +303,8 @@ static bool kasumi_dir_entry_hidden(const struct kasumi_dir_entry *entry,
 		entry->hide_sequence >= entry->sequence) &&
 	       ((entry->hide_flags & KSM_RULE_BYPASS_POLICY)
 		    ? scope->hide_bypass
-		    : (entry->hide_storage_managed ? scope->hide_storage :
-						      scope->hide));
+		    : (entry->hide_storage_managed ? scope->hide_storage
+						   : scope->hide));
 }
 
 static bool kasumi_dir_entry_visible(const struct kasumi_dir_entry *entry,
@@ -534,8 +533,7 @@ static int kasumi_dir_plan_prepare(struct kasumi_dir_state *state,
 	}
 	state->name_parent =
 	    native ? native->f_path.dentry : file->f_path.dentry;
-	list_for_each_entry_safe(entry, next, &state->entries, list)
-	{
+	list_for_each_entry_safe (entry, next, &state->entries, list) {
 		struct kasumi_dir_entry *existing;
 		ret = kasumi_dir_name_hash(state->name_parent, entry->name,
 					   entry->name_len, &entry->name_hash);
@@ -620,7 +618,7 @@ static int KASUMI_NOCFI kasumi_dir_emit_injected(
 /* Keep native iterate_dir permissions, locking, position and atime. Ordinary
  * ACCESS comes from the outer syscall and reaches the source via its relay. */
 static int KASUMI_NOCFI kasumi_dir_source_iterate(struct file *file,
-						 struct dir_context *ctx)
+						  struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 5, 0)

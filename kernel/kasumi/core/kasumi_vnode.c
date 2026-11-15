@@ -72,10 +72,11 @@ static const struct file_operations kasumi_vnode_special_fops;
 
 static void kasumi_vnode_copyattr(struct inode *inode, struct inode *source);
 static int kasumi_vnode_clone_sid(struct inode *vnode, struct inode *source);
-static struct inode *kasumi_vnode_allocate(struct super_block *sb,
-	struct kasumi_inode_identity *identity);
+static struct inode *
+kasumi_vnode_allocate(struct super_block *sb,
+		      struct kasumi_inode_identity *identity);
 static int kasumi_vnode_attach_source(struct inode *inode,
-	const struct path *source, u8 flags);
+				      const struct path *source, u8 flags);
 
 /*
  * A dedicated i_rwsem lockdep class for every Kasumi vnode.  The vnode lives on
@@ -93,14 +94,15 @@ static DEFINE_HASHTABLE(kasumi_vnode_cache, 8);
 static DEFINE_SPINLOCK(kasumi_vnode_cache_lock);
 
 static struct inode *kasumi_vnode_cached_locked(struct super_block *sb,
-					       const struct path *source,
-					       unsigned long ino, u8 flags)
+						const struct path *source,
+						unsigned long ino, u8 flags)
 {
 	struct kasumi_vnode_info *info;
 	struct inode *inode;
 	unsigned long key = (unsigned long)sb ^ (unsigned long)source->dentry;
 
-	hash_for_each_possible(kasumi_vnode_cache, info, cache_node, key) {
+	hash_for_each_possible(kasumi_vnode_cache, info, cache_node, key)
+	{
 		if (info->inode->i_sb != sb || info->v_ino != ino ||
 		    info->flags != flags || info->source.mnt != source->mnt ||
 		    info->source.dentry != source->dentry)
@@ -113,8 +115,8 @@ static struct inode *kasumi_vnode_cached_locked(struct super_block *sb,
 }
 
 static struct inode *kasumi_vnode_cached(struct super_block *sb,
-				       const struct path *source,
-				       unsigned long ino, u8 flags)
+					 const struct path *source,
+					 unsigned long ino, u8 flags)
 {
 	struct inode *inode;
 
@@ -133,7 +135,7 @@ static struct inode *kasumi_vnode_cache_publish(struct inode *inode)
 
 	spin_lock(&kasumi_vnode_cache_lock);
 	existing = kasumi_vnode_cached_locked(inode->i_sb, &info->source,
-					     info->v_ino, info->flags);
+					      info->v_ino, info->flags);
 	if (!existing)
 		hash_add(kasumi_vnode_cache, &info->cache_node, key);
 	spin_unlock(&kasumi_vnode_cache_lock);
@@ -221,7 +223,7 @@ static int KASUMI_NOCFI kasumi_vnode_read_sid(struct inode *inode, u32 *sid)
 }
 
 static int kasumi_vnode_refresh_sid(struct inode *inode, struct inode *source,
-				   bool may_block)
+				    bool may_block)
 {
 	struct kasumi_vnode_info *info = inode->i_private;
 	u32 current_sid, source_sid;
@@ -260,7 +262,8 @@ int kasumi_vnode_refresh_label(const struct dentry *dentry)
 		return 0;
 	if (!d_inode(info->source.dentry))
 		return -ENOENT;
-	return kasumi_vnode_refresh_sid(inode, d_inode(info->source.dentry), true);
+	return kasumi_vnode_refresh_sid(inode, d_inode(info->source.dentry),
+					true);
 }
 
 int kasumi_vnode_source_path(const struct dentry *dentry, struct path *source)
@@ -339,7 +342,7 @@ kasumi_vnode_getattr(KVN_IDMAP_ARG const struct path *path, struct kstat *stat,
 }
 
 static ssize_t KASUMI_NOCFI kasumi_vnode_listxattr(struct dentry *dentry,
-						char *buffer, size_t size)
+						   char *buffer, size_t size)
 {
 	typeof(vfs_listxattr) *native = (void *)kasumi_vfs_listxattr_addr;
 	struct kasumi_internal_vfs_guard guard;
@@ -422,8 +425,8 @@ kasumi_vnode_setattr(KVN_IDMAP_ARG struct dentry *dentry, struct iattr *attr)
 	}
 
 	inode_lock(src_inode);
-	ret = kasumi_notify_change(KVN_SRC_IDMAP(info->source.mnt)
-				   src_dentry, &sattr, NULL);
+	ret = kasumi_notify_change(KVN_SRC_IDMAP(info->source.mnt) src_dentry,
+				   &sattr, NULL);
 	if (!ret)
 		kasumi_vnode_copyattr(vi, src_inode);
 	inode_unlock(src_inode);
@@ -434,7 +437,7 @@ kasumi_vnode_setattr(KVN_IDMAP_ARG struct dentry *dentry, struct iattr *attr)
 /* ---- data plane: delegate to the pinned source ------------------------- */
 
 static int KASUMI_NOCFI kasumi_vnode_sync_flags(struct file *outer,
-					      struct file *real)
+						struct file *real)
 {
 	const unsigned int mask = O_APPEND | O_NONBLOCK | O_NDELAY | O_DIRECT;
 	unsigned int flags = (READ_ONCE(real->f_flags) & ~mask) |
@@ -459,8 +462,9 @@ static int KASUMI_NOCFI kasumi_vnode_sync_flags(struct file *outer,
 	return 0;
 }
 
-static unsigned long KASUMI_NOCFI kasumi_vnode_get_unmapped_area(struct file *file,
-	unsigned long addr, unsigned long len, unsigned long pgoff, unsigned long flags)
+static unsigned long KASUMI_NOCFI kasumi_vnode_get_unmapped_area(
+    struct file *file, unsigned long addr, unsigned long len,
+    unsigned long pgoff, unsigned long flags)
 {
 	struct file *real = file->private_data;
 
@@ -482,21 +486,23 @@ static struct kasumi_vnode_fops *kasumi_vnode_fops_find(unsigned int key)
 {
 	struct kasumi_vnode_fops *entry;
 
-	hash_for_each_possible_rcu(kasumi_vnode_fops_cache, entry, node, key) {
+	hash_for_each_possible_rcu(kasumi_vnode_fops_cache, entry, node, key)
+	{
 		if (entry->key == key)
 			return entry;
 	}
 	return NULL;
 }
 
-static int kasumi_vnode_select_fops(struct file *file, struct file *real, bool special)
+static int kasumi_vnode_select_fops(struct file *file, struct file *real,
+				    bool special)
 {
 	const struct file_operations *source = real->f_op;
 	struct kasumi_vnode_fops *entry, *candidate;
 	unsigned int key = special ? 1 : 0;
 #ifdef FOP_UNSIGNED_OFFSET
 	fop_flags_t supported = FOP_UNSIGNED_OFFSET | FOP_MMAP_SYNC |
-		FOP_BUFFER_WASYNC | FOP_DIO_PARALLEL_WRITE;
+				FOP_BUFFER_WASYNC | FOP_DIO_PARALLEL_WRITE;
 
 #ifdef FOP_DONTCACHE
 	supported |= FOP_DONTCACHE;
@@ -523,10 +529,11 @@ static int kasumi_vnode_select_fops(struct file *file, struct file *real, bool s
 		if (!candidate)
 			return -ENOMEM;
 		candidate->key = key;
-		candidate->operations = special ? kasumi_vnode_special_fops :
-			kasumi_vnode_file_fops;
+		candidate->operations = special ? kasumi_vnode_special_fops
+						: kasumi_vnode_file_fops;
 		if (source->get_unmapped_area)
-			candidate->operations.get_unmapped_area = kasumi_vnode_get_unmapped_area;
+			candidate->operations.get_unmapped_area =
+			    kasumi_vnode_get_unmapped_area;
 		if (!source->read)
 			candidate->operations.read = NULL;
 		if (!source->write)
@@ -545,7 +552,8 @@ static int kasumi_vnode_select_fops(struct file *file, struct file *real, bool s
 		if (!entry) {
 			entry = candidate;
 			candidate = NULL;
-			hash_add_rcu(kasumi_vnode_fops_cache, &entry->node, key);
+			hash_add_rcu(kasumi_vnode_fops_cache, &entry->node,
+				     key);
 		}
 		spin_unlock(&kasumi_vnode_fops_lock);
 		kfree(candidate);
@@ -562,7 +570,8 @@ void kasumi_vnode_fops_exit(void)
 	unsigned int bucket;
 
 	synchronize_rcu();
-	hash_for_each_safe(kasumi_vnode_fops_cache, bucket, next, entry, node) {
+	hash_for_each_safe(kasumi_vnode_fops_cache, bucket, next, entry, node)
+	{
 		hash_del(&entry->node);
 		kfree(entry);
 	}
@@ -570,8 +579,9 @@ void kasumi_vnode_fops_exit(void)
 
 static void kasumi_vnode_copy_modes(struct file *file, const struct file *real)
 {
-	fmode_t mask = FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE | FMODE_ATOMIC_POS |
-		FMODE_STREAM | FMODE_NOWAIT | FMODE_CAN_READ | FMODE_CAN_WRITE;
+	fmode_t mask = FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE |
+		       FMODE_ATOMIC_POS | FMODE_STREAM | FMODE_NOWAIT |
+		       FMODE_CAN_READ | FMODE_CAN_WRITE;
 
 #ifdef FMODE_UNSIGNED_OFFSET
 	mask |= FMODE_UNSIGNED_OFFSET;
@@ -632,7 +642,8 @@ static int KASUMI_NOCFI kasumi_vnode_open(struct inode *inode,
 	    ((info->source.mnt->mnt_flags & MNT_NODEV) ||
 	     (info->source.mnt->mnt_sb->s_iflags & SB_I_NODEV)))
 		return -EACCES;
-	ret = kasumi_vnode_refresh_sid(inode, d_inode(info->source.dentry), true);
+	ret =
+	    kasumi_vnode_refresh_sid(inode, d_inode(info->source.dentry), true);
 	if (ret)
 		return ret;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
@@ -643,7 +654,8 @@ static int KASUMI_NOCFI kasumi_vnode_open(struct inode *inode,
 #endif
 	if (IS_ERR(real_file))
 		return PTR_ERR(real_file);
-	ret = kasumi_vnode_select_fops(file, real_file, info->special_mode != 0);
+	ret =
+	    kasumi_vnode_select_fops(file, real_file, info->special_mode != 0);
 	if (!ret)
 		ret = kasumi_vnode_notify_open(inode);
 	if (ret) {
@@ -691,8 +703,8 @@ static struct file *kasumi_vnode_exec_source(struct file *file, bool denied)
 		ret = -EACCES;
 		goto release;
 	}
-	ret = inode_permission(KVN_SRC_IDMAP(real->f_path.mnt)
-			       file_inode(real), MAY_EXEC);
+	ret = inode_permission(KVN_SRC_IDMAP(real->f_path.mnt) file_inode(real),
+			       MAY_EXEC);
 	if (!ret && denied) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 		ret = exe_file_deny_write_access(real);
@@ -724,7 +736,8 @@ struct file *kasumi_vnode_exec_open(struct file *file)
 	return kasumi_vnode_exec_source(file, false);
 }
 
-static int KASUMI_NOCFI kasumi_vnode_release(struct inode *inode, struct file *file)
+static int KASUMI_NOCFI kasumi_vnode_release(struct inode *inode,
+					     struct file *file)
 {
 	struct file *real_file = file->private_data;
 
@@ -733,10 +746,11 @@ static int KASUMI_NOCFI kasumi_vnode_release(struct inode *inode, struct file *f
 	if (real_file) {
 		kasumi_vnode_notify_close(inode);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-		/* The outer __fput already provides a sleepable release context.
-		 * Keep writeback and filesystem callbacks on the deferred path.
-		 * Source and visible paths remain pinned by the outer vnode/file.
-		 * Older supported KMIs restrict __fput_sync to kernel threads.
+		/* The outer __fput already provides a sleepable release
+		 * context. Keep writeback and filesystem callbacks on the
+		 * deferred path. Source and visible paths remain pinned by the
+		 * outer vnode/file. Older supported KMIs restrict __fput_sync
+		 * to kernel threads.
 		 */
 		if (kasumi_fput_sync && !(real_file->f_mode & FMODE_WRITE) &&
 		    S_ISREG(file_inode(real_file)->i_mode) &&
@@ -758,9 +772,11 @@ static loff_t kasumi_vnode_llseek(struct file *file, loff_t offset, int whence)
 	loff_t ret;
 
 	if (S_ISDIR(file_inode(file)->i_mode))
-		return kasumi_dir_view_llseek(file, real_file,
-			real_file ? kasumi_fop_original_operations(real_file) : NULL,
-			offset, whence);
+		return kasumi_dir_view_llseek(
+		    file, real_file,
+		    real_file ? kasumi_fop_original_operations(real_file)
+			      : NULL,
+		    offset, whence);
 	if (!real_file)
 		return generic_file_llseek(file, offset, whence);
 	real_file->f_pos = file->f_pos;
@@ -803,12 +819,14 @@ static atomic_t kasumi_vnode_aio_active = ATOMIC_INIT(0);
 
 static void kasumi_vnode_aio_original_complete(struct kiocb *iocb, long result
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
-					      , long result2
+					       ,
+					       long result2
 #endif
 );
 static void kasumi_vnode_aio_complete(struct kiocb *iocb, long result
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
-				    , long result2
+				      ,
+				      long result2
 #endif
 );
 
@@ -842,7 +860,7 @@ static void kasumi_vnode_aio_put(struct kasumi_vnode_aio *request)
 }
 
 static struct kasumi_vnode_aio *kasumi_vnode_aio_find(struct kiocb *iocb,
-						    bool inner)
+						      bool inner)
 {
 	unsigned int bucket = hash_ptr(iocb, 6);
 	struct kasumi_vnode_aio *request, *found = NULL;
@@ -850,14 +868,18 @@ static struct kasumi_vnode_aio *kasumi_vnode_aio_find(struct kiocb *iocb,
 
 	spin_lock_irqsave(&kasumi_vnode_aio_locks[bucket], flags);
 	if (inner) {
-		hlist_for_each_entry(request, &kasumi_vnode_aio_inner[bucket], inner_node) {
+		hlist_for_each_entry(request, &kasumi_vnode_aio_inner[bucket],
+				     inner_node)
+		{
 			if (&request->iocb == iocb) {
 				found = request;
 				break;
 			}
 		}
 	} else {
-		hlist_for_each_entry(request, &kasumi_vnode_aio_outer[bucket], outer_node) {
+		hlist_for_each_entry(request, &kasumi_vnode_aio_outer[bucket],
+				     outer_node)
+		{
 			if (request->original == iocb) {
 				found = request;
 				break;
@@ -878,13 +900,15 @@ static void kasumi_vnode_aio_index(struct kasumi_vnode_aio *request, bool add)
 
 	spin_lock_irqsave(&kasumi_vnode_aio_locks[inner], flags);
 	if (add)
-		hlist_add_head(&request->inner_node, &kasumi_vnode_aio_inner[inner]);
+		hlist_add_head(&request->inner_node,
+			       &kasumi_vnode_aio_inner[inner]);
 	else
 		hlist_del(&request->inner_node);
 	spin_unlock_irqrestore(&kasumi_vnode_aio_locks[inner], flags);
 	spin_lock_irqsave(&kasumi_vnode_aio_locks[outer], flags);
 	if (add)
-		hlist_add_head(&request->outer_node, &kasumi_vnode_aio_outer[outer]);
+		hlist_add_head(&request->outer_node,
+			       &kasumi_vnode_aio_outer[outer]);
 	else
 		hlist_del(&request->outer_node);
 	spin_unlock_irqrestore(&kasumi_vnode_aio_locks[outer], flags);
@@ -892,7 +916,8 @@ static void kasumi_vnode_aio_index(struct kasumi_vnode_aio *request, bool add)
 
 static int KASUMI_NOCFI kasumi_vnode_aio_cancel(struct kiocb *original)
 {
-	struct kasumi_vnode_aio *request = kasumi_vnode_aio_find(original, false);
+	struct kasumi_vnode_aio *request =
+	    kasumi_vnode_aio_find(original, false);
 	int ret = -EINVAL;
 
 	if (request) {
@@ -916,16 +941,18 @@ static void kasumi_vnode_aio_retire_cancel(struct kasumi_vnode_aio *request)
 		return;
 	if (request->cancel_owner)
 		request = request->cancel_owner;
-	/* A source driver may free iocb->private as soon as ki_complete returns.
-	 * Wait for an already running cancel, then prevent any new source call.
-	 * Native ki_cancel already runs under ctx_lock and cannot synchronously
-	 * reenter its own ki_complete. Preserve that native lock contract here. */
+	/* A source driver may free iocb->private as soon as ki_complete
+	 * returns. Wait for an already running cancel, then prevent any new
+	 * source call. Native ki_cancel already runs under ctx_lock and cannot
+	 * synchronously reenter its own ki_complete. Preserve that native lock
+	 * contract here. */
 	spin_lock_irqsave(&request->cancel_lock, flags);
 	request->completed = true;
 	spin_unlock_irqrestore(&request->cancel_lock, flags);
 }
 
-static int kasumi_vnode_aio_cancel_pre(struct kprobe *probe, struct pt_regs *regs)
+static int kasumi_vnode_aio_cancel_pre(struct kprobe *probe,
+				       struct pt_regs *regs)
 {
 #ifdef CONFIG_ARM64
 	struct kasumi_vnode_aio *request;
@@ -970,15 +997,18 @@ int kasumi_vnode_aio_init(void)
 		return 0;
 	for (i = 0; i < ARRAY_SIZE(kasumi_vnode_aio_locks); i++)
 		spin_lock_init(&kasumi_vnode_aio_locks[i]);
-	kasumi_vnode_aio_wq = alloc_workqueue("kasumi_aio", WQ_UNBOUND | WQ_MEM_RECLAIM, 0);
+	kasumi_vnode_aio_wq =
+	    alloc_workqueue("kasumi_aio", WQ_UNBOUND | WQ_MEM_RECLAIM, 0);
 	if (!kasumi_vnode_aio_wq)
 		return -ENOMEM;
 	if (IS_ENABLED(CONFIG_AIO) && IS_ENABLED(CONFIG_ARM64)) {
 		kasumi_vnode_aio_cancel_probe.addr =
-			(void *)kasumi_lookup_name_quiet("kiocb_set_cancel_fn");
-		kasumi_vnode_aio_cancel_probe.pre_handler = kasumi_vnode_aio_cancel_pre;
-		ret = kasumi_vnode_aio_cancel_probe.addr ?
-			register_kprobe(&kasumi_vnode_aio_cancel_probe) : -EOPNOTSUPP;
+		    (void *)kasumi_lookup_name_quiet("kiocb_set_cancel_fn");
+		kasumi_vnode_aio_cancel_probe.pre_handler =
+		    kasumi_vnode_aio_cancel_pre;
+		ret = kasumi_vnode_aio_cancel_probe.addr
+			  ? register_kprobe(&kasumi_vnode_aio_cancel_probe)
+			  : -EOPNOTSUPP;
 		if (ret) {
 			destroy_workqueue(kasumi_vnode_aio_wq);
 			kasumi_vnode_aio_wq = NULL;
@@ -1011,7 +1041,7 @@ static void kasumi_vnode_aio_finish(struct kasumi_vnode_aio *request)
 	request->original->ki_pos = request->iocb.ki_pos;
 	if (request->iocb.ki_flags & IOCB_WRITE)
 		kasumi_vnode_copyattr(file_inode(request->outer),
-				     file_inode(request->iocb.ki_filp));
+				      file_inode(request->iocb.ki_filp));
 }
 
 static void kasumi_vnode_aio_end_write(struct kiocb *iocb)
@@ -1021,8 +1051,7 @@ static void kasumi_vnode_aio_end_write(struct kiocb *iocb)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 	kiocb_end_write(iocb);
 #else
-	__sb_writers_acquired(file_inode(iocb->ki_filp)->i_sb,
-			      SB_FREEZE_WRITE);
+	__sb_writers_acquired(file_inode(iocb->ki_filp)->i_sb, SB_FREEZE_WRITE);
 	file_end_write(iocb->ki_filp);
 #endif
 }
@@ -1030,7 +1059,7 @@ static void kasumi_vnode_aio_end_write(struct kiocb *iocb)
 static void KASUMI_NOCFI kasumi_vnode_aio_work(struct work_struct *work)
 {
 	struct kasumi_vnode_aio *request =
-		container_of(work, struct kasumi_vnode_aio, work);
+	    container_of(work, struct kasumi_vnode_aio, work);
 	struct kiocb *original = request->original;
 
 	if (request->end_write)
@@ -1061,14 +1090,15 @@ static void KASUMI_NOCFI kasumi_vnode_aio_work(struct work_struct *work)
 static void kasumi_vnode_aio_complete(struct kiocb *iocb, long result)
 #else
 static void kasumi_vnode_aio_complete(struct kiocb *iocb, long result,
-				    long result2)
+				      long result2)
 #endif
 {
 	struct kasumi_vnode_aio *request =
-		container_of(iocb, struct kasumi_vnode_aio, iocb);
+	    container_of(iocb, struct kasumi_vnode_aio, iocb);
 
-	/* Drivers may call us from hardirq, including before submission returns.
-	 * Everything needed by this path was allocated before calling them. */
+	/* Drivers may call us from hardirq, including before submission
+	 * returns. Everything needed by this path was allocated before calling
+	 * them. */
 	kasumi_vnode_aio_retire_cancel(request);
 	request->result = result;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
@@ -1080,7 +1110,8 @@ static void kasumi_vnode_aio_complete(struct kiocb *iocb, long result,
 
 static void kasumi_vnode_aio_original_complete(struct kiocb *iocb, long result
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
-					      , long result2
+					       ,
+					       long result2
 #endif
 )
 {
@@ -1091,7 +1122,8 @@ static void kasumi_vnode_aio_original_complete(struct kiocb *iocb, long result
 	kasumi_vnode_aio_retire_cancel(request);
 	/* Native aio_rw_done uses this path for immediate returns. The source
 	 * write token was already ended by the submitting helper. Retain the
-	 * cancel mapping until native completion removes its active-list entry. */
+	 * cancel mapping until native completion removes its active-list entry.
+	 */
 	request->result = result;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
 	request->result2 = result2;
@@ -1101,7 +1133,8 @@ static void kasumi_vnode_aio_original_complete(struct kiocb *iocb, long result
 }
 
 static ssize_t KASUMI_NOCFI kasumi_vnode_iter_write(struct file *file,
-	struct kiocb *iocb, struct iov_iter *iter)
+						    struct kiocb *iocb,
+						    struct iov_iter *iter)
 {
 	struct inode *inode = file_inode(file);
 	ssize_t ret;
@@ -1114,7 +1147,8 @@ static ssize_t KASUMI_NOCFI kasumi_vnode_iter_write(struct file *file,
 		return -EINVAL;
 	if (!kasumi_rw_verify_area)
 		return -EOPNOTSUPP;
-	ret = kasumi_rw_verify_area(WRITE, file, &iocb->ki_pos, iov_iter_count(iter));
+	ret = kasumi_rw_verify_area(WRITE, file, &iocb->ki_pos,
+				    iov_iter_count(iter));
 	if (ret)
 		return ret;
 	if (S_ISREG(inode->i_mode)) {
@@ -1133,7 +1167,8 @@ static ssize_t KASUMI_NOCFI kasumi_vnode_iter_write(struct file *file,
 }
 
 static ssize_t KASUMI_NOCFI kasumi_vnode_iter_read(struct file *file,
-	struct kiocb *iocb, struct iov_iter *iter)
+						   struct kiocb *iocb,
+						   struct iov_iter *iter)
 {
 	ssize_t ret;
 
@@ -1147,7 +1182,8 @@ static ssize_t KASUMI_NOCFI kasumi_vnode_iter_read(struct file *file,
 		return 0;
 	if (!kasumi_rw_verify_area)
 		return -EOPNOTSUPP;
-	ret = kasumi_rw_verify_area(READ, file, &iocb->ki_pos, iov_iter_count(iter));
+	ret = kasumi_rw_verify_area(READ, file, &iocb->ki_pos,
+				    iov_iter_count(iter));
 	if (ret)
 		return ret;
 	/* Native outer VFS/io_uring code emits the event in its own producer
@@ -1156,7 +1192,7 @@ static ssize_t KASUMI_NOCFI kasumi_vnode_iter_read(struct file *file,
 }
 
 static ssize_t kasumi_vnode_iter(struct kiocb *iocb, struct iov_iter *iter,
-				bool write)
+				 bool write)
 {
 	struct file *outer = iocb->ki_filp;
 	struct file *real = outer->private_data;
@@ -1192,9 +1228,9 @@ static ssize_t kasumi_vnode_iter(struct kiocb *iocb, struct iov_iter *iter,
 		    !kasumi_vnode_aio_cancel_registered)
 			return -EOPNOTSUPP;
 #endif
-		request = kzalloc(sizeof(*request),
-				  iocb->ki_flags & IOCB_NOWAIT ? GFP_NOWAIT :
-							       GFP_KERNEL);
+		request = kzalloc(sizeof(*request), iocb->ki_flags & IOCB_NOWAIT
+							? GFP_NOWAIT
+							: GFP_KERNEL);
 		if (!request)
 			return iocb->ki_flags & IOCB_NOWAIT ? -EAGAIN : -ENOMEM;
 		if (!try_module_get(THIS_MODULE)) {
@@ -1213,13 +1249,16 @@ static ssize_t kasumi_vnode_iter(struct kiocb *iocb, struct iov_iter *iter,
 		refcount_set(&request->refs, 2);
 #ifdef IOCB_AIO_RW
 		request->legacy = iocb->ki_flags & IOCB_AIO_RW;
-		if (!request->legacy && iocb->ki_complete == kasumi_vnode_aio_complete) {
+		if (!request->legacy &&
+		    iocb->ki_complete == kasumi_vnode_aio_complete) {
 			struct kasumi_vnode_aio *parent =
-				container_of(iocb, struct kasumi_vnode_aio, iocb);
-			struct kasumi_vnode_aio *owner = parent->cancel_owner ?: parent;
+			    container_of(iocb, struct kasumi_vnode_aio, iocb);
+			struct kasumi_vnode_aio *owner =
+			    parent->cancel_owner ?: parent;
 
-			/* Preserve native cancellation through nested vnode sources.
-			 * The parent submission reference protects this lookup. */
+			/* Preserve native cancellation through nested vnode
+			 * sources. The parent submission reference protects
+			 * this lookup. */
 			if (owner->legacy) {
 				request->cancel_owner = owner;
 				refcount_inc(&owner->refs);
@@ -1259,7 +1298,8 @@ static ssize_t kasumi_vnode_iter(struct kiocb *iocb, struct iov_iter *iter,
 	} else {
 		iocb->ki_pos = inner->ki_pos;
 		if (write)
-			kasumi_vnode_copyattr(file_inode(outer), file_inode(real));
+			kasumi_vnode_copyattr(file_inode(outer),
+					      file_inode(real));
 	}
 	return ret;
 }
@@ -1269,7 +1309,8 @@ static ssize_t kasumi_vnode_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	return kasumi_vnode_iter(iocb, to, false);
 }
 
-static ssize_t kasumi_vnode_write_iter(struct kiocb *iocb, struct iov_iter *from)
+static ssize_t kasumi_vnode_write_iter(struct kiocb *iocb,
+				       struct iov_iter *from)
 {
 	return kasumi_vnode_iter(iocb, from, true);
 }
@@ -1280,9 +1321,9 @@ static int KASUMI_NOCFI kasumi_vnode_mmap(struct file *file,
 	struct file *real = file->private_data;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	struct backing_file_ctx ctx = {
-		.cred = current_cred(),
+	    .cred = current_cred(),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-		.user_file = file,
+	    .user_file = file,
 #endif
 	};
 
@@ -1364,8 +1405,9 @@ static int KASUMI_NOCFI kasumi_vnode_fsync(struct file *file, loff_t start,
 	return real_file->f_op->fsync(real_file, start, end, datasync);
 }
 
-static long KASUMI_NOCFI kasumi_vnode_source_fallocate(struct file *file, int mode,
-	loff_t offset, loff_t len)
+static long KASUMI_NOCFI kasumi_vnode_source_fallocate(struct file *file,
+						       int mode, loff_t offset,
+						       loff_t len)
 {
 	struct inode *inode = file_inode(file);
 	loff_t end;
@@ -1377,7 +1419,8 @@ static long KASUMI_NOCFI kasumi_vnode_source_fallocate(struct file *file, int mo
 	 */
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
-	if (((mode & ~FALLOC_FL_KEEP_SIZE) && IS_APPEND(inode)) || IS_IMMUTABLE(inode))
+	if (((mode & ~FALLOC_FL_KEEP_SIZE) && IS_APPEND(inode)) ||
+	    IS_IMMUTABLE(inode))
 		return -EPERM;
 	if (IS_SWAPFILE(inode))
 		return -ETXTBSY;
@@ -1397,7 +1440,8 @@ static long KASUMI_NOCFI kasumi_vnode_source_fallocate(struct file *file, int mo
 		return -EISDIR;
 	if (!S_ISREG(inode->i_mode) && !S_ISBLK(inode->i_mode))
 		return -ENODEV;
-	if (check_add_overflow(offset, len, &end) || end > inode->i_sb->s_maxbytes)
+	if (check_add_overflow(offset, len, &end) ||
+	    end > inode->i_sb->s_maxbytes)
 		return -EFBIG;
 	if (!file->f_op->fallocate)
 		return -EOPNOTSUPP;
@@ -1407,8 +1451,8 @@ static long KASUMI_NOCFI kasumi_vnode_source_fallocate(struct file *file, int mo
 	return ret;
 }
 
-static long kasumi_vnode_fallocate(struct file *file, int mode,
-				    loff_t offset, loff_t len)
+static long kasumi_vnode_fallocate(struct file *file, int mode, loff_t offset,
+				   loff_t len)
 {
 	struct file *real = file->private_data;
 	long ret;
@@ -1423,8 +1467,8 @@ static long kasumi_vnode_fallocate(struct file *file, int mode,
 	return ret;
 }
 
-static int kasumi_vnode_fadvise(struct file *file, loff_t offset,
-			       loff_t len, int advice)
+static int kasumi_vnode_fadvise(struct file *file, loff_t offset, loff_t len,
+				int advice)
 {
 	struct file *real = file->private_data;
 
@@ -1436,8 +1480,7 @@ static int KASUMI_NOCFI kasumi_vnode_flush(struct file *file, fl_owner_t owner)
 	return kasumi_file_lock_flush(file, owner);
 }
 
-static int kasumi_vnode_permission(KVN_IDMAP_ARG struct inode *inode,
-				   int mask)
+static int kasumi_vnode_permission(KVN_IDMAP_ARG struct inode *inode, int mask)
 {
 	struct kasumi_vnode_info *info = inode->i_private;
 	int ret;
@@ -1450,31 +1493,33 @@ static int kasumi_vnode_permission(KVN_IDMAP_ARG struct inode *inode,
 				       !(mask & MAY_NOT_BLOCK));
 	if (ret)
 		return ret;
-	return inode_permission(KVN_SRC_IDMAP(info->source.mnt)
-				d_inode(info->source.dentry), mask);
+	return inode_permission(
+	    KVN_SRC_IDMAP(info->source.mnt) d_inode(info->source.dentry), mask);
 }
 
 static const struct inode_operations kasumi_vnode_file_iops = {
-	.permission = kasumi_vnode_permission,
+    .permission = kasumi_vnode_permission,
     .getattr = kasumi_vnode_getattr,
     .setattr = kasumi_vnode_setattr,
     .listxattr = kasumi_vnode_listxattr,
     .get_link = kasumi_vnode_get_link,
 };
 
-static ssize_t KASUMI_NOCFI kasumi_vnode_read(struct file *file, char __user *buf,
-					     size_t len, loff_t *ppos);
-static ssize_t KASUMI_NOCFI kasumi_vnode_write(struct file *file, const char __user *buf,
-					      size_t len, loff_t *ppos);
+static ssize_t KASUMI_NOCFI kasumi_vnode_read(struct file *file,
+					      char __user *buf, size_t len,
+					      loff_t *ppos);
+static ssize_t KASUMI_NOCFI kasumi_vnode_write(struct file *file,
+					       const char __user *buf,
+					       size_t len, loff_t *ppos);
 static __poll_t KASUMI_NOCFI kasumi_vnode_poll(struct file *file,
-					    struct poll_table_struct *wait);
+					       struct poll_table_struct *wait);
 static int KASUMI_NOCFI kasumi_vnode_fasync(int fd, struct file *file, int on);
 
 static const struct file_operations kasumi_vnode_file_fops = {
     .owner = THIS_MODULE,
-	.lock = kasumi_file_lock_posix,
-	.flock = kasumi_file_lock_flock,
-	.setlease = kasumi_file_lock_setlease,
+    .lock = kasumi_file_lock_posix,
+    .flock = kasumi_file_lock_flock,
+    .setlease = kasumi_file_lock_setlease,
     .open = kasumi_vnode_open,
     .release = kasumi_vnode_release,
     .llseek = kasumi_vnode_llseek,
@@ -1503,8 +1548,8 @@ static const struct file_operations kasumi_vnode_file_fops = {
  * device/fifo.
  */
 static ssize_t KASUMI_NOCFI kasumi_vnode_read(struct file *file,
-						      char __user *buf,
-						      size_t len, loff_t *ppos)
+					      char __user *buf, size_t len,
+					      loff_t *ppos)
 {
 	struct file *real = file->private_data;
 	ssize_t ret;
@@ -1531,8 +1576,8 @@ static ssize_t KASUMI_NOCFI kasumi_vnode_read(struct file *file,
 }
 
 static ssize_t KASUMI_NOCFI kasumi_vnode_write(struct file *file,
-						       const char __user *buf,
-						       size_t len, loff_t *ppos)
+					       const char __user *buf,
+					       size_t len, loff_t *ppos)
 {
 	struct file *real = file->private_data;
 	ssize_t ret;
@@ -1560,8 +1605,8 @@ static ssize_t KASUMI_NOCFI kasumi_vnode_write(struct file *file,
 	return ret;
 }
 
-static __poll_t KASUMI_NOCFI
-kasumi_vnode_poll(struct file *file, struct poll_table_struct *wait)
+static __poll_t KASUMI_NOCFI kasumi_vnode_poll(struct file *file,
+					       struct poll_table_struct *wait)
 {
 	struct file *real = file->private_data;
 
@@ -1570,17 +1615,16 @@ kasumi_vnode_poll(struct file *file, struct poll_table_struct *wait)
 	return vfs_poll(real, wait);
 }
 
-static int KASUMI_NOCFI kasumi_vnode_fasync(int fd, struct file *file,
-						    int on)
+static int KASUMI_NOCFI kasumi_vnode_fasync(int fd, struct file *file, int on)
 {
 	return kasumi_file_lock_fasync(fd, file, on);
 }
 
 static const struct file_operations kasumi_vnode_special_fops = {
     .owner = THIS_MODULE,
-	.lock = kasumi_file_lock_posix,
-	.flock = kasumi_file_lock_flock,
-	.setlease = kasumi_file_lock_setlease,
+    .lock = kasumi_file_lock_posix,
+    .flock = kasumi_file_lock_flock,
+    .setlease = kasumi_file_lock_setlease,
     .open = kasumi_vnode_open,
     .release = kasumi_vnode_release,
     .llseek = kasumi_vnode_llseek,
@@ -1698,7 +1742,8 @@ char *kasumi_vnode_visible_path(struct dentry *dentry)
 }
 
 static int kasumi_vnode_collect_children(struct file *file,
-	struct list_head *entries, u64 *generation, void *data)
+					 struct list_head *entries,
+					 u64 *generation, void *data)
 {
 	struct kasumi_vnode_info *info = file_inode(file)->i_private;
 	struct kasumi_dir_entry *entry;
@@ -1718,7 +1763,7 @@ static int kasumi_vnode_collect_children(struct file *file,
 	kfree(visible_path);
 	if (ret || !info->source.dentry)
 		return ret;
-	list_for_each_entry(entry, entries, list) {
+	list_for_each_entry (entry, entries, list) {
 		struct path child = {};
 		struct inode *inode;
 		struct kasumi_inode_identity *identity;
@@ -1728,15 +1773,16 @@ static int kasumi_vnode_collect_children(struct file *file,
 		     (!entry->bypass_redirect || entry->bypass_direct_rule)))
 			continue;
 		ret = vfs_path_lookup(info->source.dentry, info->source.mnt,
-					     entry->name, 0, &child);
+				      entry->name, 0, &child);
 		if (ret == -ENOENT)
 			continue;
 		if (ret)
 			return ret;
 		inode = d_inode(child.dentry);
 		if (inode && S_ISDIR(inode->i_mode)) {
-			ret = kasumi_identity_domain_source_get(info->identity_domain,
-				inode->i_sb->s_dev, inode->i_ino, GFP_NOFS, &identity);
+			ret = kasumi_identity_domain_source_get(
+			    info->identity_domain, inode->i_sb->s_dev,
+			    inode->i_ino, GFP_NOFS, &identity);
 			if (ret) {
 				path_put(&child);
 				return ret;
@@ -1747,11 +1793,13 @@ static int kasumi_vnode_collect_children(struct file *file,
 				kasumi_identity_get(identity);
 				entry->ino = kasumi_identity_ino(identity);
 			}
-			if (entry->bypass_redirect && !entry->bypass_direct_rule) {
+			if (entry->bypass_redirect &&
+			    !entry->bypass_direct_rule) {
 				kasumi_identity_put(entry->bypass_identity);
 				entry->bypass_identity = identity;
 				kasumi_identity_get(identity);
-				entry->bypass_ino = kasumi_identity_ino(identity);
+				entry->bypass_ino =
+				    kasumi_identity_ino(identity);
 			}
 			kasumi_identity_put(identity);
 		}
@@ -1780,9 +1828,10 @@ static int KASUMI_NOCFI kasumi_vnode_dir_iterate(struct file *file,
 	source = real_dir ? file_inode(real_dir) : NULL;
 	identity.source_identity = source != NULL;
 	identity.source_dev = source ? source->i_sb->s_dev : 0;
-	return kasumi_dir_view_iterate(file, real_dir,
-		real_dir ? kasumi_fop_original_operations(real_dir) : NULL, ctx,
-		kasumi_vnode_collect_children, NULL, &identity);
+	return kasumi_dir_view_iterate(
+	    file, real_dir,
+	    real_dir ? kasumi_fop_original_operations(real_dir) : NULL, ctx,
+	    kasumi_vnode_collect_children, NULL, &identity);
 }
 
 struct kasumi_virtual_dop {
@@ -1811,22 +1860,24 @@ static int kasumi_vnode_resolve_child(struct inode *dir,
 	}
 	if (!info->source.dentry)
 		return kind;
-	ret = vfs_path_lookup(info->source.dentry, info->source.mnt,
-				     name, 0, leaf);
+	ret = vfs_path_lookup(info->source.dentry, info->source.mnt, name, 0,
+			      leaf);
 	if (ret == -ENOENT)
 		return kind;
 	if (ret)
 		return ret;
 	source = d_inode(leaf->dentry);
-	if (!source || (kind == KASUMI_VPATH_VDIR && !S_ISDIR(source->i_mode))) {
+	if (!source ||
+	    (kind == KASUMI_VPATH_VDIR && !S_ISDIR(source->i_mode))) {
 		path_put(leaf);
 		memset(leaf, 0, sizeof(*leaf));
 		return kind;
 	}
 	if (mode)
 		*mode = source->i_mode;
-	ret = kasumi_identity_domain_source_get(info->identity_domain,
-		source->i_sb->s_dev, source->i_ino, GFP_NOFS, identity);
+	ret = kasumi_identity_domain_source_get(
+	    info->identity_domain, source->i_sb->s_dev, source->i_ino, GFP_NOFS,
+	    identity);
 	if (ret) {
 		path_put(leaf);
 		memset(leaf, 0, sizeof(*leaf));
@@ -1898,7 +1949,8 @@ static int kasumi_virtual_revalidate_child_path(struct inode *dir,
 			!memcmp(info->visible_path + len + 1, name->name,
 				name->len);
 	} else if (info && kind == KASUMI_VPATH_LEAF) {
-		valid = path_equal(&info->source, &leaf) && info->v_ino == kasumi_identity_ino(identity);
+		valid = path_equal(&info->source, &leaf) &&
+			info->v_ino == kasumi_identity_ino(identity);
 	}
 	kasumi_identity_put(identity);
 	if (leaf.dentry)
@@ -2016,7 +2068,7 @@ static int kasumi_virtual_track_dentry(struct dentry *dentry)
 }
 
 static struct dentry *KASUMI_NOCFI kasumi_vnode_dir_lookup(
-	struct inode *dir, struct dentry *dentry, unsigned int flags)
+    struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
 	struct kasumi_vnode_info *info = dir->i_private;
 	struct inode *child_inode = NULL;
@@ -2058,11 +2110,13 @@ static struct dentry *KASUMI_NOCFI kasumi_vnode_dir_lookup(
 		goto out;
 	}
 	if (kind == KASUMI_VPATH_LEAF) {
-		u8 child_flags = S_ISDIR(mode) ? KASUMI_VNODE_F_DIR :
-			S_ISLNK(mode) ? KASUMI_VNODE_F_LNK :
-			special_file(mode) ? KASUMI_VNODE_F_SPECIAL : 0;
+		u8 child_flags = S_ISDIR(mode)	      ? KASUMI_VNODE_F_DIR
+				 : S_ISLNK(mode)      ? KASUMI_VNODE_F_LNK
+				 : special_file(mode) ? KASUMI_VNODE_F_SPECIAL
+						      : 0;
 
-		child_inode = kasumi_vnode_new(dir->i_sb, &leaf, mode, child_flags);
+		child_inode =
+		    kasumi_vnode_new(dir->i_sb, &leaf, mode, child_flags);
 	} else {
 		child_path =
 		    kasprintf(GFP_KERNEL, "%s%s%s", visible_path,
@@ -2146,13 +2200,14 @@ kasumi_vnode_src_child(struct kasumi_vnode_info *info, const struct dentry *vis,
 	inode_lock_nested(src_dir, I_MUTEX_PARENT2);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	child = kasumi_lookup_one(mnt_idmap(info->source.mnt), &name,
-				 info->source.dentry);
+				  info->source.dentry);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-	child = kasumi_lookup_one(KVN_SRC_IDMAP(info->source.mnt)
-		vis->d_name.name, info->source.dentry, vis->d_name.len);
+	child =
+	    kasumi_lookup_one(KVN_SRC_IDMAP(info->source.mnt) vis->d_name.name,
+			      info->source.dentry, vis->d_name.len);
 #else
 	child = kasumi_lookup_one(vis->d_name.name, info->source.dentry,
-				 vis->d_name.len);
+				  vis->d_name.len);
 #endif
 	if (IS_ERR(child)) {
 		inode_unlock(src_dir);
@@ -2206,7 +2261,8 @@ static void kasumi_vnode_src_end(struct kasumi_vnode_info *info,
 
 /* Allocate publication state before changing the source filesystem. */
 static struct inode *kasumi_vnode_prepare_child(struct inode *dir,
-	struct dentry *visible, umode_t mode)
+						struct dentry *visible,
+						umode_t mode)
 {
 	struct kasumi_vnode_info *parent = dir->i_private;
 	struct kasumi_inode_identity *identity;
@@ -2227,7 +2283,7 @@ static struct inode *kasumi_vnode_prepare_child(struct inode *dir,
 	}
 	info = inode->i_private;
 	ret = kasumi_identity_domain_reserve(parent->identity_domain,
-		&info->identity_hold);
+					     &info->identity_hold);
 	if (ret) {
 		iput(inode);
 		return ERR_PTR(ret);
@@ -2240,10 +2296,11 @@ static struct inode *kasumi_vnode_prepare_child(struct inode *dir,
 	return inode;
 }
 
-static int KASUMI_NOCFI kasumi_vnode_publish_child(struct inode **prepared,
-	const struct path *src_parent, struct dentry *src_child, struct dentry *visible)
+static int KASUMI_NOCFI kasumi_vnode_publish_child(
+    struct inode **prepared, const struct path *src_parent,
+    struct dentry *src_child, struct dentry *visible)
 {
-	struct path source = { .mnt = src_parent->mnt, .dentry = src_child };
+	struct path source = {.mnt = src_parent->mnt, .dentry = src_child};
 	struct inode *backing = d_inode(src_child), *inode = *prepared;
 	struct kasumi_vnode_info *info = inode->i_private;
 	u8 flags = info->flags;
@@ -2251,8 +2308,8 @@ static int KASUMI_NOCFI kasumi_vnode_publish_child(struct inode **prepared,
 
 	if (!backing)
 		return -ENOENT;
-	info->identity = kasumi_identity_source_bind(info->identity,
-		backing->i_sb->s_dev, backing->i_ino);
+	info->identity = kasumi_identity_source_bind(
+	    info->identity, backing->i_sb->s_dev, backing->i_ino);
 	kasumi_identity_domain_commit(info->identity_hold, info->identity);
 	info->identity_hold = NULL;
 	if (S_ISDIR(backing->i_mode))
@@ -2263,7 +2320,8 @@ static int KASUMI_NOCFI kasumi_vnode_publish_child(struct inode **prepared,
 		flags |= KASUMI_VNODE_F_SPECIAL;
 	ret = kasumi_vnode_attach_source(inode, &source, flags);
 	if (ret) {
-		/* The source committed. Retry lookup after a label-copy failure. */
+		/* The source committed. Retry lookup after a label-copy
+		 * failure. */
 		d_drop(visible);
 		return ret;
 	}
@@ -2345,7 +2403,7 @@ static int KASUMI_NOCFI kasumi_vnode_dir_mkdir_common(struct inode *dir,
 		} else {
 			child = created;
 			ret = kasumi_vnode_publish_child(
-				&prepared, &info->source, child, dentry);
+			    &prepared, &info->source, child, dentry);
 		}
 	}
 #else
@@ -2550,15 +2608,17 @@ static int KASUMI_NOCFI kasumi_vnode_dir_link(struct dentry *old_dentry,
 
 /* Syscall rename is routed before VFS locking by kasumi_rename_view. */
 static int kasumi_vnode_dir_rename(KVN_IDMAP_ARG struct inode *old_dir,
-	struct dentry *old_dentry, struct inode *new_dir,
-	struct dentry *new_dentry, unsigned int flags)
+				   struct dentry *old_dentry,
+				   struct inode *new_dir,
+				   struct dentry *new_dentry,
+				   unsigned int flags)
 {
 	/* A direct kernel caller already owns visible locks at this point. */
 	return -EOPNOTSUPP;
 }
 
 static const struct inode_operations kasumi_vnode_dir_iops = {
-	.permission = kasumi_vnode_permission,
+    .permission = kasumi_vnode_permission,
     .lookup = kasumi_vnode_dir_lookup,
     .getattr = kasumi_vnode_getattr,
     .setattr = kasumi_vnode_setattr,
@@ -2575,33 +2635,34 @@ static const struct inode_operations kasumi_vnode_dir_iops = {
 
 static const struct file_operations kasumi_vnode_dir_fops = {
     .owner = THIS_MODULE,
-	.lock = kasumi_file_lock_posix,
-	.flock = kasumi_file_lock_flock,
-	.setlease = kasumi_file_lock_setlease,
+    .lock = kasumi_file_lock_posix,
+    .flock = kasumi_file_lock_flock,
+    .setlease = kasumi_file_lock_setlease,
     .open = kasumi_vnode_dir_open,
     .release = kasumi_vnode_release,
     .read = generic_read_dir,
     .iterate_shared = kasumi_vnode_dir_iterate,
     .llseek = kasumi_vnode_llseek,
-	.fsync = kasumi_vnode_fsync,
-	.flush = kasumi_vnode_flush,
-	.unlocked_ioctl = kasumi_vnode_ioctl,
+    .fsync = kasumi_vnode_fsync,
+    .flush = kasumi_vnode_flush,
+    .unlocked_ioctl = kasumi_vnode_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = kasumi_vnode_compat_ioctl,
+    .compat_ioctl = kasumi_vnode_compat_ioctl,
 #endif
-	.poll = kasumi_vnode_poll,
-	.fasync = kasumi_vnode_fasync,
-	.fadvise = kasumi_vnode_fadvise,
+    .poll = kasumi_vnode_poll,
+    .fasync = kasumi_vnode_fasync,
+    .fadvise = kasumi_vnode_fadvise,
 };
 
 /* Copy through the public LSM context API and propagate every failure. */
 static KASUMI_NOCFI int kasumi_vnode_clone_sid(struct inode *vnode,
-					      struct inode *source)
+					       struct inode *source)
 {
 	int ret;
 
 	if (!vnode || !source || !kasumi_security_inode_getsecctx ||
-	    !kasumi_security_inode_notifysecctx || !kasumi_security_release_secctx)
+	    !kasumi_security_inode_notifysecctx ||
+	    !kasumi_security_release_secctx)
 		return -EOPNOTSUPP;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 	{
@@ -2613,7 +2674,7 @@ static KASUMI_NOCFI int kasumi_vnode_clone_sid(struct inode *vnode,
 				ret = -EIO;
 			else
 				ret = kasumi_security_inode_notifysecctx(
-					vnode, context.context, context.len);
+				    vnode, context.context, context.len);
 		}
 		if (context.context)
 			kasumi_security_release_secctx(&context);
@@ -2623,12 +2684,14 @@ static KASUMI_NOCFI int kasumi_vnode_clone_sid(struct inode *vnode,
 		void *context = NULL;
 		u32 length = 0;
 
-		ret = kasumi_security_inode_getsecctx(source, &context, &length);
+		ret =
+		    kasumi_security_inode_getsecctx(source, &context, &length);
 		if (!ret) {
 			if (!context || !length)
 				ret = -EIO;
 			else
-				ret = kasumi_security_inode_notifysecctx(vnode, context, length);
+				ret = kasumi_security_inode_notifysecctx(
+				    vnode, context, length);
 		}
 		if (context)
 			kasumi_security_release_secctx(context, length);
@@ -2637,8 +2700,9 @@ static KASUMI_NOCFI int kasumi_vnode_clone_sid(struct inode *vnode,
 	return ret;
 }
 
-static struct inode *kasumi_vnode_allocate(struct super_block *sb,
-	struct kasumi_inode_identity *identity)
+static struct inode *
+kasumi_vnode_allocate(struct super_block *sb,
+		      struct kasumi_inode_identity *identity)
 {
 	struct kasumi_vnode_info *info;
 	struct inode *inode;
@@ -2671,7 +2735,7 @@ static struct inode *kasumi_vnode_allocate(struct super_block *sb,
 }
 
 static int kasumi_vnode_attach_source(struct inode *inode,
-	const struct path *source, u8 flags)
+				      const struct path *source, u8 flags)
 {
 	struct kasumi_vnode_info *info = inode->i_private;
 	struct inode *r_inode = d_inode(source->dentry);
@@ -2736,14 +2800,17 @@ static int kasumi_vnode_attach_source(struct inode *inode,
 
 	/* Project the source's SELinux label onto the vnode (view-consistency:
 	 * security.selinux must match the source).  Done last, after i_security
-	 * is allocated by kasumi_sop_new_inode() and all identity is in place. */
+	 * is allocated by kasumi_sop_new_inode() and all identity is in place.
+	 */
 	ret = kasumi_vnode_refresh_sid(inode, r_inode, true);
 	if (ret)
 		return ret;
 	return 0;
 }
 
-struct inode *kasumi_vnode_new(struct super_block *sb, const struct path *source, umode_t mode, u8 flags)
+struct inode *kasumi_vnode_new(struct super_block *sb,
+			       const struct path *source, umode_t mode,
+			       u8 flags)
 {
 	struct kasumi_inode_identity *identity;
 	struct inode *inode, *r_inode;
@@ -2755,17 +2822,20 @@ struct inode *kasumi_vnode_new(struct super_block *sb, const struct path *source
 	r_inode = d_inode(source->dentry);
 	if (!r_inode)
 		return ERR_PTR(-ENOENT);
-	ret = kasumi_identity_source_get(r_inode->i_sb->s_dev, r_inode->i_ino, &identity);
+	ret = kasumi_identity_source_get(r_inode->i_sb->s_dev, r_inode->i_ino,
+					 &identity);
 	if (ret)
 		return ERR_PTR(ret);
-	if (S_ISCHR(r_inode->i_mode) || S_ISBLK(r_inode->i_mode) || S_ISFIFO(r_inode->i_mode))
+	if (S_ISCHR(r_inode->i_mode) || S_ISBLK(r_inode->i_mode) ||
+	    S_ISFIFO(r_inode->i_mode))
 		flags |= KASUMI_VNODE_F_SPECIAL;
 	cacheable = !S_ISDIR(r_inode->i_mode);
 #ifdef KASUMI_VNODE_F_SU
 	cacheable = cacheable && !(flags & KASUMI_VNODE_F_SU);
 #endif
 	if (cacheable) {
-		inode = kasumi_vnode_cached(sb, source, kasumi_identity_ino(identity), flags);
+		inode = kasumi_vnode_cached(
+		    sb, source, kasumi_identity_ino(identity), flags);
 		if (inode) {
 			kasumi_identity_put(identity);
 			ret = kasumi_vnode_refresh_sid(inode, r_inode, true);

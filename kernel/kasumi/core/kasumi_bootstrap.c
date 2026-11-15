@@ -108,19 +108,20 @@ static void kasumi_resolve_runtime_symbols(void)
 	kasumi_vfs_link = (void *)ksu_lookup_symbol("vfs_link");
 	kasumi_vfs_rename = (void *)ksu_lookup_symbol("vfs_rename");
 	kasumi_vfs_read = (void *)ksu_lookup_symbol("vfs_read");
-	kasumi_rw_verify_area = (void *)kasumi_lookup_callable_quiet("rw_verify_area");
+	kasumi_rw_verify_area =
+	    (void *)kasumi_lookup_callable_quiet("rw_verify_area");
 	kasumi_security_file_permission =
-		(void *)kasumi_lookup_callable_quiet("security_file_permission");
+	    (void *)kasumi_lookup_callable_quiet("security_file_permission");
 	kasumi_fput_sync = (void *)kasumi_lookup_callable_quiet("__fput_sync");
 	kasumi_vfs_write = (void *)ksu_lookup_symbol("vfs_write");
 	kasumi_get_vfs_caps_from_disk =
 	    (void *)ksu_lookup_symbol("get_vfs_caps_from_disk");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 	kasumi_security_inode_getlsmprop =
-		(void *)ksu_lookup_symbol("security_inode_getlsmprop");
+	    (void *)ksu_lookup_symbol("security_inode_getlsmprop");
 #else
 	kasumi_security_inode_getsecid =
-		(void *)ksu_lookup_symbol("security_inode_getsecid");
+	    (void *)ksu_lookup_symbol("security_inode_getsecid");
 #endif
 	kasumi_security_inode_getsecctx =
 	    (void *)ksu_lookup_symbol("security_inode_getsecctx");
@@ -157,7 +158,6 @@ static int kasumi_start_views(void)
 	hash_init(kasumi_xattr_sbs);
 	hash_init(kasumi_merge_dirs);
 
-
 	kasumi_resolve_system_dev();
 
 	ret = kasumi_fake_mi_init();
@@ -175,7 +175,8 @@ static int kasumi_start_views(void)
 	}
 	ret = kasumi_vnode_handle_init();
 	if (ret) {
-		pr_err("kasumi: vnode file handle guard unavailable: %d\n", ret);
+		pr_err("kasumi: vnode file handle guard unavailable: %d\n",
+		       ret);
 		goto err_fop_bridge;
 	}
 	ret = kasumi_io_notify_init();
@@ -185,7 +186,8 @@ static int kasumi_start_views(void)
 	}
 	ret = kasumi_vnode_aio_init();
 	if (ret) {
-		pr_err("kasumi: asynchronous I/O bridge unavailable: %d\n", ret);
+		pr_err("kasumi: asynchronous I/O bridge unavailable: %d\n",
+		       ret);
 		goto err_fop_bridge;
 	}
 	ret = kasumi_sop_shadow_init();
@@ -196,7 +198,8 @@ static int kasumi_start_views(void)
 	}
 	ret = kasumi_file_lock_init();
 	if (ret)
-		pr_warn("kasumi: source file lock bridge unavailable: %d\n", ret);
+		pr_warn("kasumi: source file lock bridge unavailable: %d\n",
+			ret);
 	(void)kasumi_fop_override_init();
 	(void)kasumi_dirhijack_init();
 
@@ -213,7 +216,8 @@ static int kasumi_start_views(void)
 		pr_warn("kasumi: source exec bridge unavailable: %d\n", ret);
 	ret = kasumi_notify_view_init();
 	if (ret)
-		pr_warn("kasumi: source notification bridge unavailable: %d\n", ret);
+		pr_warn("kasumi: source notification bridge unavailable: %d\n",
+			ret);
 	ret = kasumi_rename_view_init();
 	if (ret)
 		pr_warn("kasumi: source rename bridge unavailable: %d\n", ret);

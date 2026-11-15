@@ -18,9 +18,10 @@ struct kasumi_mount_stat_guard {
 };
 
 static DEFINE_HASHTABLE(kasumi_mount_stat_guards, 6);
-static spinlock_t kasumi_mount_stat_guard_locks[HASH_SIZE(kasumi_mount_stat_guards)] = {
+static spinlock_t
+    kasumi_mount_stat_guard_locks[HASH_SIZE(kasumi_mount_stat_guards)] = {
 	[0 ... HASH_SIZE(kasumi_mount_stat_guards) - 1] =
-		__SPIN_LOCK_UNLOCKED(kasumi_mount_stat_guard_locks),
+	    __SPIN_LOCK_UNLOCKED(kasumi_mount_stat_guard_locks),
 };
 static DECLARE_WAIT_QUEUE_HEAD(kasumi_mount_stat_wait);
 static atomic_t kasumi_mount_stat_active = ATOMIC_INIT(0);
@@ -42,22 +43,24 @@ typedef const char __user *kasumi_mount_stat_filename;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 static int (*kasumi_mount_stat_original)(kasumi_mount_stat_path, int,
-					struct kstat *, u32);
+					 struct kstat *, u32);
 #else
 static int (*kasumi_mount_stat_original)(int, kasumi_mount_stat_filename, int,
-					struct kstat *, u32);
+					 struct kstat *, u32);
 #endif
 
 static bool kasumi_mount_stat_guarded(void)
 {
-	spinlock_t *lock = &kasumi_mount_stat_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_mount_stat_guards))];
+	spinlock_t *lock = &kasumi_mount_stat_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_mount_stat_guards))];
 	struct kasumi_mount_stat_guard *guard;
 	unsigned long flags;
 	bool found = false;
 
 	spin_lock_irqsave(lock, flags);
-	hash_for_each_possible(kasumi_mount_stat_guards, guard, node, (unsigned long)current) {
+	hash_for_each_possible(kasumi_mount_stat_guards, guard, node,
+			       (unsigned long)current)
+	{
 		if (guard->task == current) {
 			found = true;
 			break;
@@ -69,20 +72,21 @@ static bool kasumi_mount_stat_guarded(void)
 
 static void kasumi_mount_stat_enter(struct kasumi_mount_stat_guard *guard)
 {
-	spinlock_t *lock = &kasumi_mount_stat_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_mount_stat_guards))];
+	spinlock_t *lock = &kasumi_mount_stat_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_mount_stat_guards))];
 	unsigned long flags;
 
 	guard->task = current;
 	spin_lock_irqsave(lock, flags);
-	hash_add(kasumi_mount_stat_guards, &guard->node, (unsigned long)current);
+	hash_add(kasumi_mount_stat_guards, &guard->node,
+		 (unsigned long)current);
 	spin_unlock_irqrestore(lock, flags);
 }
 
 static void kasumi_mount_stat_leave(struct kasumi_mount_stat_guard *guard)
 {
-	spinlock_t *lock = &kasumi_mount_stat_guard_locks[
-		hash_min((unsigned long)guard->task, HASH_BITS(kasumi_mount_stat_guards))];
+	spinlock_t *lock = &kasumi_mount_stat_guard_locks[hash_min(
+	    (unsigned long)guard->task, HASH_BITS(kasumi_mount_stat_guards))];
 	unsigned long flags;
 
 	spin_lock_irqsave(lock, flags);
@@ -92,10 +96,12 @@ static void kasumi_mount_stat_leave(struct kasumi_mount_stat_guard *guard)
 		wake_up_all(&kasumi_mount_stat_wait);
 }
 
-static bool kasumi_mount_stat_alias_root(const struct kasumi_mount_record *record,
-					const struct kasumi_mount_record *alias)
+static bool
+kasumi_mount_stat_alias_root(const struct kasumi_mount_record *record,
+			     const struct kasumi_mount_record *alias)
 {
-	struct path path = { .mnt = record->mount, .dentry = record->mount->mnt_root };
+	struct path path = {.mnt = record->mount,
+			    .dentry = record->mount->mnt_root};
 	bool root;
 
 	path_get(&path);
@@ -103,7 +109,8 @@ static bool kasumi_mount_stat_alias_root(const struct kasumi_mount_record *recor
 		if (!follow_up(&path))
 			break;
 	}
-	root = path.mnt == alias->mount && path.dentry == alias->mount->mnt_root;
+	root =
+	    path.mnt == alias->mount && path.dentry == alias->mount->mnt_root;
 	path_put(&path);
 	return root;
 }
@@ -153,11 +160,13 @@ static int kasumi_mount_stat_project(struct kstat *stat)
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-static KASUMI_NOCFI int kasumi_mount_stat_entry(kasumi_mount_stat_path path, int flags,
-					      struct kstat *stat, u32 request_mask)
+static KASUMI_NOCFI int kasumi_mount_stat_entry(kasumi_mount_stat_path path,
+						int flags, struct kstat *stat,
+						u32 request_mask)
 #else
-static KASUMI_NOCFI int kasumi_mount_stat_entry(int dfd, kasumi_mount_stat_filename filename,
-					      int flags, struct kstat *stat, u32 request_mask)
+static KASUMI_NOCFI int
+kasumi_mount_stat_entry(int dfd, kasumi_mount_stat_filename filename, int flags,
+			struct kstat *stat, u32 request_mask)
 #endif
 {
 	struct kasumi_mount_stat_guard guard;
@@ -167,9 +176,11 @@ static KASUMI_NOCFI int kasumi_mount_stat_entry(int dfd, kasumi_mount_stat_filen
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	ret = kasumi_mount_stat_original(path, flags, stat, request_mask);
 #else
-	ret = kasumi_mount_stat_original(dfd, filename, flags, stat, request_mask);
+	ret = kasumi_mount_stat_original(dfd, filename, flags, stat,
+					 request_mask);
 #endif
-	if (!ret && !READ_ONCE(kasumi_mount_stat_stopping) && kasumi_mount_projection_active())
+	if (!ret && !READ_ONCE(kasumi_mount_stat_stopping) &&
+	    kasumi_mount_projection_active())
 		ret = kasumi_mount_stat_project(stat);
 	kasumi_mount_stat_leave(&guard);
 	return ret;
@@ -178,8 +189,8 @@ static KASUMI_NOCFI int kasumi_mount_stat_entry(int dfd, kasumi_mount_stat_filen
 static int kasumi_mount_stat_pre(struct kprobe *probe, struct pt_regs *regs)
 {
 #ifdef CONFIG_ARM64
-	if (READ_ONCE(kasumi_mount_stat_stopping) || kasumi_mount_stat_guarded() ||
-	    kasumi_vfs_internal_current())
+	if (READ_ONCE(kasumi_mount_stat_stopping) ||
+	    kasumi_mount_stat_guarded() || kasumi_vfs_internal_current())
 		return 0;
 	atomic_inc(&kasumi_mount_stat_active);
 	instruction_pointer_set(regs, (unsigned long)kasumi_mount_stat_entry);
@@ -201,13 +212,15 @@ static u64 kasumi_mount_stat_capabilities(void)
 
 KASUMI_NOCFI void kasumi_mount_stat_stop(void)
 {
-	kasumi_mount_view_publish_capabilities(0, kasumi_mount_stat_capabilities());
+	kasumi_mount_view_publish_capabilities(
+	    0, kasumi_mount_stat_capabilities());
 	WRITE_ONCE(kasumi_mount_stat_stopping, true);
 	if (kasumi_mount_stat_registered) {
 		unregister_kprobe(&kasumi_mount_stat_probe);
 		kasumi_mount_stat_registered = false;
 	}
-	wait_event(kasumi_mount_stat_wait, !atomic_read(&kasumi_mount_stat_active));
+	wait_event(kasumi_mount_stat_wait,
+		   !atomic_read(&kasumi_mount_stat_active));
 	if (kasumi_mount_stat_tasks_barrier)
 		kasumi_mount_stat_tasks_barrier();
 }
@@ -226,10 +239,12 @@ int kasumi_mount_stat_init(void)
 #ifndef CONFIG_ARM64
 	return -EOPNOTSUPP;
 #endif
-	kasumi_mount_stat_namespace_lock = (void *)kasumi_lookup_name_quiet("namespace_sem");
-	kasumi_mount_stat_original = (void *)kasumi_lookup_callable_quiet(symbol);
+	kasumi_mount_stat_namespace_lock =
+	    (void *)kasumi_lookup_name_quiet("namespace_sem");
+	kasumi_mount_stat_original =
+	    (void *)kasumi_lookup_callable_quiet(symbol);
 	kasumi_mount_stat_tasks_barrier =
-		(void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
 	if (!kasumi_mount_stat_namespace_lock || !kasumi_mount_stat_original ||
 	    !kasumi_mount_stat_tasks_barrier)
 		return -EOPNOTSUPP;
@@ -240,7 +255,8 @@ int kasumi_mount_stat_init(void)
 		return ret;
 	kasumi_mount_stat_registered = true;
 	WRITE_ONCE(kasumi_mount_stat_stopping, false);
-	kasumi_mount_view_publish_capabilities(kasumi_mount_stat_capabilities(), 0);
+	kasumi_mount_view_publish_capabilities(kasumi_mount_stat_capabilities(),
+					       0);
 	return 0;
 }
 

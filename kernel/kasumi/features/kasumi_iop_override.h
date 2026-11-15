@@ -16,7 +16,8 @@ void kasumi_iop_put(const struct path *path);
 void kasumi_iop_override_drain(void);
 void kasumi_iop_retire_batch_begin(void);
 void kasumi_iop_retire_batch_end(void);
-const struct inode_operations *kasumi_iop_original_iops(const struct inode *inode);
+const struct inode_operations *
+kasumi_iop_original_iops(const struct inode *inode);
 int kasumi_iop_install(struct inode *inode);
 
 /*

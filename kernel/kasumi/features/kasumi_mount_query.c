@@ -35,13 +35,17 @@
 #include "kasumi_mount_view.h"
 #include "kasumi_runtime.h"
 
-#define KASUMI_QUERY_CAPABILITIES (KASUMI_MOUNT_CAP_STATMOUNT | KASUMI_MOUNT_CAP_LISTMOUNT)
+#define KASUMI_QUERY_CAPABILITIES                                              \
+	(KASUMI_MOUNT_CAP_STATMOUNT | KASUMI_MOUNT_CAP_LISTMOUNT)
 #define KASUMI_UNIQUE_ID_OFFSET (1ULL << 31)
-#define KASUMI_STATMOUNT_STRINGS (STATMOUNT_MNT_ROOT | STATMOUNT_MNT_POINT | \
-	STATMOUNT_FS_TYPE | STATMOUNT_MNT_OPTS)
+#define KASUMI_STATMOUNT_STRINGS                                               \
+	(STATMOUNT_MNT_ROOT | STATMOUNT_MNT_POINT | STATMOUNT_FS_TYPE |        \
+	 STATMOUNT_MNT_OPTS)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
-#define KASUMI_STATMOUNT_EXTRA_STRINGS (STATMOUNT_FS_SUBTYPE | STATMOUNT_SB_SOURCE | \
-	STATMOUNT_OPT_ARRAY | STATMOUNT_OPT_SEC_ARRAY | STATMOUNT_MNT_UIDMAP | STATMOUNT_MNT_GIDMAP)
+#define KASUMI_STATMOUNT_EXTRA_STRINGS                                         \
+	(STATMOUNT_FS_SUBTYPE | STATMOUNT_SB_SOURCE | STATMOUNT_OPT_ARRAY |    \
+	 STATMOUNT_OPT_SEC_ARRAY | STATMOUNT_MNT_UIDMAP |                      \
+	 STATMOUNT_MNT_GIDMAP)
 #else
 #define KASUMI_STATMOUNT_EXTRA_STRINGS 0
 #endif
@@ -50,15 +54,18 @@ static struct rw_semaphore *kasumi_query_namespace_lock;
 static int (*kasumi_query_show_path)(struct seq_file *, struct dentry *);
 static int (*kasumi_query_dominating_id)(struct mount *, const struct path *);
 static int (*kasumi_query_seq_path_root)(struct seq_file *, const struct path *,
-				       const struct path *, const char *);
-static int (*kasumi_query_show_options)(struct seq_file *, struct super_block *);
+					 const struct path *, const char *);
+static int (*kasumi_query_show_options)(struct seq_file *,
+					struct super_block *);
 static int (*kasumi_query_security_statfs)(struct dentry *);
 static bool (*kasumi_query_proc_ns_file)(const struct file *);
-static bool (*kasumi_query_reachable)(struct mount *, struct dentry *, const struct path *);
+static bool (*kasumi_query_reachable)(struct mount *, struct dentry *,
+				      const struct path *);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 static typeof(ns_tree_lookup_rcu) *kasumi_query_ns_lookup;
 static void (*kasumi_query_ns_release_rcu)(struct rcu_head *);
-static int (*kasumi_query_mnt_idmap)(struct mnt_idmap *, struct seq_file *, bool);
+static int (*kasumi_query_mnt_idmap)(struct mnt_idmap *, struct seq_file *,
+				     bool);
 #else
 static rwlock_t *kasumi_query_ns_tree_lock;
 static struct rb_root *kasumi_query_ns_tree;
@@ -143,7 +150,8 @@ static void statmount_sb_basic(struct kstatmount *s)
 	s->sm.sb_dev_major = MAJOR(sb->s_dev);
 	s->sm.sb_dev_minor = MINOR(sb->s_dev);
 	s->sm.sb_magic = sb->s_magic;
-	s->sm.sb_flags = sb->s_flags & (SB_RDONLY|SB_SYNCHRONOUS|SB_DIRSYNC|SB_LAZYTIME);
+	s->sm.sb_flags = sb->s_flags & (SB_RDONLY | SB_SYNCHRONOUS |
+					SB_DIRSYNC | SB_LAZYTIME);
 }
 
 static void statmount_mnt_basic(struct kstatmount *s)
@@ -157,7 +165,7 @@ static void statmount_mnt_basic(struct kstatmount *s)
 	s->sm.mnt_parent_id_old = m->mnt_parent->mnt_id;
 	s->sm.mnt_attr = mnt_to_attr_flags(&m->mnt);
 	s->sm.mnt_propagation = mnt_to_propagation_flags(m);
-	#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	s->sm.mnt_peer_group = m->mnt_group_id;
 #else
 	s->sm.mnt_peer_group = IS_MNT_SHARED(m) ? m->mnt_group_id : 0;
@@ -171,10 +179,12 @@ static void KASUMI_NOCFI statmount_propagate_from(struct kstatmount *s)
 
 	s->sm.mask |= STATMOUNT_PROPAGATE_FROM;
 	if (IS_MNT_SLAVE(m))
-		s->sm.propagate_from = kasumi_query_dominating_id(m, &current->fs->root);
+		s->sm.propagate_from =
+		    kasumi_query_dominating_id(m, &current->fs->root);
 }
 
-static int KASUMI_NOCFI statmount_mnt_root(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_mnt_root(struct kstatmount *s,
+					   struct seq_file *seq)
 {
 	int ret;
 	size_t start = seq->count;
@@ -187,26 +197,29 @@ static int KASUMI_NOCFI statmount_mnt_root(struct kstatmount *s, struct seq_file
 		return -EAGAIN;
 
 	/*
-         * Unescape the result. It would be better if supplied string was not
-         * escaped in the first place, but that's a pretty invasive change.
-         */
+	 * Unescape the result. It would be better if supplied string was not
+	 * escaped in the first place, but that's a pretty invasive change.
+	 */
 	seq->buf[seq->count] = '\0';
 	seq->count = start;
-	seq_commit(seq, string_unescape_inplace(seq->buf + start, UNESCAPE_OCTAL));
+	seq_commit(seq,
+		   string_unescape_inplace(seq->buf + start, UNESCAPE_OCTAL));
 	return 0;
 }
 
-static int KASUMI_NOCFI statmount_mnt_point(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_mnt_point(struct kstatmount *s,
+					    struct seq_file *seq)
 {
 	struct vfsmount *mnt = s->mnt;
-	struct path mnt_path = { .dentry = mnt->mnt_root, .mnt = mnt };
+	struct path mnt_path = {.dentry = mnt->mnt_root, .mnt = mnt};
 	int err;
 
 	err = kasumi_query_seq_path_root(seq, &mnt_path, &s->root, "");
 	return err == SEQ_SKIP ? 0 : err;
 }
 
-static int KASUMI_NOCFI statmount_fs_type(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_fs_type(struct kstatmount *s,
+					  struct seq_file *seq)
 {
 	struct super_block *sb = s->mnt->mnt_sb;
 
@@ -223,7 +236,8 @@ static void statmount_fs_subtype(struct kstatmount *s, struct seq_file *seq)
 		seq_puts(seq, sb->s_subtype);
 }
 
-static int KASUMI_NOCFI statmount_sb_source(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_sb_source(struct kstatmount *s,
+					    struct seq_file *seq)
 {
 	struct super_block *sb = s->mnt->mnt_sb;
 	struct mount *r = real_mount(s->mnt);
@@ -242,7 +256,8 @@ static int KASUMI_NOCFI statmount_sb_source(struct kstatmount *s, struct seq_fil
 		/* Unescape the result */
 		seq->buf[seq->count] = '\0';
 		seq->count = start;
-		seq_commit(seq, string_unescape_inplace(seq->buf + start, UNESCAPE_OCTAL));
+		seq_commit(seq, string_unescape_inplace(seq->buf + start,
+							UNESCAPE_OCTAL));
 	} else {
 		seq_puts(seq, r->mnt_devname);
 	}
@@ -261,7 +276,8 @@ static void statmount_mnt_ns_id(struct kstatmount *s, struct mnt_namespace *ns)
 #endif
 }
 
-static int KASUMI_NOCFI statmount_mnt_opts(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_mnt_opts(struct kstatmount *s,
+					   struct seq_file *seq)
 {
 	struct vfsmount *mnt = s->mnt;
 	struct super_block *sb = mnt->mnt_sb;
@@ -285,8 +301,7 @@ static int KASUMI_NOCFI statmount_mnt_opts(struct kstatmount *s, struct seq_file
 		return 0;
 
 	/* skip leading comma */
-	memmove(seq->buf + start, seq->buf + start + 1,
-		seq->count - start - 1);
+	memmove(seq->buf + start, seq->buf + start + 1, seq->count - start - 1);
 	seq->count--;
 
 	return 0;
@@ -303,7 +318,7 @@ static inline int statmount_opt_process(struct seq_file *seq, size_t start)
 
 	buf_end = seq->buf + seq->count;
 	dst = seq->buf + start;
-	src = dst + 1;	/* skip initial comma */
+	src = dst + 1; /* skip initial comma */
 
 	if (src >= buf_end) {
 		seq->count = start;
@@ -322,7 +337,8 @@ static inline int statmount_opt_process(struct seq_file *seq, size_t start)
 	return count;
 }
 
-static int KASUMI_NOCFI statmount_opt_array(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_opt_array(struct kstatmount *s,
+					    struct seq_file *seq)
 {
 	struct vfsmount *mnt = s->mnt;
 	struct super_block *sb = mnt->mnt_sb;
@@ -344,7 +360,8 @@ static int KASUMI_NOCFI statmount_opt_array(struct kstatmount *s, struct seq_fil
 	return 0;
 }
 
-static int KASUMI_NOCFI statmount_opt_sec_array(struct kstatmount *s, struct seq_file *seq)
+static int KASUMI_NOCFI statmount_opt_sec_array(struct kstatmount *s,
+						struct seq_file *seq)
 {
 	struct vfsmount *mnt = s->mnt;
 	struct super_block *sb = mnt->mnt_sb;
@@ -363,7 +380,8 @@ static int KASUMI_NOCFI statmount_opt_sec_array(struct kstatmount *s, struct seq
 	return 0;
 }
 
-static inline int KASUMI_NOCFI statmount_mnt_uidmap(struct kstatmount *s, struct seq_file *seq)
+static inline int KASUMI_NOCFI statmount_mnt_uidmap(struct kstatmount *s,
+						    struct seq_file *seq)
 {
 	int ret;
 
@@ -383,7 +401,8 @@ static inline int KASUMI_NOCFI statmount_mnt_uidmap(struct kstatmount *s, struct
 	return 0;
 }
 
-static inline int KASUMI_NOCFI statmount_mnt_gidmap(struct kstatmount *s, struct seq_file *seq)
+static inline int KASUMI_NOCFI statmount_mnt_gidmap(struct kstatmount *s,
+						    struct seq_file *seq)
 {
 	int ret;
 
@@ -512,7 +531,7 @@ static int copy_statmount_to_user(struct kstatmount *s)
 }
 
 static int kasumi_query_copy_request(const struct mnt_id_req __user *request,
-				    struct mnt_id_req *result)
+				     struct mnt_id_req *result)
 {
 	u32 size;
 	int ret;
@@ -555,7 +574,7 @@ static KASUMI_NOCFI struct mnt_namespace *kasumi_query_lookup_ns(u64 id)
 	node = kasumi_query_ns_tree->rb_node;
 	while (node) {
 		struct mnt_namespace *candidate =
-			container_of(node, struct mnt_namespace, mnt_ns_tree_node);
+		    container_of(node, struct mnt_namespace, mnt_ns_tree_node);
 
 		if (id == candidate->seq) {
 			ns = candidate;
@@ -614,7 +633,8 @@ static KASUMI_NOCFI void kasumi_query_put_ns(struct mnt_namespace *ns)
 	if (!ns)
 		return;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
-	/* The native callback performs the passive put without queueing this head. */
+	/* The native callback performs the passive put without queueing this
+	 * head. */
 	kasumi_query_ns_release_rcu(&ns->ns.ns_rcu);
 #else
 	kasumi_query_ns_release(ns);
@@ -649,9 +669,11 @@ static int kasumi_query_root(struct mnt_namespace *ns, struct path *root)
 	return 0;
 }
 
-/* Return with namespace_sem held after matching the immutable view to topology. */
+/* Return with namespace_sem held after matching the immutable view to topology.
+ */
 static int kasumi_query_view_lock(struct mnt_namespace *ns, struct path *root,
-				 struct kasumi_mount_view **view, unsigned int *attempt)
+				  struct kasumi_mount_view **view,
+				  unsigned int *attempt)
 {
 	int ret;
 
@@ -698,7 +720,8 @@ static int kasumi_query_view_lock(struct mnt_namespace *ns, struct path *root,
 
 static bool kasumi_query_hidden(const struct kasumi_mount_record *record)
 {
-	return kasumi_mount_projection_active() && record && record->in_view && !record->retained;
+	return kasumi_mount_projection_active() && record && record->in_view &&
+	       !record->retained;
 }
 
 static void kasumi_query_parent(struct statmount *result,
@@ -719,17 +742,17 @@ static void kasumi_query_parent(struct statmount *result,
 	}
 }
 
-static KASUMI_NOCFI int kasumi_query_statmount_fill(struct kstatmount *state,
-						 const struct mnt_id_req *request,
-						 struct mnt_namespace *ns,
-						 const struct kasumi_mount_view *view)
+static KASUMI_NOCFI int kasumi_query_statmount_fill(
+    struct kstatmount *state, const struct mnt_id_req *request,
+    struct mnt_namespace *ns, const struct kasumi_mount_view *view)
 {
 	const struct kasumi_mount_record *record;
 	const u64 strings[] = {
-		STATMOUNT_FS_TYPE, STATMOUNT_MNT_ROOT, STATMOUNT_MNT_POINT, STATMOUNT_MNT_OPTS,
+	    STATMOUNT_FS_TYPE,	 STATMOUNT_MNT_ROOT,	  STATMOUNT_MNT_POINT,
+	    STATMOUNT_MNT_OPTS,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
-		STATMOUNT_OPT_ARRAY, STATMOUNT_OPT_SEC_ARRAY, STATMOUNT_FS_SUBTYPE,
-		STATMOUNT_SB_SOURCE, STATMOUNT_MNT_UIDMAP, STATMOUNT_MNT_GIDMAP,
+	    STATMOUNT_OPT_ARRAY, STATMOUNT_OPT_SEC_ARRAY, STATMOUNT_FS_SUBTYPE,
+	    STATMOUNT_SB_SOURCE, STATMOUNT_MNT_UIDMAP,	  STATMOUNT_MNT_GIDMAP,
 #endif
 	};
 	u32 i;
@@ -741,8 +764,8 @@ static KASUMI_NOCFI int kasumi_query_statmount_fill(struct kstatmount *state,
 	if (!record || kasumi_query_hidden(record))
 		return -ENOENT;
 	state->mnt = record->mount;
-	if (!kasumi_query_reachable(real_mount(state->mnt), state->mnt->mnt_root,
-				    &state->root) &&
+	if (!kasumi_query_reachable(real_mount(state->mnt),
+				    state->mnt->mnt_root, &state->root) &&
 	    !ns_capable_noaudit(ns->user_ns, CAP_SYS_ADMIN))
 		return -EPERM;
 	ret = kasumi_query_security_statfs(state->mnt->mnt_root);
@@ -768,22 +791,23 @@ static KASUMI_NOCFI int kasumi_query_statmount_fill(struct kstatmount *state,
 		statmount_mnt_ns_id(state, ns);
 	if (kasumi_mount_groups_active()) {
 		if (state->sm.mask & STATMOUNT_MNT_BASIC) {
-			state->sm.mnt_peer_group =
-				kasumi_mount_view_group_id(view, state->sm.mnt_peer_group);
-			state->sm.mnt_master =
-				kasumi_mount_view_group_id(view, state->sm.mnt_master);
+			state->sm.mnt_peer_group = kasumi_mount_view_group_id(
+			    view, state->sm.mnt_peer_group);
+			state->sm.mnt_master = kasumi_mount_view_group_id(
+			    view, state->sm.mnt_master);
 		}
 		if (state->sm.mask & STATMOUNT_PROPAGATE_FROM)
-			state->sm.propagate_from =
-				kasumi_mount_view_group_id(view, state->sm.propagate_from);
+			state->sm.propagate_from = kasumi_mount_view_group_id(
+			    view, state->sm.propagate_from);
 	}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	if (state->mask & STATMOUNT_SUPPORTED_MASK) {
 		state->sm.mask |= STATMOUNT_SUPPORTED_MASK;
-		state->sm.supported_mask = STATMOUNT_SB_BASIC | STATMOUNT_MNT_BASIC |
-			STATMOUNT_PROPAGATE_FROM | KASUMI_STATMOUNT_STRINGS |
-			KASUMI_STATMOUNT_EXTRA_STRINGS | STATMOUNT_MNT_NS_ID |
-			STATMOUNT_SUPPORTED_MASK;
+		state->sm.supported_mask =
+		    STATMOUNT_SB_BASIC | STATMOUNT_MNT_BASIC |
+		    STATMOUNT_PROPAGATE_FROM | KASUMI_STATMOUNT_STRINGS |
+		    KASUMI_STATMOUNT_EXTRA_STRINGS | STATMOUNT_MNT_NS_ID |
+		    STATMOUNT_SUPPORTED_MASK;
 	}
 #endif
 	return 0;
@@ -795,15 +819,16 @@ static long kasumi_query_native(const struct pt_regs *regs, bool list)
 	long ret;
 
 	kasumi_vfs_internal_enter(&guard);
-	ret = list ? kasumi_query_listmount_original(regs) :
-		     kasumi_query_statmount_original(regs);
+	ret = list ? kasumi_query_listmount_original(regs)
+		   : kasumi_query_statmount_original(regs);
 	kasumi_vfs_internal_leave(&guard);
 	return ret;
 }
 
 static long kasumi_query_statmount(const struct pt_regs *regs)
 {
-	const struct mnt_id_req __user *user_request = (void __user *)regs->regs[0];
+	const struct mnt_id_req __user *user_request =
+	    (void __user *)regs->regs[0];
 	struct statmount __user *buffer = (void __user *)regs->regs[1];
 	size_t buffer_size = regs->regs[2], seq_size = 3 * PATH_MAX;
 	unsigned int flags = regs->regs[3];
@@ -847,7 +872,8 @@ static long kasumi_query_statmount(const struct pt_regs *regs)
 			ret = -EFAULT;
 			break;
 		}
-		if (request.param & (KASUMI_STATMOUNT_STRINGS | KASUMI_STATMOUNT_EXTRA_STRINGS)) {
+		if (request.param & (KASUMI_STATMOUNT_STRINGS |
+				     KASUMI_STATMOUNT_EXTRA_STRINGS)) {
 			if (buffer_size == sizeof(state->sm)) {
 				ret = -EOVERFLOW;
 				break;
@@ -862,12 +888,14 @@ static long kasumi_query_statmount(const struct pt_regs *regs)
 		ret = kasumi_query_view_lock(ns, &root, &view, &attempt);
 		if (!ret) {
 			state->root = root;
-			ret = kasumi_query_statmount_fill(state, &request, ns, view);
+			ret = kasumi_query_statmount_fill(state, &request, ns,
+							  view);
 			up_read(kasumi_query_namespace_lock);
 		}
 		if (!ret)
 			ret = copy_statmount_to_user(state);
-		grow = ret == -EAGAIN && state->seq.buf && seq_has_overflowed(&state->seq);
+		grow = ret == -EAGAIN && state->seq.buf &&
+		       seq_has_overflowed(&state->seq);
 		kvfree(state->seq.buf);
 		if (!grow || check_mul_overflow(seq_size, 2, &seq_size) ||
 		    seq_size > MAX_RW_COUNT)
@@ -881,19 +909,21 @@ put_ns:
 	return ret;
 }
 
-static struct mount *kasumi_query_first(struct mnt_namespace *ns, u64 last, bool reverse)
+static struct mount *kasumi_query_first(struct mnt_namespace *ns, u64 last,
+					bool reverse)
 {
 	struct rb_node *node = ns->mounts.rb_node;
 	struct mount *result = NULL;
 	u64 boundary;
 
 	if (!last)
-		return kasumi_query_mount_node(reverse ? rb_last(&ns->mounts) : rb_first(&ns->mounts));
+		return kasumi_query_mount_node(reverse ? rb_last(&ns->mounts)
+						       : rb_first(&ns->mounts));
 	boundary = reverse ? last - 1 : last + 1;
 	while (node) {
 		struct mount *candidate = kasumi_query_mount_node(node);
-		bool select = reverse ? candidate->mnt_id_unique <= boundary :
-					candidate->mnt_id_unique >= boundary;
+		bool select = reverse ? candidate->mnt_id_unique <= boundary
+				      : candidate->mnt_id_unique >= boundary;
 
 		if (select) {
 			result = candidate;
@@ -905,11 +935,11 @@ static struct mount *kasumi_query_first(struct mnt_namespace *ns, u64 last, bool
 	return result;
 }
 
-static KASUMI_NOCFI long kasumi_query_listmount_fill(struct mnt_namespace *ns,
-						   const struct path *root,
-						   const struct kasumi_mount_view *view,
-						   const struct mnt_id_req *request,
-						   u64 *ids, size_t capacity, bool reverse)
+static KASUMI_NOCFI long
+kasumi_query_listmount_fill(struct mnt_namespace *ns, const struct path *root,
+			    const struct kasumi_mount_view *view,
+			    const struct mnt_id_req *request, u64 *ids,
+			    size_t capacity, bool reverse)
 {
 	const struct kasumi_mount_record *record;
 	struct path origin;
@@ -926,21 +956,26 @@ static KASUMI_NOCFI long kasumi_query_listmount_fill(struct mnt_namespace *ns,
 		origin.mnt = record->mount;
 		origin.dentry = origin.mnt->mnt_root;
 	}
-	if (!kasumi_query_reachable(real_mount(origin.mnt), origin.dentry, root) &&
+	if (!kasumi_query_reachable(real_mount(origin.mnt), origin.dentry,
+				    root) &&
 	    !ns_capable_noaudit(ns->user_ns, CAP_SYS_ADMIN))
 		return -EPERM;
 	ret = kasumi_query_security_statfs(origin.dentry);
 	if (ret)
 		return ret;
-	for (mount = kasumi_query_first(ns, request->param, reverse); mount && count < capacity;
-	     mount = kasumi_query_mount_node(reverse ? rb_prev(&mount->mnt_node) :
-						     rb_next(&mount->mnt_node))) {
+	for (mount = kasumi_query_first(ns, request->param, reverse);
+	     mount && count < capacity;
+	     mount =
+		 kasumi_query_mount_node(reverse ? rb_prev(&mount->mnt_node)
+						 : rb_next(&mount->mnt_node))) {
 		if (mount->mnt_id_unique == request->mnt_id)
 			continue;
-		record = kasumi_mount_view_find(view, mount->mnt_id_unique, true);
+		record =
+		    kasumi_mount_view_find(view, mount->mnt_id_unique, true);
 		if (kasumi_query_hidden(record))
 			continue;
-		if (!kasumi_query_reachable(mount, mount->mnt.mnt_root, &origin))
+		if (!kasumi_query_reachable(mount, mount->mnt.mnt_root,
+					    &origin))
 			continue;
 		ids[count++] = mount->mnt_id_unique;
 	}
@@ -949,7 +984,8 @@ static KASUMI_NOCFI long kasumi_query_listmount_fill(struct mnt_namespace *ns,
 
 static long kasumi_query_listmount(const struct pt_regs *regs)
 {
-	const struct mnt_id_req __user *user_request = (void __user *)regs->regs[0];
+	const struct mnt_id_req __user *user_request =
+	    (void __user *)regs->regs[0];
 	u64 __user *user_ids = (void __user *)regs->regs[1];
 	size_t capacity = regs->regs[2];
 	unsigned int flags = regs->regs[3];
@@ -992,8 +1028,9 @@ static long kasumi_query_listmount(const struct pt_regs *regs)
 	}
 	ret = kasumi_query_view_lock(ns, &root, &view, &attempt);
 	if (!ret) {
-		ret = kasumi_query_listmount_fill(ns, &root, view, &request, ids, capacity,
-						flags & LISTMOUNT_REVERSE);
+		ret = kasumi_query_listmount_fill(ns, &root, view, &request,
+						  ids, capacity,
+						  flags & LISTMOUNT_REVERSE);
 		up_read(kasumi_query_namespace_lock);
 	}
 	if (ret > 0 && copy_to_user(user_ids, ids, ret * sizeof(*ids)))
@@ -1006,15 +1043,18 @@ out:
 	return ret;
 }
 
-static KASUMI_NOCFI long kasumi_query_dispatch(const struct pt_regs *regs, bool list)
+static KASUMI_NOCFI long kasumi_query_dispatch(const struct pt_regs *regs,
+					       bool list)
 {
 	long ret;
 
 	if (READ_ONCE(kasumi_query_stopping) ||
-	    (!kasumi_mount_projection_active() && (list || !kasumi_mount_groups_active()))) {
+	    (!kasumi_mount_projection_active() &&
+	     (list || !kasumi_mount_groups_active()))) {
 		ret = kasumi_query_native(regs, list);
 	} else {
-		ret = list ? kasumi_query_listmount(regs) : kasumi_query_statmount(regs);
+		ret = list ? kasumi_query_listmount(regs)
+			   : kasumi_query_statmount(regs);
 	}
 	if (atomic_dec_and_test(&kasumi_query_active))
 		wake_up_all(&kasumi_query_wait);
@@ -1038,9 +1078,9 @@ static int kasumi_query_pre(struct kprobe *probe, struct pt_regs *regs)
 
 	if (READ_ONCE(kasumi_query_stopping) || kasumi_vfs_internal_current())
 		return 0;
-	target = probe == &kasumi_query_listmount_probe ?
-		(unsigned long)kasumi_query_listmount_entry :
-		(unsigned long)kasumi_query_statmount_entry;
+	target = probe == &kasumi_query_listmount_probe
+		     ? (unsigned long)kasumi_query_listmount_entry
+		     : (unsigned long)kasumi_query_statmount_entry;
 	atomic_inc(&kasumi_query_active);
 	instruction_pointer_set(regs, target);
 	return 1;
@@ -1075,46 +1115,64 @@ int kasumi_mount_query_init(void)
 #ifndef CONFIG_ARM64
 	return -EOPNOTSUPP;
 #endif
-	kasumi_query_namespace_lock = (void *)kasumi_lookup_name_quiet("namespace_sem");
-	kasumi_query_show_path = (void *)kasumi_lookup_callable_quiet("show_path");
-	kasumi_query_dominating_id = (void *)kasumi_lookup_callable_quiet("get_dominating_id");
-	kasumi_query_seq_path_root = (void *)kasumi_lookup_callable_quiet("seq_path_root");
-	kasumi_query_show_options = (void *)kasumi_lookup_callable_quiet("security_sb_show_options");
-	kasumi_query_security_statfs = (void *)kasumi_lookup_callable_quiet("security_sb_statfs");
-	kasumi_query_proc_ns_file = (void *)kasumi_lookup_callable_quiet("proc_ns_file");
-	kasumi_query_reachable = (void *)kasumi_lookup_callable_quiet("is_path_reachable");
-	kasumi_query_statmount_original = (void *)kasumi_lookup_callable_quiet("__arm64_sys_statmount");
-	kasumi_query_listmount_original = (void *)kasumi_lookup_callable_quiet("__arm64_sys_listmount");
-	kasumi_query_tasks_barrier = (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	kasumi_query_namespace_lock =
+	    (void *)kasumi_lookup_name_quiet("namespace_sem");
+	kasumi_query_show_path =
+	    (void *)kasumi_lookup_callable_quiet("show_path");
+	kasumi_query_dominating_id =
+	    (void *)kasumi_lookup_callable_quiet("get_dominating_id");
+	kasumi_query_seq_path_root =
+	    (void *)kasumi_lookup_callable_quiet("seq_path_root");
+	kasumi_query_show_options =
+	    (void *)kasumi_lookup_callable_quiet("security_sb_show_options");
+	kasumi_query_security_statfs =
+	    (void *)kasumi_lookup_callable_quiet("security_sb_statfs");
+	kasumi_query_proc_ns_file =
+	    (void *)kasumi_lookup_callable_quiet("proc_ns_file");
+	kasumi_query_reachable =
+	    (void *)kasumi_lookup_callable_quiet("is_path_reachable");
+	kasumi_query_statmount_original =
+	    (void *)kasumi_lookup_callable_quiet("__arm64_sys_statmount");
+	kasumi_query_listmount_original =
+	    (void *)kasumi_lookup_callable_quiet("__arm64_sys_listmount");
+	kasumi_query_tasks_barrier =
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
-	kasumi_query_ns_lookup = (void *)kasumi_lookup_callable_quiet("ns_tree_lookup_rcu");
-	kasumi_query_ns_release_rcu = (void *)kasumi_lookup_callable_quiet("mnt_ns_release_rcu");
-	kasumi_query_mnt_idmap = (void *)kasumi_lookup_callable_quiet("statmount_mnt_idmap");
-	if (!kasumi_query_ns_lookup || !kasumi_query_ns_release_rcu || !kasumi_query_mnt_idmap)
+	kasumi_query_ns_lookup =
+	    (void *)kasumi_lookup_callable_quiet("ns_tree_lookup_rcu");
+	kasumi_query_ns_release_rcu =
+	    (void *)kasumi_lookup_callable_quiet("mnt_ns_release_rcu");
+	kasumi_query_mnt_idmap =
+	    (void *)kasumi_lookup_callable_quiet("statmount_mnt_idmap");
+	if (!kasumi_query_ns_lookup || !kasumi_query_ns_release_rcu ||
+	    !kasumi_query_mnt_idmap)
 		return -EOPNOTSUPP;
 #else
-	kasumi_query_ns_tree_lock = (void *)kasumi_lookup_name_quiet("mnt_ns_tree_lock");
+	kasumi_query_ns_tree_lock =
+	    (void *)kasumi_lookup_name_quiet("mnt_ns_tree_lock");
 	kasumi_query_ns_tree = (void *)kasumi_lookup_name_quiet("mnt_ns_tree");
-	kasumi_query_ns_release = (void *)kasumi_lookup_callable_quiet("mnt_ns_release");
-	if (!kasumi_query_ns_tree_lock || !kasumi_query_ns_tree || !kasumi_query_ns_release)
+	kasumi_query_ns_release =
+	    (void *)kasumi_lookup_callable_quiet("mnt_ns_release");
+	if (!kasumi_query_ns_tree_lock || !kasumi_query_ns_tree ||
+	    !kasumi_query_ns_release)
 		return -EOPNOTSUPP;
 #endif
 	if (!kasumi_query_namespace_lock || !kasumi_query_show_path ||
 	    !kasumi_query_dominating_id || !kasumi_query_seq_path_root ||
 	    !kasumi_query_show_options || !kasumi_query_security_statfs ||
 	    !kasumi_query_proc_ns_file || !kasumi_query_reachable ||
-	    !kasumi_query_statmount_original || !kasumi_query_listmount_original ||
-	    !kasumi_query_tasks_barrier)
+	    !kasumi_query_statmount_original ||
+	    !kasumi_query_listmount_original || !kasumi_query_tasks_barrier)
 		return -EOPNOTSUPP;
 	kasumi_query_statmount_probe.addr =
-		(void *)kasumi_lookup_name_quiet("__arm64_sys_statmount");
+	    (void *)kasumi_lookup_name_quiet("__arm64_sys_statmount");
 	kasumi_query_statmount_probe.pre_handler = kasumi_query_pre;
 	ret = register_kprobe(&kasumi_query_statmount_probe);
 	if (ret)
 		return ret;
 	kasumi_query_statmount_registered = true;
 	kasumi_query_listmount_probe.addr =
-		(void *)kasumi_lookup_name_quiet("__arm64_sys_listmount");
+	    (void *)kasumi_lookup_name_quiet("__arm64_sys_listmount");
 	kasumi_query_listmount_probe.pre_handler = kasumi_query_pre;
 	ret = register_kprobe(&kasumi_query_listmount_probe);
 	if (ret) {

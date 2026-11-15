@@ -20,8 +20,10 @@
 
 #if defined(CONFIG_FANOTIFY) && defined(CONFIG_ARM64)
 
-#define KASUMI_FAN_TOPOLOGY (FS_CREATE | FS_DELETE | FS_MOVED_FROM | FS_MOVED_TO | \
-	FS_DELETE_SELF | FS_MOVE_SELF | FS_UNMOUNT | FS_EVENT_ON_CHILD | FS_ISDIR)
+#define KASUMI_FAN_TOPOLOGY                                                    \
+	(FS_CREATE | FS_DELETE | FS_MOVED_FROM | FS_MOVED_TO |                 \
+	 FS_DELETE_SELF | FS_MOVE_SELF | FS_UNMOUNT | FS_EVENT_ON_CHILD |      \
+	 FS_ISDIR)
 #define KASUMI_FAN_ANCHOR UINT_MAX
 #ifdef FAN_MARK_IGNORE
 #define KASUMI_FAN_IGNORE_BITS (FAN_MARK_IGNORED_MASK | FAN_MARK_IGNORE)
@@ -72,8 +74,9 @@ struct kasumi_fan_subscription {
 };
 
 /* One real native mark, with independently removable logical contributions.
- * The native mark owns the queue, quotas, permission objects and group lifetime.
- * record->mark holds the native reference until all claims have been removed.
+ * The native mark owns the queue, quotas, permission objects and group
+ * lifetime. record->mark holds the native reference until all claims have been
+ * removed.
  */
 struct kasumi_fan_record {
 	struct hlist_node node;
@@ -120,7 +123,8 @@ struct kasumi_fan_call {
 };
 
 /* Mutations serialize before native group->mark_mutex. Event/freeing probes
- * take only data_lock; snapshot/path release always happens after it is dropped.
+ * take only data_lock; snapshot/path release always happens after it is
+ * dropped.
  */
 static DEFINE_MUTEX(kasumi_fan_mutex);
 static DEFINE_RWLOCK(kasumi_fan_data_lock);
@@ -146,23 +150,29 @@ static typeof(fsnotify_find_mark) *kasumi_fan_find_mark;
 static typeof(fsnotify_recalc_mask) *kasumi_fan_recalc_mask;
 static typeof(fsnotify_get_group) *kasumi_fan_get_group;
 static typeof(vfs_get_fsid) *kasumi_fan_get_fsid;
-static int (*kasumi_fan_insert_event)(struct fsnotify_group *, struct fsnotify_event *,
-	int (*)(struct fsnotify_group *, struct fsnotify_event *),
-	void (*)(struct fsnotify_group *, struct fsnotify_event *));
-static int (*kasumi_fan_add_event)(struct fsnotify_group *, struct fsnotify_event *,
-	int (*)(struct fsnotify_group *, struct fsnotify_event *));
+static int (*kasumi_fan_insert_event)(
+    struct fsnotify_group *, struct fsnotify_event *,
+    int (*)(struct fsnotify_group *, struct fsnotify_event *),
+    void (*)(struct fsnotify_group *, struct fsnotify_event *));
+static int (*kasumi_fan_add_event)(struct fsnotify_group *,
+				   struct fsnotify_event *,
+				   int (*)(struct fsnotify_group *,
+					   struct fsnotify_event *));
 static void (*kasumi_fan_tasks_barrier)(void);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-static int (*kasumi_fan_native_add)(struct fsnotify_group *, void *, unsigned int,
-	u32, unsigned int, struct kasumi_fan_fsid *);
-static int (*kasumi_fan_native_remove)(struct fsnotify_group *, void *, unsigned int,
-	u32, unsigned int, u32);
+static int (*kasumi_fan_native_add)(struct fsnotify_group *, void *,
+				    unsigned int, u32, unsigned int,
+				    struct kasumi_fan_fsid *);
+static int (*kasumi_fan_native_remove)(struct fsnotify_group *, void *,
+				       unsigned int, u32, unsigned int, u32);
 #else
 static int (*kasumi_fan_native_add)(struct fsnotify_group *, fsnotify_connp_t *,
-	unsigned int, u32, unsigned int, __kernel_fsid_t *);
-static int (*kasumi_fan_native_remove)(struct fsnotify_group *, fsnotify_connp_t *,
-	u32, unsigned int, u32);
+				    unsigned int, u32, unsigned int,
+				    __kernel_fsid_t *);
+static int (*kasumi_fan_native_remove)(struct fsnotify_group *,
+				       fsnotify_connp_t *, u32, unsigned int,
+				       u32);
 #endif
 
 static void *kasumi_fan_object(struct inode *inode)
@@ -175,26 +185,28 @@ static void *kasumi_fan_object(struct inode *inode)
 }
 
 static struct kasumi_fan_record *kasumi_fan_find(struct fsnotify_group *group,
-	void *object)
+						 void *object)
 {
 	struct kasumi_fan_record *record;
 
-	hash_for_each_possible(kasumi_fan_records, record, node, (unsigned long)object) {
-		if (record->group == group && kasumi_fan_object(record->inode) == object &&
-		    !record->dead)
+	hash_for_each_possible(kasumi_fan_records, record, node,
+			       (unsigned long)object)
+	{
+		if (record->group == group &&
+		    kasumi_fan_object(record->inode) == object && !record->dead)
 			return record;
 	}
 	return NULL;
 }
 
-static struct kasumi_fan_owner *kasumi_fan_owner_find(struct fsnotify_group *group,
-	struct inode *inode)
+static struct kasumi_fan_owner *
+kasumi_fan_owner_find(struct fsnotify_group *group, struct inode *inode)
 {
 	struct kasumi_fan_owner *owner;
 
-	list_for_each_entry(owner, &kasumi_fan_owners, link) {
-		if (owner->group == group && d_inode(owner->visible.dentry) == inode &&
-		    !owner->dead)
+	list_for_each_entry (owner, &kasumi_fan_owners, link) {
+		if (owner->group == group &&
+		    d_inode(owner->visible.dentry) == inode && !owner->dead)
 			return owner;
 	}
 	return NULL;
@@ -203,7 +215,8 @@ static struct kasumi_fan_owner *kasumi_fan_owner_find(struct fsnotify_group *gro
 static void kasumi_fan_call_enter(struct kasumi_fan_call *call)
 {
 	unsigned long flags;
-	spinlock_t *lock = &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)];
+	spinlock_t *lock =
+	    &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)];
 
 	call->task = current;
 	spin_lock_irqsave(lock, flags);
@@ -214,7 +227,8 @@ static void kasumi_fan_call_enter(struct kasumi_fan_call *call)
 static void kasumi_fan_call_leave(struct kasumi_fan_call *call)
 {
 	unsigned long flags;
-	spinlock_t *lock = &kasumi_fan_task_locks[hash_min((unsigned long)call->task, 6)];
+	spinlock_t *lock =
+	    &kasumi_fan_task_locks[hash_min((unsigned long)call->task, 6)];
 
 	spin_lock_irqsave(lock, flags);
 	hash_del(&call->node);
@@ -226,10 +240,13 @@ bool kasumi_notify_fanotify_internal(void)
 	struct kasumi_fan_call *call;
 	unsigned long flags;
 	bool found = false;
-	spinlock_t *lock = &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)];
+	spinlock_t *lock =
+	    &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)];
 
 	spin_lock_irqsave(lock, flags);
-	hash_for_each_possible(kasumi_fan_calls, call, node, (unsigned long)current) {
+	hash_for_each_possible(kasumi_fan_calls, call, node,
+			       (unsigned long)current)
+	{
 		if (call->task == current) {
 			found = true;
 			break;
@@ -243,10 +260,13 @@ static struct kasumi_fanotify_pending *kasumi_fan_current(void)
 {
 	struct kasumi_fanotify_pending *pending, *found = NULL;
 	unsigned long flags;
-	spinlock_t *lock = &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)];
+	spinlock_t *lock =
+	    &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)];
 
 	spin_lock_irqsave(lock, flags);
-	hash_for_each_possible(kasumi_fan_pending, pending, node, (unsigned long)current) {
+	hash_for_each_possible(kasumi_fan_pending, pending, node,
+			       (unsigned long)current)
+	{
 		if (pending->task == current) {
 			found = pending;
 			break;
@@ -270,7 +290,7 @@ static struct kasumi_fan_state kasumi_fan_capture(struct fsnotify_mark *mark)
 }
 
 static int kasumi_fan_state_update(struct kasumi_fan_state *state, u32 mask,
-	unsigned int flags, u32 umask)
+				   unsigned int flags, u32 umask)
 {
 	bool ignore = flags & KASUMI_FAN_IGNORE_BITS;
 
@@ -324,14 +344,18 @@ static KASUMI_NOCFI void kasumi_fan_apply(struct kasumi_fan_record *record)
 	mutex_lock(&record->group->mark_mutex);
 	read_lock_irqsave(&kasumi_fan_data_lock, flags);
 	mask = kasumi_fan_interest(&record->direct);
-	list_for_each_entry(claim, &record->claims, link) {
+	list_for_each_entry (claim, &record->claims, link) {
 		if (claim->index == KASUMI_FAN_ANCHOR)
-			mask |= kasumi_fan_interest(&claim->subscription->state);
+			mask |=
+			    kasumi_fan_interest(&claim->subscription->state);
 		else {
-			const struct kasumi_notify_source *source = kasumi_notify_snapshot_source(
+			const struct kasumi_notify_source *source =
+			    kasumi_notify_snapshot_source(
 				claim->subscription->snapshot, claim->index);
-			mask |= source->kind == KASUMI_NOTIFY_SOURCE_TOPOLOGY ?
-				KASUMI_FAN_TOPOLOGY : kasumi_fan_interest(&claim->subscription->state);
+			mask |= source->kind == KASUMI_NOTIFY_SOURCE_TOPOLOGY
+				    ? KASUMI_FAN_TOPOLOGY
+				    : kasumi_fan_interest(
+					  &claim->subscription->state);
 		}
 	}
 	read_unlock_irqrestore(&kasumi_fan_data_lock, flags);
@@ -345,8 +369,8 @@ static KASUMI_NOCFI void kasumi_fan_apply(struct kasumi_fan_record *record)
 	mutex_unlock(&record->group->mark_mutex);
 }
 
-static KASUMI_NOCFI struct fsnotify_mark *kasumi_fan_lookup(struct inode *inode,
-	struct fsnotify_group *group)
+static KASUMI_NOCFI struct fsnotify_mark *
+kasumi_fan_lookup(struct inode *inode, struct fsnotify_group *group)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	return kasumi_fan_find_mark(inode, FSNOTIFY_OBJ_TYPE_INODE, group);
@@ -358,9 +382,9 @@ static KASUMI_NOCFI struct fsnotify_mark *kasumi_fan_lookup(struct inode *inode,
 /* Add with an empty mask first. The record becomes visible before its raw
  * interest, so unpublished staged sources cannot leak a native event.
  */
-static KASUMI_NOCFI struct kasumi_fan_record *kasumi_fan_acquire(
-	struct fsnotify_group *group, struct inode *inode,
-	struct kasumi_fan_fsid *fsid)
+static KASUMI_NOCFI struct kasumi_fan_record *
+kasumi_fan_acquire(struct fsnotify_group *group, struct inode *inode,
+		   struct kasumi_fan_fsid *fsid)
 {
 	struct kasumi_fan_record *record;
 	struct fsnotify_mark *mark;
@@ -386,11 +410,12 @@ static KASUMI_NOCFI struct kasumi_fan_record *kasumi_fan_acquire(
 	mutex_unlock(&group->mark_mutex);
 	if (!mark) {
 		error = kasumi_fan_native_add(group, kasumi_fan_object(inode),
-			FSNOTIFY_OBJ_TYPE_INODE, 0, FAN_MARK_ADD,
+					      FSNOTIFY_OBJ_TYPE_INODE, 0,
+					      FAN_MARK_ADD,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-			fsid);
+					      fsid);
 #else
-			fsid ? &fsid->id : NULL);
+					      fsid ? &fsid->id : NULL);
 #endif
 		if (error) {
 			kfree(record);
@@ -404,7 +429,8 @@ static KASUMI_NOCFI struct kasumi_fan_record *kasumi_fan_acquire(
 	}
 	record->mark = mark;
 	write_lock_irqsave(&kasumi_fan_data_lock, flags);
-	hash_add(kasumi_fan_records, &record->node, (unsigned long)kasumi_fan_object(inode));
+	hash_add(kasumi_fan_records, &record->node,
+		 (unsigned long)kasumi_fan_object(inode));
 	hash_add(kasumi_fan_marks, &record->mark_node, (unsigned long)mark);
 	write_unlock_irqrestore(&kasumi_fan_data_lock, flags);
 	return record;
@@ -413,7 +439,8 @@ static KASUMI_NOCFI struct kasumi_fan_record *kasumi_fan_acquire(
 /* Restore the direct native contribution before removing the filter record.
  * If none remains, native destroy releases quota and preserves queued waits.
  */
-static KASUMI_NOCFI void kasumi_fan_record_release(struct kasumi_fan_record *record)
+static KASUMI_NOCFI void
+kasumi_fan_record_release(struct kasumi_fan_record *record)
 {
 	struct fsnotify_mark *mark = record->mark;
 	unsigned long flags;
@@ -451,7 +478,8 @@ static KASUMI_NOCFI void kasumi_fan_record_release(struct kasumi_fan_record *rec
 	kfree(record);
 }
 
-static void kasumi_fan_subscription_free(struct kasumi_fan_subscription *subscription)
+static void
+kasumi_fan_subscription_free(struct kasumi_fan_subscription *subscription)
 {
 	unsigned int index;
 	unsigned long flags;
@@ -482,14 +510,14 @@ static bool kasumi_fan_fid_group(struct fsnotify_group *group);
  * The actual event handle remains allocated and encoded by native fanotify.
  */
 static KASUMI_NOCFI int kasumi_fan_validate_fid(struct dentry *dentry,
-	struct kasumi_fan_fsid *fsid)
+						struct kasumi_fan_fsid *fsid)
 {
 	const struct export_operations *operations;
 	__kernel_fsid_t root;
 	int error;
 
-	if (!dentry || !d_inode(dentry) || kasumi_vnode_is_ours(d_inode(dentry)) ||
-	    !kasumi_fan_get_fsid)
+	if (!dentry || !d_inode(dentry) ||
+	    kasumi_vnode_is_ours(d_inode(dentry)) || !kasumi_fan_get_fsid)
 		return -EOPNOTSUPP;
 	error = kasumi_fan_get_fsid(dentry, &fsid->id);
 	if (error)
@@ -506,7 +534,8 @@ static KASUMI_NOCFI int kasumi_fan_validate_fid(struct dentry *dentry,
 		error = kasumi_fan_get_fsid(dentry->d_sb->s_root, &root);
 		if (error)
 			return error;
-		if (root.val[0] != fsid->id.val[0] || root.val[1] != fsid->id.val[1]) {
+		if (root.val[0] != fsid->id.val[0] ||
+		    root.val[1] != fsid->id.val[1]) {
 #ifdef FSNOTIFY_MARK_FLAG_WEAK_FSID
 			fsid->weak = true;
 #else
@@ -524,10 +553,12 @@ static KASUMI_NOCFI int kasumi_fan_validate_fid(struct dentry *dentry,
 #endif
 }
 
-static struct kasumi_fan_subscription *kasumi_fan_subscription_build(
-	struct fsnotify_group *group,
-	const struct path *visible, const struct kasumi_notify_scope *scope,
-	const struct kasumi_fan_subscription *previous, const struct kasumi_fan_state *state)
+static struct kasumi_fan_subscription *
+kasumi_fan_subscription_build(struct fsnotify_group *group,
+			      const struct path *visible,
+			      const struct kasumi_notify_scope *scope,
+			      const struct kasumi_fan_subscription *previous,
+			      const struct kasumi_fan_state *state)
 {
 	struct kasumi_notify_snapshot *snapshot;
 	struct kasumi_fan_subscription *subscription;
@@ -535,12 +566,14 @@ static struct kasumi_fan_subscription *kasumi_fan_subscription_build(
 	bool fid = kasumi_fan_fid_group(group);
 	int error;
 
-	error = kasumi_notify_snapshot_build(visible, ALL_FSNOTIFY_EVENTS, scope,
-		kasumi_rules_generation(), previous ? previous->snapshot : NULL, &snapshot);
+	error = kasumi_notify_snapshot_build(
+	    visible, ALL_FSNOTIFY_EVENTS, scope, kasumi_rules_generation(),
+	    previous ? previous->snapshot : NULL, &snapshot);
 	if (error)
 		return ERR_PTR(error);
 	count = kasumi_notify_snapshot_source_count(snapshot);
-	subscription = kzalloc(struct_size(subscription, claims, count + 1), GFP_KERNEL);
+	subscription =
+	    kzalloc(struct_size(subscription, claims, count + 1), GFP_KERNEL);
 	if (!subscription) {
 		kasumi_notify_snapshot_put(snapshot);
 		return ERR_PTR(-ENOMEM);
@@ -548,7 +581,8 @@ static struct kasumi_fan_subscription *kasumi_fan_subscription_build(
 	subscription->snapshot = snapshot;
 	subscription->state = *state;
 	for (index = 0; index < count; index++) {
-		const struct kasumi_notify_source *source = kasumi_notify_snapshot_source(snapshot, index);
+		const struct kasumi_notify_source *source =
+		    kasumi_notify_snapshot_source(snapshot, index);
 		struct kasumi_fan_claim *claim = &subscription->claims[index];
 
 		claim->subscription = subscription;
@@ -559,8 +593,9 @@ static struct kasumi_fan_subscription *kasumi_fan_subscription_build(
 		} else {
 			claim->path = source->path;
 			path_get(&claim->path);
-			error = kasumi_notify_resolve_source(&claim->path,
-				(state->mask | state->ignore) & ALL_FSNOTIFY_EVENTS);
+			error = kasumi_notify_resolve_source(
+			    &claim->path, (state->mask | state->ignore) &
+					      ALL_FSNOTIFY_EVENTS);
 			if (error)
 				goto fail;
 			claim->inode = d_inode(claim->path.dentry);
@@ -570,8 +605,11 @@ static struct kasumi_fan_subscription *kasumi_fan_subscription_build(
 			goto fail;
 		}
 		if (fid) {
-			error = kasumi_fan_validate_fid(source->kind == KASUMI_NOTIFY_SOURCE_TOPOLOGY ?
-				source->topology : claim->path.dentry, &claim->fsid);
+			error = kasumi_fan_validate_fid(
+			    source->kind == KASUMI_NOTIFY_SOURCE_TOPOLOGY
+				? source->topology
+				: claim->path.dentry,
+			    &claim->fsid);
 			if (error)
 				goto fail;
 			claim->has_fsid = true;
@@ -582,7 +620,8 @@ static struct kasumi_fan_subscription *kasumi_fan_subscription_build(
 	subscription->claims[count].index = KASUMI_FAN_ANCHOR;
 	subscription->count++;
 	if (fid) {
-		error = kasumi_fan_validate_fid(visible->dentry, &subscription->claims[count].fsid);
+		error = kasumi_fan_validate_fid(
+		    visible->dentry, &subscription->claims[count].fsid);
 		if (error)
 			goto fail;
 		subscription->claims[count].has_fsid = true;
@@ -593,16 +632,18 @@ fail:
 	return ERR_PTR(error);
 }
 
-static int kasumi_fan_subscription_attach(struct kasumi_fan_owner *owner,
-	struct kasumi_fan_subscription *subscription)
+static int
+kasumi_fan_subscription_attach(struct kasumi_fan_owner *owner,
+			       struct kasumi_fan_subscription *subscription)
 {
 	unsigned int index;
 	unsigned long flags;
 
 	for (index = 0; index < subscription->count; index++) {
 		struct kasumi_fan_claim *claim = &subscription->claims[index];
-		struct kasumi_fan_record *record = kasumi_fan_acquire(owner->group, claim->inode,
-			claim->has_fsid ? &claim->fsid : NULL);
+		struct kasumi_fan_record *record =
+		    kasumi_fan_acquire(owner->group, claim->inode,
+				       claim->has_fsid ? &claim->fsid : NULL);
 
 		if (IS_ERR(record))
 			return PTR_ERR(record);
@@ -629,8 +670,8 @@ static bool kasumi_fan_fid_group(struct fsnotify_group *group)
 	return group->fanotify_data.flags & bits;
 }
 
-static int kasumi_fan_fid_scope(struct fsnotify_group *group, struct inode *visible,
-	u32 effective_mask)
+static int kasumi_fan_fid_scope(struct fsnotify_group *group,
+				struct inode *visible, u32 effective_mask)
 {
 	u32 flags = group->fanotify_data.flags;
 
@@ -654,9 +695,11 @@ static int kasumi_fan_fid_scope(struct fsnotify_group *group, struct inode *visi
 	return effective_mask & ALL_FSNOTIFY_DIRENT_EVENTS ? -EOPNOTSUPP : 0;
 }
 
-KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 mask,
-	unsigned int type, unsigned int operation, struct fsnotify_group *group,
-	struct kasumi_fanotify_pending **result)
+KASUMI_NOCFI int
+kasumi_notify_fanotify_prepare(const struct path *visible, u64 mask,
+			       unsigned int type, unsigned int operation,
+			       struct fsnotify_group *group,
+			       struct kasumi_fanotify_pending **result)
 {
 	struct kasumi_fanotify_pending *pending;
 	struct kasumi_fan_subscription *previous = NULL;
@@ -669,16 +712,19 @@ KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 
 	int error = 0;
 
 	*result = NULL;
-	if (!READ_ONCE(kasumi_fan_ready) || READ_ONCE(kasumi_fan_stopping) || !group ||
-	    type != FSNOTIFY_OBJ_TYPE_INODE || !S_ISDIR(d_inode(visible->dentry)->i_mode))
+	if (!READ_ONCE(kasumi_fan_ready) || READ_ONCE(kasumi_fan_stopping) ||
+	    !group || type != FSNOTIFY_OBJ_TYPE_INODE ||
+	    !S_ISDIR(d_inode(visible->dentry)->i_mode))
 		return 0;
 	buffer = kmalloc(PATH_MAX, GFP_KERNEL);
 	if (!buffer)
 		return -ENOMEM;
 	if (kasumi_vnode_is_ours(d_inode(visible->dentry))) {
-		struct kasumi_vnode_info *info = d_inode(visible->dentry)->i_private;
+		struct kasumi_vnode_info *info =
+		    d_inode(visible->dentry)->i_private;
 
-		name = info && info->visible_path ? info->visible_path : ERR_PTR(-EIO);
+		name = info && info->visible_path ? info->visible_path
+						  : ERR_PTR(-EIO);
 	} else {
 		name = kasumi_d_absolute_path(visible, buffer, PATH_MAX);
 	}
@@ -687,12 +733,14 @@ KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 
 		kfree(buffer);
 		return error;
 	}
-	overridden = kasumi_rule_directory_overridden(name, kasumi_rules_generation());
+	overridden =
+	    kasumi_rule_directory_overridden(name, kasumi_rules_generation());
 	kfree(buffer);
 	pending = kzalloc(sizeof(*pending), GFP_KERNEL);
 	if (!pending)
 		return -ENOMEM;
-	pending->group = group; /* The admitting syscall pins its fanotify file. */
+	pending->group =
+	    group; /* The admitting syscall pins its fanotify file. */
 	pending->visible = *visible;
 	path_get(&pending->visible);
 	pending->flags = operation;
@@ -715,10 +763,11 @@ KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 
 	}
 #ifdef FAN_MARK_EVICTABLE
 	if ((operation & FAN_MARK_ADD) && (operation & FAN_MARK_EVICTABLE)) {
-		/* Owner and immutable snapshot hold visible/source paths, topology
-		 * dentries and base-child inode references. NO_IREF on the native
-		 * mark cannot make these objects evictable. Supporting this flag
-		 * requires a weak-reference snapshot and refresh lifetime protocol.
+		/* Owner and immutable snapshot hold visible/source paths,
+		 * topology dentries and base-child inode references. NO_IREF on
+		 * the native mark cannot make these objects evictable.
+		 * Supporting this flag requires a weak-reference snapshot and
+		 * refresh lifetime protocol.
 		 */
 		error = -EOPNOTSUPP;
 		goto unlock;
@@ -737,13 +786,14 @@ KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 
 		mutex_lock(&group->mark_mutex);
 		mark = kasumi_fan_lookup(d_inode(visible->dentry), group);
 		if (mark) {
-			struct kasumi_fan_record *record = kasumi_fan_find(group,
-				kasumi_fan_object(d_inode(visible->dentry)));
+			struct kasumi_fan_record *record = kasumi_fan_find(
+			    group, kasumi_fan_object(d_inode(visible->dentry)));
 
 			if (record && record->mark == mark) {
 				read_lock_irqsave(&kasumi_fan_data_lock, flags);
 				pending->state = record->direct;
-				read_unlock_irqrestore(&kasumi_fan_data_lock, flags);
+				read_unlock_irqrestore(&kasumi_fan_data_lock,
+						       flags);
 			} else {
 				spin_lock(&mark->lock);
 				pending->state = kasumi_fan_capture(mark);
@@ -753,15 +803,17 @@ KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 
 		}
 		mutex_unlock(&group->mark_mutex);
 	}
-	error = kasumi_fan_state_update(&pending->state, (u32)mask, operation, 0);
+	error =
+	    kasumi_fan_state_update(&pending->state, (u32)mask, operation, 0);
 	if (error)
 		goto unlock;
-	error = kasumi_fan_fid_scope(group, d_inode(visible->dentry), pending->state.mask);
+	error = kasumi_fan_fid_scope(group, d_inode(visible->dentry),
+				     pending->state.mask);
 	if (error)
 		goto unlock;
 	if (!(operation & FAN_MARK_REMOVE)) {
-		pending->subscription = kasumi_fan_subscription_build(group, visible, &pending->scope,
-			previous, &pending->state);
+		pending->subscription = kasumi_fan_subscription_build(
+		    group, visible, &pending->scope, previous, &pending->state);
 		if (IS_ERR(pending->subscription)) {
 			error = PTR_ERR(pending->subscription);
 			pending->subscription = NULL;
@@ -769,9 +821,11 @@ KASUMI_NOCFI int kasumi_notify_fanotify_prepare(const struct path *visible, u64 
 		}
 	}
 	pending->task = current;
-	spin_lock_irqsave(&kasumi_fan_task_locks[hash_min((unsigned long)current, 6)], flags);
+	spin_lock_irqsave(
+	    &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)], flags);
 	hash_add(kasumi_fan_pending, &pending->node, (unsigned long)current);
-	spin_unlock_irqrestore(&kasumi_fan_task_locks[hash_min((unsigned long)current, 6)], flags);
+	spin_unlock_irqrestore(
+	    &kasumi_fan_task_locks[hash_min((unsigned long)current, 6)], flags);
 	*result = pending;
 	error = 1;
 unlock:
@@ -782,21 +836,24 @@ unlock:
 	return error;
 }
 
-void kasumi_notify_fanotify_complete(struct kasumi_fanotify_pending *pending, long result)
+void kasumi_notify_fanotify_complete(struct kasumi_fanotify_pending *pending,
+				     long result)
 {
 	unsigned long flags;
 
 	if (!pending)
 		return;
 	if (pending->task) {
-		spinlock_t *lock = &kasumi_fan_task_locks[hash_min((unsigned long)pending->task, 6)];
+		spinlock_t *lock = &kasumi_fan_task_locks[hash_min(
+		    (unsigned long)pending->task, 6)];
 
 		spin_lock_irqsave(lock, flags);
 		hash_del(&pending->node);
 		spin_unlock_irqrestore(lock, flags);
 	}
 	/* Native add/remove is the last fallible syscall step. The wrapper owns
-	 * publication or complete rollback; complete releases unused preparation.
+	 * publication or complete rollback; complete releases unused
+	 * preparation.
 	 */
 	kasumi_fan_subscription_free(pending->subscription);
 	path_put(&pending->visible);
@@ -819,8 +876,10 @@ static void kasumi_fan_owner_destroy(struct kasumi_fan_owner *owner)
 	kfree(owner);
 }
 
-static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pending,
-	struct fsnotify_group *group, void *object, unsigned int operation)
+static KASUMI_NOCFI int
+kasumi_fan_commit(struct kasumi_fanotify_pending *pending,
+		  struct fsnotify_group *group, void *object,
+		  unsigned int operation)
 {
 	struct kasumi_fan_owner *owner;
 	struct kasumi_fan_subscription *old;
@@ -830,19 +889,23 @@ static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pendin
 	struct kasumi_fan_state updated;
 	int error;
 
-	if (group != pending->group || object != kasumi_fan_object(d_inode(pending->visible.dentry)) ||
-	    !!(pending->flags & FAN_MARK_REMOVE) != !!(operation & FAN_MARK_REMOVE))
+	if (group != pending->group ||
+	    object != kasumi_fan_object(d_inode(pending->visible.dentry)) ||
+	    !!(pending->flags & FAN_MARK_REMOVE) !=
+		!!(operation & FAN_MARK_REMOVE))
 		return -EAGAIN;
 	if (READ_ONCE(kasumi_fan_stopping))
 		return -ESHUTDOWN;
 	owner = kasumi_fan_owner_find(group, d_inode(pending->visible.dentry));
-	if (pending->existing != !!owner || (owner && owner->serial != pending->serial))
+	if (pending->existing != !!owner ||
+	    (owner && owner->serial != pending->serial))
 		return -EAGAIN;
 	if (owner) {
 		read_lock_irqsave(&kasumi_fan_data_lock, flags);
 		updated = owner->subscription->state;
 		read_unlock_irqrestore(&kasumi_fan_data_lock, flags);
-		error = kasumi_fan_state_update(&updated, pending->requested, pending->flags, 0);
+		error = kasumi_fan_state_update(&updated, pending->requested,
+						pending->flags, 0);
 		if (error)
 			return error;
 		pending->state = updated;
@@ -854,7 +917,8 @@ static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pendin
 			return -ENOENT;
 		write_lock_irqsave(&kasumi_fan_data_lock, flags);
 		updated = owner->subscription->state;
-		error = kasumi_fan_state_update(&updated, pending->requested, pending->flags, 0);
+		error = kasumi_fan_state_update(&updated, pending->requested,
+						pending->flags, 0);
 		if (!error) {
 			owner->subscription->state = updated;
 			owner->serial++;
@@ -865,8 +929,10 @@ static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pendin
 		if (!(updated.mask | updated.ignore))
 			kasumi_fan_owner_destroy(owner);
 		else {
-			for (index = 0; index < owner->subscription->count; index++)
-				kasumi_fan_apply(owner->subscription->claims[index].record);
+			for (index = 0; index < owner->subscription->count;
+			     index++)
+				kasumi_fan_apply(
+				    owner->subscription->claims[index].record);
 		}
 		pending->selected = true;
 		return 0;
@@ -899,32 +965,42 @@ static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pendin
 	mutex_lock(&group->mark_mutex);
 	write_lock_irqsave(&kasumi_fan_data_lock, flags);
 	error = owner->dead ? -EAGAIN : 0;
-	for (index = 0; !error && index < pending->subscription->count; index++) {
-		struct kasumi_fan_record *record = pending->subscription->claims[index].record;
+	for (index = 0; !error && index < pending->subscription->count;
+	     index++) {
+		struct kasumi_fan_record *record =
+		    pending->subscription->claims[index].record;
 
-		if (record->dead || !(record->mark->flags & FSNOTIFY_MARK_FLAG_ALIVE))
+		if (record->dead ||
+		    !(record->mark->flags & FSNOTIFY_MARK_FLAG_ALIVE))
 			error = -EAGAIN;
 	}
 	if (!error) {
-		/* Source attachment can sleep while MODIFY clears the old logical
-		 * ignore mask. Reapply this operation to that latest state only at
-		 * publication, under the same lock used by event filtering.
+		/* Source attachment can sleep while MODIFY clears the old
+		 * logical ignore mask. Reapply this operation to that latest
+		 * state only at publication, under the same lock used by event
+		 * filtering.
 		 */
 		if (owner->subscription) {
 			updated = owner->subscription->state;
 		} else {
-			struct kasumi_fan_record *anchor = pending->subscription->claims[
-				pending->subscription->count - 1].record;
+			struct kasumi_fan_record *anchor =
+			    pending->subscription
+				->claims[pending->subscription->count - 1]
+				.record;
 
-			/* First adoption has the same race with native MODIFY/FLUSH:
-			 * use the currently attached native direct contribution, never
-			 * the baseline sampled before source preparation.
+			/* First adoption has the same race with native
+			 * MODIFY/FLUSH: use the currently attached native
+			 * direct contribution, never the baseline sampled
+			 * before source preparation.
 			 */
 			updated = anchor->direct;
 		}
-		error = kasumi_fan_state_update(&updated, pending->requested, pending->flags, 0);
+		error = kasumi_fan_state_update(&updated, pending->requested,
+						pending->flags, 0);
 		if (!error)
-			error = kasumi_fan_fid_scope(group, d_inode(pending->visible.dentry), updated.mask);
+			error = kasumi_fan_fid_scope(
+			    group, d_inode(pending->visible.dentry),
+			    updated.mask);
 		if (!error)
 			pending->subscription->state = updated;
 	}
@@ -946,11 +1022,13 @@ static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pendin
 	pending->subscription = NULL;
 	owner->serial++;
 	if (created) {
-		struct kasumi_fan_record *anchor = owner->subscription->claims[
-			owner->subscription->count - 1].record;
+		struct kasumi_fan_record *anchor =
+		    owner->subscription->claims[owner->subscription->count - 1]
+			.record;
 
-		/* The prior visible mark is this same logical watch. Its preexisting
-		 * state was merged during prepare, so it has no independent bypass.
+		/* The prior visible mark is this same logical watch. Its
+		 * preexisting state was merged during prepare, so it has no
+		 * independent bypass.
 		 */
 		memset(&anchor->direct, 0, sizeof(anchor->direct));
 		list_add_tail(&owner->link, &kasumi_fan_owners);
@@ -963,7 +1041,7 @@ static KASUMI_NOCFI int kasumi_fan_commit(struct kasumi_fanotify_pending *pendin
 }
 
 static int kasumi_fan_direct_update(struct kasumi_fan_record *record, u32 mask,
-	unsigned int flags, u32 umask)
+				    unsigned int flags, u32 umask)
 {
 	struct kasumi_fan_state state;
 	unsigned long irqflags;
@@ -982,8 +1060,9 @@ static int kasumi_fan_direct_update(struct kasumi_fan_record *record, u32 mask,
 	write_unlock_irqrestore(&kasumi_fan_data_lock, irqflags);
 	if (!error) {
 #ifdef FSNOTIFY_MARK_FLAG_NO_IREF
-		/* Native ADD upgrades an evictable inode mark irreversibly. Keep
-		 * this direct-user transition even while virtual owners share it.
+		/* Native ADD upgrades an evictable inode mark irreversibly.
+		 * Keep this direct-user transition even while virtual owners
+		 * share it.
 		 */
 		if ((flags & FAN_MARK_ADD) && !(flags & FAN_MARK_EVICTABLE)) {
 			mutex_lock(&record->group->mark_mutex);
@@ -1000,12 +1079,15 @@ static int kasumi_fan_direct_update(struct kasumi_fan_record *record, u32 mask,
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 static KASUMI_NOCFI int kasumi_fan_add_entry(struct fsnotify_group *group,
-	void *object, unsigned int type, u32 mask, unsigned int flags,
-	struct kasumi_fan_fsid *fsid)
+					     void *object, unsigned int type,
+					     u32 mask, unsigned int flags,
+					     struct kasumi_fan_fsid *fsid)
 #else
 static KASUMI_NOCFI int kasumi_fan_add_entry(struct fsnotify_group *group,
-	fsnotify_connp_t *object, unsigned int type, u32 mask, unsigned int flags,
-	__kernel_fsid_t *fsid)
+					     fsnotify_connp_t *object,
+					     unsigned int type, u32 mask,
+					     unsigned int flags,
+					     __kernel_fsid_t *fsid)
 #endif
 {
 	struct kasumi_fanotify_pending *pending = kasumi_fan_current();
@@ -1015,13 +1097,18 @@ static KASUMI_NOCFI int kasumi_fan_add_entry(struct fsnotify_group *group,
 
 	kasumi_fan_call_enter(&call);
 	mutex_lock(&kasumi_fan_mutex);
-	record = type == FSNOTIFY_OBJ_TYPE_INODE ? kasumi_fan_find(group, object) : NULL;
+	record = type == FSNOTIFY_OBJ_TYPE_INODE
+		     ? kasumi_fan_find(group, object)
+		     : NULL;
 	if (pending)
-		result = kasumi_fan_commit(pending, group, object, FAN_MARK_ADD);
+		result =
+		    kasumi_fan_commit(pending, group, object, FAN_MARK_ADD);
 	else if (record)
-		result = kasumi_fan_direct_update(record, mask, flags | FAN_MARK_ADD, 0);
+		result = kasumi_fan_direct_update(record, mask,
+						  flags | FAN_MARK_ADD, 0);
 	else
-		result = kasumi_fan_native_add(group, object, type, mask, flags, fsid);
+		result = kasumi_fan_native_add(group, object, type, mask, flags,
+					       fsid);
 	mutex_unlock(&kasumi_fan_mutex);
 	kasumi_fan_call_leave(&call);
 	if (atomic_dec_and_test(&kasumi_fan_active))
@@ -1031,10 +1118,14 @@ static KASUMI_NOCFI int kasumi_fan_add_entry(struct fsnotify_group *group,
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 static KASUMI_NOCFI int kasumi_fan_remove_entry(struct fsnotify_group *group,
-	void *object, unsigned int type, u32 mask, unsigned int flags, u32 umask)
+						void *object, unsigned int type,
+						u32 mask, unsigned int flags,
+						u32 umask)
 #else
 static KASUMI_NOCFI int kasumi_fan_remove_entry(struct fsnotify_group *group,
-	fsnotify_connp_t *object, u32 mask, unsigned int flags, u32 umask)
+						fsnotify_connp_t *object,
+						u32 mask, unsigned int flags,
+						u32 umask)
 #endif
 {
 	struct kasumi_fanotify_pending *pending = kasumi_fan_current();
@@ -1046,14 +1137,18 @@ static KASUMI_NOCFI int kasumi_fan_remove_entry(struct fsnotify_group *group,
 	mutex_lock(&kasumi_fan_mutex);
 	record = kasumi_fan_find(group, object);
 	if (pending)
-		result = kasumi_fan_commit(pending, group, object, FAN_MARK_REMOVE);
+		result =
+		    kasumi_fan_commit(pending, group, object, FAN_MARK_REMOVE);
 	else if (record)
-		result = kasumi_fan_direct_update(record, mask, flags | FAN_MARK_REMOVE, umask);
+		result = kasumi_fan_direct_update(
+		    record, mask, flags | FAN_MARK_REMOVE, umask);
 	else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-		result = kasumi_fan_native_remove(group, object, type, mask, flags, umask);
+		result = kasumi_fan_native_remove(group, object, type, mask,
+						  flags, umask);
 #else
-		result = kasumi_fan_native_remove(group, object, mask, flags, umask);
+		result =
+		    kasumi_fan_native_remove(group, object, mask, flags, umask);
 #endif
 	}
 	mutex_unlock(&kasumi_fan_mutex);
@@ -1068,16 +1163,21 @@ static int kasumi_fan_mutation_pre(struct kprobe *probe, struct pt_regs *regs)
 	if (kasumi_notify_fanotify_internal())
 		return 0;
 	atomic_inc(&kasumi_fan_active);
-	instruction_pointer_set(regs, probe == &kasumi_fan_add_probe ?
-		(unsigned long)kasumi_fan_add_entry : (unsigned long)kasumi_fan_remove_entry);
+	instruction_pointer_set(regs,
+				probe == &kasumi_fan_add_probe
+				    ? (unsigned long)kasumi_fan_add_entry
+				    : (unsigned long)kasumi_fan_remove_entry);
 	return 1;
 }
 
-static struct kasumi_fan_record *kasumi_fan_mark_record(struct fsnotify_mark *mark)
+static struct kasumi_fan_record *
+kasumi_fan_mark_record(struct fsnotify_mark *mark)
 {
 	struct kasumi_fan_record *record;
 
-	hash_for_each_possible(kasumi_fan_marks, record, mark_node, (unsigned long)mark) {
+	hash_for_each_possible(kasumi_fan_marks, record, mark_node,
+			       (unsigned long)mark)
+	{
 		if (record->mark == mark)
 			return record;
 	}
@@ -1087,10 +1187,11 @@ static struct kasumi_fan_record *kasumi_fan_mark_record(struct fsnotify_mark *ma
 static bool kasumi_fan_applicable(u32 mask, u32 event, bool child)
 {
 	return (!(event & FS_ISDIR) || (mask & FS_ISDIR)) &&
-		(!child || (mask & FS_EVENT_ON_CHILD));
+	       (!child || (mask & FS_EVENT_ON_CHILD));
 }
 
-static u32 kasumi_fan_ignored(const struct kasumi_fan_state *state, u32 mask, bool child)
+static u32 kasumi_fan_ignored(const struct kasumi_fan_state *state, u32 mask,
+			      bool child)
 {
 	u32 ignore = state->ignore;
 
@@ -1109,13 +1210,15 @@ static u32 kasumi_fan_ignored(const struct kasumi_fan_state *state, u32 mask, bo
 #endif
 }
 
-static u32 kasumi_fan_allowed(struct kasumi_fan_state *state, u32 mask, bool child)
+static u32 kasumi_fan_allowed(struct kasumi_fan_state *state, u32 mask,
+			      bool child)
 {
 	if ((mask & FS_MODIFY) && !state->survive)
 		state->ignore = 0;
 	if (!kasumi_fan_applicable(state->mask, mask, child))
 		return 0;
-	return mask & state->mask & ~kasumi_fan_ignored(state, mask, child) & ALL_FSNOTIFY_EVENTS;
+	return mask & state->mask & ~kasumi_fan_ignored(state, mask, child) &
+	       ALL_FSNOTIFY_EVENTS;
 }
 
 struct kasumi_fan_projection {
@@ -1123,12 +1226,14 @@ struct kasumi_fan_projection {
 	u32 allowed;
 };
 
-static int kasumi_fan_project_emit(void *data, const struct kasumi_notify_event *event)
+static int kasumi_fan_project_emit(void *data,
+				   const struct kasumi_notify_event *event)
 {
 	struct kasumi_fan_projection *projection = data;
 
-	projection->allowed |= kasumi_fan_allowed(projection->state, event->mask,
-		event->named || (event->mask & FS_EVENT_ON_CHILD));
+	projection->allowed |= kasumi_fan_allowed(
+	    projection->state, event->mask,
+	    event->named || (event->mask & FS_EVENT_ON_CHILD));
 	return 0;
 }
 
@@ -1137,8 +1242,9 @@ static int kasumi_fan_project_emit(void *data, const struct kasumi_notify_event 
  * The data write lock pins every snapshot until filtering has completed.
  */
 static u32 kasumi_fan_filter(u32 mask, const void *data, int data_type,
-	struct inode *dir, const struct qstr *name, u32 cookie,
-	struct fsnotify_iter_info *iterator, bool fid)
+			     struct inode *dir, const struct qstr *name,
+			     u32 cookie, struct fsnotify_iter_info *iterator,
+			     bool fid)
 {
 	struct inode *inode = fsnotify_data_inode(data, data_type);
 	struct fsnotify_mark *mark;
@@ -1165,47 +1271,57 @@ static u32 kasumi_fan_filter(u32 mask, const void *data, int data_type,
 #endif
 		record = kasumi_fan_mark_record(mark);
 		if (!record) {
-			struct kasumi_fan_state native = kasumi_fan_capture(mark);
+			struct kasumi_fan_state native =
+			    kasumi_fan_capture(mark);
 
 			allowed |= kasumi_fan_allowed(&native, mask, parent);
-			native_ignore |= kasumi_fan_ignored(&native, mask, parent);
+			native_ignore |=
+			    kasumi_fan_ignored(&native, mask, parent);
 			continue;
 		}
 		managed = true;
 		if (record->dead)
 			continue;
 		allowed |= kasumi_fan_allowed(&record->direct, mask, parent);
-		/* A direct inode ignore also vetoes this native group's mount/sb
-		 * interests. Keep the native group-wide subtraction after merging
-		 * all direct and projected contributions.
+		/* A direct inode ignore also vetoes this native group's
+		 * mount/sb interests. Keep the native group-wide subtraction
+		 * after merging all direct and projected contributions.
 		 */
-		native_ignore |= kasumi_fan_ignored(&record->direct, mask, parent);
-		list_for_each_entry(claim, &record->claims, link) {
+		native_ignore |=
+		    kasumi_fan_ignored(&record->direct, mask, parent);
+		list_for_each_entry (claim, &record->claims, link) {
 			struct kasumi_fan_owner *owner = claim->owner;
-			struct kasumi_fan_subscription *subscription = claim->subscription;
+			struct kasumi_fan_subscription *subscription =
+			    claim->subscription;
 			const struct kasumi_notify_source *source;
 			const struct qstr *query = name;
-			struct kasumi_fan_projection projection = { .state = &subscription->state };
+			struct kasumi_fan_projection projection = {
+			    .state = &subscription->state};
 			u32 projected_mask = mask;
 			bool refresh = false;
 			int error;
 
-			if (owner->dead || owner->subscription != subscription ||
+			if (owner->dead ||
+			    owner->subscription != subscription ||
 			    claim->index == KASUMI_FAN_ANCHOR)
 				continue;
-			source = kasumi_notify_snapshot_source(subscription->snapshot, claim->index);
-			/* The full native fanotify callback carries the parent name even
-			 * for an inode mark. A leaf receives its own event without that
-			 * name; a directory leaf still excludes its grandchildren.
+			source = kasumi_notify_snapshot_source(
+			    subscription->snapshot, claim->index);
+			/* The full native fanotify callback carries the parent
+			 * name even for an inode mark. A leaf receives its own
+			 * event without that name; a directory leaf still
+			 * excludes its grandchildren.
 			 */
 			if (!parent && !(mask & ALL_FSNOTIFY_DIRENT_EVENTS)) {
 				query = NULL;
 				projected_mask &= ~FS_EVENT_ON_CHILD;
 			}
-			error = kasumi_notify_snapshot_project(subscription->snapshot, claim->index,
-				projected_mask, inode, dir, query, cookie, &refresh,
-				kasumi_fan_project_emit, &projection);
-			if (!error && source->kind != KASUMI_NOTIFY_SOURCE_TOPOLOGY)
+			error = kasumi_notify_snapshot_project(
+			    subscription->snapshot, claim->index,
+			    projected_mask, inode, dir, query, cookie, &refresh,
+			    kasumi_fan_project_emit, &projection);
+			if (!error &&
+			    source->kind != KASUMI_NOTIFY_SOURCE_TOPOLOGY)
 				allowed |= projection.allowed;
 			if (refresh || error) {
 				owner->dirty = true;
@@ -1220,18 +1336,21 @@ static u32 kasumi_fan_filter(u32 mask, const void *data, int data_type,
 	 * passing a vnode to the backing filesystem's exportfs callbacks.
 	 * FID-only identifies dir for dirent events and data inode otherwise.
 	 */
-	if (managed && fid && kasumi_vnode_is_ours(
-		(mask & ALL_FSNOTIFY_DIRENT_EVENTS) ? dir : inode))
+	if (managed && fid &&
+	    kasumi_vnode_is_ours((mask & ALL_FSNOTIFY_DIRENT_EVENTS) ? dir
+								     : inode))
 		return 0;
-	return managed ? (mask & ~ALL_FSNOTIFY_EVENTS) | (allowed & ~native_ignore) : mask;
+	return managed
+		   ? (mask & ~ALL_FSNOTIFY_EVENTS) | (allowed & ~native_ignore)
+		   : mask;
 }
 
 static int kasumi_fan_event_pre(struct kprobe *probe, struct pt_regs *regs)
 {
-	regs->regs[1] = kasumi_fan_filter(regs->regs[1], (void *)regs->regs[2],
-		regs->regs[3], (void *)regs->regs[4], (void *)regs->regs[5],
-		regs->regs[6], (void *)regs->regs[7],
-		kasumi_fan_fid_group((void *)regs->regs[0]));
+	regs->regs[1] = kasumi_fan_filter(
+	    regs->regs[1], (void *)regs->regs[2], regs->regs[3],
+	    (void *)regs->regs[4], (void *)regs->regs[5], regs->regs[6],
+	    (void *)regs->regs[7], kasumi_fan_fid_group((void *)regs->regs[0]));
 	return 0;
 }
 
@@ -1246,7 +1365,7 @@ static int kasumi_fan_freeing_pre(struct kprobe *probe, struct pt_regs *regs)
 	record = kasumi_fan_mark_record((void *)regs->regs[0]);
 	if (record) {
 		record->dead = true;
-		list_for_each_entry(claim, &record->claims, link) {
+		list_for_each_entry (claim, &record->claims, link) {
 			if (claim->index == KASUMI_FAN_ANCHOR)
 				claim->owner->dead = true;
 			claim->owner->dirty = true;
@@ -1267,7 +1386,7 @@ static KASUMI_NOCFI void kasumi_fan_work(struct work_struct *work)
 
 	kasumi_fan_call_enter(&call);
 	mutex_lock(&kasumi_fan_mutex);
-	list_for_each_entry_safe(owner, next, &kasumi_fan_owners, link) {
+	list_for_each_entry_safe (owner, next, &kasumi_fan_owners, link) {
 		struct kasumi_fan_subscription *replacement, *old;
 		struct kasumi_fan_state state;
 		const struct cred *saved;
@@ -1287,17 +1406,23 @@ static KASUMI_NOCFI void kasumi_fan_work(struct work_struct *work)
 		if (!dirty)
 			continue;
 		saved = override_creds(owner->cred);
-		replacement = kasumi_fan_subscription_build(owner->group, &owner->visible, &owner->scope,
-			owner->subscription, &state);
+		replacement = kasumi_fan_subscription_build(
+		    owner->group, &owner->visible, &owner->scope,
+		    owner->subscription, &state);
 		revert_creds(saved);
 		if (IS_ERR(replacement)) {
 			if (kasumi_fan_insert_event)
-				kasumi_fan_insert_event(owner->group, owner->group->overflow_event, NULL, NULL);
+				kasumi_fan_insert_event(
+				    owner->group, owner->group->overflow_event,
+				    NULL, NULL);
 			else
-				kasumi_fan_add_event(owner->group, owner->group->overflow_event, NULL);
+				kasumi_fan_add_event(
+				    owner->group, owner->group->overflow_event,
+				    NULL);
 			continue;
 		}
-		if (kasumi_notify_snapshot_root_retired(replacement->snapshot)) {
+		if (kasumi_notify_snapshot_root_retired(
+			replacement->snapshot)) {
 			kasumi_fan_subscription_free(replacement);
 			kasumi_fan_owner_destroy(owner);
 			continue;
@@ -1306,9 +1431,13 @@ static KASUMI_NOCFI void kasumi_fan_work(struct work_struct *work)
 		if (error) {
 			kasumi_fan_subscription_free(replacement);
 			if (kasumi_fan_insert_event)
-				kasumi_fan_insert_event(owner->group, owner->group->overflow_event, NULL, NULL);
+				kasumi_fan_insert_event(
+				    owner->group, owner->group->overflow_event,
+				    NULL, NULL);
 			else
-				kasumi_fan_add_event(owner->group, owner->group->overflow_event, NULL);
+				kasumi_fan_add_event(
+				    owner->group, owner->group->overflow_event,
+				    NULL);
 			continue;
 		}
 		mutex_lock(&owner->group->mark_mutex);
@@ -1322,7 +1451,8 @@ static KASUMI_NOCFI void kasumi_fan_work(struct work_struct *work)
 			continue;
 		}
 		old = owner->subscription;
-		/* A native MODIFY may have cleared ignored events during build. */
+		/* A native MODIFY may have cleared ignored events during build.
+		 */
 		replacement->state = old->state;
 		owner->subscription = replacement;
 		owner->serial++;
@@ -1343,7 +1473,7 @@ void kasumi_notify_fanotify_rules_changed(void)
 	if (!READ_ONCE(kasumi_fan_ready) || READ_ONCE(kasumi_fan_stopping))
 		return;
 	write_lock_irqsave(&kasumi_fan_data_lock, flags);
-	list_for_each_entry(owner, &kasumi_fan_owners, link) {
+	list_for_each_entry (owner, &kasumi_fan_owners, link) {
 		if (!owner->dead) {
 			owner->dirty = true;
 			queue = true;
@@ -1361,10 +1491,12 @@ bool kasumi_notify_fanotify_supported(void)
 
 int kasumi_notify_fanotify_init(void)
 {
-	struct kprobe *probes[] = { &kasumi_fan_add_probe, &kasumi_fan_remove_probe,
-		&kasumi_fan_event_probe, &kasumi_fan_freeing_probe };
-	const char *names[] = { "fanotify_add_mark", "fanotify_remove_mark",
-		"fanotify_handle_event", "fanotify_freeing_mark" };
+	struct kprobe *probes[] = {
+	    &kasumi_fan_add_probe, &kasumi_fan_remove_probe,
+	    &kasumi_fan_event_probe, &kasumi_fan_freeing_probe};
+	const char *names[] = {"fanotify_add_mark", "fanotify_remove_mark",
+			       "fanotify_handle_event",
+			       "fanotify_freeing_mark"};
 	unsigned int index;
 	int error;
 
@@ -1373,38 +1505,53 @@ int kasumi_notify_fanotify_init(void)
 	for (index = 0; index < ARRAY_SIZE(kasumi_fan_task_locks); index++)
 		spin_lock_init(&kasumi_fan_task_locks[index]);
 	kasumi_fan_native_add = (void *)kasumi_lookup_callable_quiet(names[0]);
-	kasumi_fan_native_remove = (void *)kasumi_lookup_callable_quiet(names[1]);
-	kasumi_fan_find_mark = (void *)kasumi_lookup_callable_quiet("fsnotify_find_mark");
-	kasumi_fan_recalc_mask = (void *)kasumi_lookup_callable_quiet("fsnotify_recalc_mask");
-	kasumi_fan_get_group = (void *)kasumi_lookup_callable_quiet("fsnotify_get_group");
-	kasumi_fan_get_fsid = (void *)kasumi_lookup_callable_quiet("vfs_get_fsid");
-	kasumi_fan_insert_event = (void *)kasumi_lookup_callable_quiet("fsnotify_insert_event");
-	kasumi_fan_add_event = (void *)kasumi_lookup_callable_quiet("fsnotify_add_event");
-	kasumi_fan_tasks_barrier = (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
-	if (!kasumi_fan_native_add || !kasumi_fan_native_remove || !kasumi_fan_find_mark ||
-	    !kasumi_fan_recalc_mask || !kasumi_fan_get_group || !kasumi_fan_tasks_barrier ||
+	kasumi_fan_native_remove =
+	    (void *)kasumi_lookup_callable_quiet(names[1]);
+	kasumi_fan_find_mark =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_find_mark");
+	kasumi_fan_recalc_mask =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_recalc_mask");
+	kasumi_fan_get_group =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_get_group");
+	kasumi_fan_get_fsid =
+	    (void *)kasumi_lookup_callable_quiet("vfs_get_fsid");
+	kasumi_fan_insert_event =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_insert_event");
+	kasumi_fan_add_event =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_add_event");
+	kasumi_fan_tasks_barrier =
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	if (!kasumi_fan_native_add || !kasumi_fan_native_remove ||
+	    !kasumi_fan_find_mark || !kasumi_fan_recalc_mask ||
+	    !kasumi_fan_get_group || !kasumi_fan_tasks_barrier ||
 	    (!kasumi_fan_insert_event && !kasumi_fan_add_event))
 		return -EOPNOTSUPP;
-	kasumi_fan_queue = alloc_ordered_workqueue("kasumi-fanotify", WQ_MEM_RECLAIM);
+	kasumi_fan_queue =
+	    alloc_ordered_workqueue("kasumi-fanotify", WQ_MEM_RECLAIM);
 	if (!kasumi_fan_queue)
 		return -ENOMEM;
 	for (index = 0; index < ARRAY_SIZE(probes); index++) {
-		probes[index]->addr = (void *)kasumi_lookup_name_quiet(names[index]);
+		probes[index]->addr =
+		    (void *)kasumi_lookup_name_quiet(names[index]);
 		/* Older fanotify has no freeing_mark callback. Its generic free
-		 * transition can be inlined by LTO into flush and destroy paths;
-		 * detach remains the shared entry before final put/SRCU destruction.
-		 * The caller holds group->mark_mutex and a mark reference, so the
-		 * worker cannot restore a removed contribution before detach finishes.
-		 * The probe's mark hash excludes every unrelated group.
+		 * transition can be inlined by LTO into flush and destroy
+		 * paths; detach remains the shared entry before final put/SRCU
+		 * destruction. The caller holds group->mark_mutex and a mark
+		 * reference, so the worker cannot restore a removed
+		 * contribution before detach finishes. The probe's mark hash
+		 * excludes every unrelated group.
 		 */
 		if (index == 3 && !probes[index]->addr)
-			probes[index]->addr = (void *)kasumi_lookup_name_quiet("fsnotify_detach_mark");
+			probes[index]->addr = (void *)kasumi_lookup_name_quiet(
+			    "fsnotify_detach_mark");
 		if (!probes[index]->addr) {
 			error = -EOPNOTSUPP;
 			goto fail;
 		}
-		probes[index]->pre_handler = index < 2 ? kasumi_fan_mutation_pre :
-			index == 2 ? kasumi_fan_event_pre : kasumi_fan_freeing_pre;
+		probes[index]->pre_handler = index < 2 ? kasumi_fan_mutation_pre
+					     : index == 2
+						 ? kasumi_fan_event_pre
+						 : kasumi_fan_freeing_pre;
 		error = register_kprobe(probes[index]);
 		if (error)
 			goto fail;
@@ -1429,8 +1576,9 @@ void kasumi_notify_fanotify_stop(void)
 
 KASUMI_NOCFI void kasumi_notify_fanotify_exit(void)
 {
-	struct kprobe *probes[] = { &kasumi_fan_add_probe, &kasumi_fan_remove_probe,
-		&kasumi_fan_event_probe, &kasumi_fan_freeing_probe };
+	struct kprobe *probes[] = {
+	    &kasumi_fan_add_probe, &kasumi_fan_remove_probe,
+	    &kasumi_fan_event_probe, &kasumi_fan_freeing_probe};
 
 	kasumi_notify_fanotify_stop();
 	while (kasumi_fan_probes)
@@ -1447,17 +1595,36 @@ KASUMI_NOCFI void kasumi_notify_fanotify_exit(void)
 
 #else
 int kasumi_notify_fanotify_prepare(const struct path *path, u64 mask,
-	unsigned int type, unsigned int flags, struct fsnotify_group *group,
-	struct kasumi_fanotify_pending **pending)
+				   unsigned int type, unsigned int flags,
+				   struct fsnotify_group *group,
+				   struct kasumi_fanotify_pending **pending)
 {
 	*pending = NULL;
 	return 0;
 }
-void kasumi_notify_fanotify_complete(struct kasumi_fanotify_pending *pending, long result) {}
-bool kasumi_notify_fanotify_internal(void) { return false; }
-bool kasumi_notify_fanotify_supported(void) { return false; }
-void kasumi_notify_fanotify_rules_changed(void) {}
-int kasumi_notify_fanotify_init(void) { return -EOPNOTSUPP; }
-void kasumi_notify_fanotify_stop(void) {}
-void kasumi_notify_fanotify_exit(void) {}
+void kasumi_notify_fanotify_complete(struct kasumi_fanotify_pending *pending,
+				     long result)
+{
+}
+bool kasumi_notify_fanotify_internal(void)
+{
+	return false;
+}
+bool kasumi_notify_fanotify_supported(void)
+{
+	return false;
+}
+void kasumi_notify_fanotify_rules_changed(void)
+{
+}
+int kasumi_notify_fanotify_init(void)
+{
+	return -EOPNOTSUPP;
+}
+void kasumi_notify_fanotify_stop(void)
+{
+}
+void kasumi_notify_fanotify_exit(void)
+{
+}
 #endif

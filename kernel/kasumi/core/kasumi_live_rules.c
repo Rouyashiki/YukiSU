@@ -94,7 +94,8 @@ static struct kasumi_live_scope *live_replay_scope;
 static struct kasumi_live_rule *live_replay_original;
 static struct fs_struct *(*live_copy_fs)(struct fs_struct *);
 static void (*live_free_fs)(struct fs_struct *);
-static char *(*live_d_path)(const struct path *, const struct path *, char *, int);
+static char *(*live_d_path)(const struct path *, const struct path *, char *,
+			    int);
 
 static void live_notify(void *unused)
 {
@@ -175,7 +176,7 @@ static struct kasumi_live_scope *KASUMI_NOCFI live_scope_get(bool needs_cwd)
 	}
 	scope->cred = get_current_cred();
 	scope->namespace = current->nsproxy->mnt_ns;
-	list_for_each_entry(existing, &live_scopes, node) {
+	list_for_each_entry (existing, &live_scopes, node) {
 		if (existing->cred == scope->cred &&
 		    existing->namespace == scope->namespace &&
 		    path_equal(&existing->fs->root, &scope->fs->root) &&
@@ -188,8 +189,8 @@ static struct kasumi_live_scope *KASUMI_NOCFI live_scope_get(bool needs_cwd)
 		}
 	}
 	kasumi_vfs_internal_enter(&guard);
-	error = kasumi_hide_events_open_scope(&scope->events,
-		&scope->fs->root, scope->cred, live_notify, NULL);
+	error = kasumi_hide_events_open_scope(&scope->events, &scope->fs->root,
+					      scope->cred, live_notify, NULL);
 	kasumi_vfs_internal_leave(&guard);
 	if (error)
 		goto fail;
@@ -205,7 +206,7 @@ fail:
 }
 
 static char *KASUMI_NOCFI live_absolute(struct kasumi_live_scope *scope,
-				      const char *name)
+					const char *name)
 {
 	char *buffer, *text;
 	int error = 0;
@@ -218,7 +219,8 @@ static char *KASUMI_NOCFI live_absolute(struct kasumi_live_scope *scope,
 		buffer = kmalloc(PATH_MAX, GFP_KERNEL);
 		if (!buffer)
 			return ERR_PTR(-ENOMEM);
-		text = live_d_path(&scope->fs->pwd, &scope->fs->root, buffer, PATH_MAX);
+		text = live_d_path(&scope->fs->pwd, &scope->fs->root, buffer,
+				   PATH_MAX);
 		if (IS_ERR_OR_NULL(text)) {
 			error = text ? PTR_ERR(text) : -EXDEV;
 		} else {
@@ -241,16 +243,21 @@ static void live_prefix_link(struct kasumi_live_rule *rule)
 		struct kasumi_live_prefix *prefix = &rule->prefixes[slot];
 		struct rb_node **link = &live_prefixes.rb_node, *parent = NULL;
 
-		prefix->path = slot ? rule->visible_canonical : rule->visible_absolute;
+		prefix->path =
+		    slot ? rule->visible_canonical : rule->visible_absolute;
 		prefix->rule = rule;
 		if (!prefix->path)
 			continue;
 		while (*link) {
-			struct kasumi_live_prefix *other = rb_entry(*link, struct kasumi_live_prefix, node);
+			struct kasumi_live_prefix *other =
+			    rb_entry(*link, struct kasumi_live_prefix, node);
 			int order = strcmp(prefix->path, other->path);
 
 			if (!order)
-				order = (unsigned long)prefix < (unsigned long)other ? -1 : 1;
+				order =
+				    (unsigned long)prefix < (unsigned long)other
+					? -1
+					: 1;
 			parent = *link;
 			link = order < 0 ? &parent->rb_left : &parent->rb_right;
 		}
@@ -288,7 +295,7 @@ static void live_rule_free(struct kasumi_live_rule *rule)
 	list_del_init(&rule->replay);
 	list_del_init(&rule->xattr);
 	live_prefix_unlink(rule);
-	list_for_each_entry_safe(life, next, &rule->materialized, live_node) {
+	list_for_each_entry_safe (life, next, &rule->materialized, live_node) {
 		list_del_init(&life->live_node);
 		life->live_rule = NULL;
 	}
@@ -336,7 +343,8 @@ static int live_watch(struct kasumi_live_rule *rule, const char *name,
 	}
 	kasumi_vfs_internal_enter(&guard);
 	error = kasumi_hide_events_watch_path(&rule->scope->events, path, leaf,
-		&resolved, &rule->watches, live_rule_notify, rule);
+					      &resolved, &rule->watches,
+					      live_rule_notify, rule);
 	kasumi_vfs_internal_leave(&guard);
 	if (resolved.dentry)
 		path_put(&resolved);
@@ -398,7 +406,8 @@ static char *KASUMI_NOCFI live_link_target(const char *name)
 			if (IS_ERR(base))
 				error = PTR_ERR(base);
 			else
-				expanded = kasprintf(GFP_KERNEL, "%s/%s%s", base, link, end);
+				expanded = kasprintf(GFP_KERNEL, "%s/%s%s",
+						     base, link, end);
 			dput(parent.dentry);
 		}
 		do_delayed_call(&done);
@@ -442,7 +451,9 @@ static int live_watch_missing_links(struct kasumi_live_rule *rule,
 }
 
 static int KASUMI_NOCFI live_watch_resolved(struct kasumi_live_rule *rule,
-	const char *name, const char *previous, char **canonical)
+					    const char *name,
+					    const char *previous,
+					    char **canonical)
 {
 	struct kasumi_internal_vfs_guard guard;
 	struct path path;
@@ -525,7 +536,8 @@ struct kasumi_live_batch *kasumi_live_rules_begin(void)
 }
 
 int kasumi_live_rules_record(struct kasumi_live_batch *batch,
-	unsigned int command, const char *visible, const char *source, u32 flags)
+			     unsigned int command, const char *visible,
+			     const char *source, u32 flags)
 {
 	struct kasumi_live_rule *rule, *other;
 	struct hlist_node *next;
@@ -540,7 +552,8 @@ int kasumi_live_rules_record(struct kasumi_live_batch *batch,
 	if (command != KSM_IOC_ADD_RULE && command != KSM_IOC_ADD_MERGE_RULE)
 		source = NULL;
 	if (!visible || !*visible ||
-	    ((command == KSM_IOC_ADD_RULE || command == KSM_IOC_ADD_MERGE_RULE) &&
+	    ((command == KSM_IOC_ADD_RULE ||
+	      command == KSM_IOC_ADD_MERGE_RULE) &&
 	     (!source || !*source)))
 		return -EINVAL;
 	rule = kzalloc(sizeof(*rule), GFP_KERNEL);
@@ -556,7 +569,8 @@ int kasumi_live_rules_record(struct kasumi_live_batch *batch,
 		return -EOVERFLOW;
 	}
 	rule->previous = live_replay_original;
-	rule->sequence = live_replay_original ? live_replay_original->sequence : ++live_sequence;
+	rule->sequence = live_replay_original ? live_replay_original->sequence
+					      : ++live_sequence;
 	rule->visible = kstrdup(visible, GFP_KERNEL);
 	rule->source = source ? kstrdup(source, GFP_KERNEL) : NULL;
 	rule->command = command;
@@ -569,7 +583,8 @@ int kasumi_live_rules_record(struct kasumi_live_batch *batch,
 		error = -ENOMEM;
 		goto fail;
 	}
-	rule->scope = live_scope_get(visible[0] != '/' || (source && source[0] != '/'));
+	rule->scope =
+	    live_scope_get(visible[0] != '/' || (source && source[0] != '/'));
 	if (IS_ERR(rule->scope)) {
 		error = PTR_ERR(rule->scope);
 		rule->scope = NULL;
@@ -577,7 +592,8 @@ int kasumi_live_rules_record(struct kasumi_live_batch *batch,
 	}
 	rule->visible_absolute = live_absolute(rule->scope, visible);
 	if (IS_ERR_OR_NULL(rule->visible_absolute)) {
-		error = rule->visible_absolute ? PTR_ERR(rule->visible_absolute) : -ENOMEM;
+		error = rule->visible_absolute ? PTR_ERR(rule->visible_absolute)
+					       : -ENOMEM;
 		rule->visible_absolute = NULL;
 		goto fail;
 	}
@@ -590,23 +606,30 @@ int kasumi_live_rules_record(struct kasumi_live_batch *batch,
 		if (error && !live_missing(error) && error != -EOPNOTSUPP)
 			goto fail;
 	}
-	error = live_watch_resolved(rule, visible,
-		live_replay_original ? live_replay_original->visible_canonical : NULL,
-		&rule->visible_canonical);
+	error = live_watch_resolved(
+	    rule, visible,
+	    live_replay_original ? live_replay_original->visible_canonical
+				 : NULL,
+	    &rule->visible_canonical);
 	if (error)
 		goto fail;
 	if (source) {
-		error = live_watch_resolved(rule, source,
-			live_replay_original ? live_replay_original->source_canonical : NULL,
-			&rule->source_canonical);
+		error = live_watch_resolved(
+		    rule, source,
+		    live_replay_original
+			? live_replay_original->source_canonical
+			: NULL,
+		    &rule->source_canonical);
 		if (error)
 			goto fail;
 	}
-	hash_for_each_possible(live_index, other, hash, rule->key) {
+	hash_for_each_possible(live_index, other, hash, rule->key)
+	{
 		if (live_same_operation(other, rule))
 			live_remove_later(batch, other);
 	}
-	hash_for_each_possible_safe(batch->index, other, next, hash, rule->key) {
+	hash_for_each_possible_safe(batch->index, other, next, hash, rule->key)
+	{
 		if (!live_same_operation(other, rule))
 			continue;
 		hash_del(&other->hash);
@@ -668,11 +691,12 @@ static void live_clear_batch(struct kasumi_live_batch *batch, bool xattrs_only)
 
 	if (!batch)
 		return;
-	list_for_each_entry(rule, &live_rules, node) {
-		if (!xattrs_only || rule->command == KSM_IOC_HIDE_OVERLAY_XATTRS)
+	list_for_each_entry (rule, &live_rules, node) {
+		if (!xattrs_only ||
+		    rule->command == KSM_IOC_HIDE_OVERLAY_XATTRS)
 			live_remove_later(batch, rule);
 	}
-	list_for_each_entry_safe(rule, next, &batch->additions, node) {
+	list_for_each_entry_safe (rule, next, &batch->additions, node) {
 		if (xattrs_only && rule->command != KSM_IOC_HIDE_OVERLAY_XATTRS)
 			continue;
 		list_del(&rule->node);
@@ -700,11 +724,13 @@ void kasumi_live_rules_finish(struct kasumi_live_batch *batch, bool publish)
 	if (!batch)
 		return;
 	kasumi_live_rules_end_record();
-	list_for_each_entry_safe(rule, next, &batch->additions, node) {
+	list_for_each_entry_safe (rule, next, &batch->additions, node) {
 		list_del(&rule->node);
 		hash_del(&rule->hash);
 		if (publish) {
-			list_add_tail(&rule->node, rule->previous ? &rule->previous->node : &live_rules);
+			list_add_tail(&rule->node, rule->previous
+						       ? &rule->previous->node
+						       : &live_rules);
 			rule->previous = NULL;
 			live_prefix_link(rule);
 			hash_add(live_index, &rule->hash, rule->key);
@@ -712,7 +738,7 @@ void kasumi_live_rules_finish(struct kasumi_live_batch *batch, bool publish)
 			live_rule_free(rule);
 		}
 	}
-	list_for_each_entry_safe(rule, next, &batch->removals, removal) {
+	list_for_each_entry_safe (rule, next, &batch->removals, removal) {
 		list_del_init(&rule->removal);
 		if (publish) {
 			list_del(&rule->node);
@@ -736,7 +762,8 @@ static int KASUMI_NOCFI live_parent_ready(struct kasumi_live_rule *rule)
 	visible = live_absolute(rule->scope, rule->visible);
 	if (IS_ERR_OR_NULL(visible))
 		return visible ? PTR_ERR(visible) : -ENOMEM;
-	error = kasumi_rule_projected_parent(visible, kasumi_batch_generation(), &parent);
+	error = kasumi_rule_projected_parent(visible, kasumi_batch_generation(),
+					     &parent);
 	if (parent.dentry)
 		path_put(&parent);
 	if (error > 0) {
@@ -747,7 +774,8 @@ static int KASUMI_NOCFI live_parent_ready(struct kasumi_live_rule *rule)
 			slash[1] = '\0';
 		else
 			*slash = '\0';
-		error = kern_path(visible, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &parent);
+		error = kern_path(visible, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,
+				  &parent);
 		if (!error)
 			path_put(&parent);
 	}
@@ -796,14 +824,16 @@ static int KASUMI_NOCFI live_replay_rule(struct kasumi_live_rule *rule)
 	kasumi_vfs_internal_enter(&guard);
 	error = live_replay_ready(rule);
 	if (live_missing(error)) {
-		error = kasumi_live_rules_record(kasumi_batch_live(), rule->command,
-			rule->visible, rule->source, rule->flags);
+		error = kasumi_live_rules_record(kasumi_batch_live(),
+						 rule->command, rule->visible,
+						 rule->source, rule->flags);
 		kasumi_live_rules_end_record();
 		if (!error) {
 			int ready = live_replay_ready(rule);
 
-			/* A source can appear between the first miss and subscribing
-			 * to its newly existing parent. Recheck after subscribing. */
+			/* A source can appear between the first miss and
+			 * subscribing to its newly existing parent. Recheck
+			 * after subscribing. */
 			if (!ready)
 				error = -EAGAIN;
 			else if (!live_missing(ready))
@@ -811,7 +841,7 @@ static int KASUMI_NOCFI live_replay_rule(struct kasumi_live_rule *rule)
 		}
 	} else if (!error) {
 		error = kasumi_apply_path_rule(rule->command, rule->visible,
-					     rule->source, rule->flags);
+					       rule->source, rule->flags);
 	}
 	kasumi_vfs_internal_leave(&guard);
 	live_replay_scope = NULL;
@@ -835,25 +865,28 @@ static const char *live_materialized_path(struct kasumi_rule_lifetime *life)
 	return NULL;
 }
 
-static void live_select_rule(struct kasumi_live_rule *rule, struct list_head *replay)
+static void live_select_rule(struct kasumi_live_rule *rule,
+			     struct list_head *replay)
 {
 	if (rule && list_empty(&rule->replay))
 		list_add_tail(&rule->replay, replay);
 }
 
-static void live_select_materialized(struct kasumi_rule_lifetime *life, void *data)
+static void live_select_materialized(struct kasumi_rule_lifetime *life,
+				     void *data)
 {
 	live_select_rule(life->live_rule, data);
 }
 
-static struct kasumi_live_prefix *live_prefix_first(const char *path, size_t length,
-						   bool descendants)
+static struct kasumi_live_prefix *
+live_prefix_first(const char *path, size_t length, bool descendants)
 {
 	struct rb_node *node = live_prefixes.rb_node;
 	struct kasumi_live_prefix *first = NULL;
 
 	while (node) {
-		struct kasumi_live_prefix *prefix = rb_entry(node, struct kasumi_live_prefix, node);
+		struct kasumi_live_prefix *prefix =
+		    rb_entry(node, struct kasumi_live_prefix, node);
 		int order = strncmp(prefix->path, path, length);
 
 		if (!order && descendants && length != 1)
@@ -868,7 +901,8 @@ static struct kasumi_live_prefix *live_prefix_first(const char *path, size_t len
 	return first;
 }
 
-static struct kasumi_live_prefix *live_prefix_next(struct kasumi_live_prefix *prefix)
+static struct kasumi_live_prefix *
+live_prefix_next(struct kasumi_live_prefix *prefix)
 {
 	struct rb_node *node = rb_next(&prefix->node);
 
@@ -884,10 +918,12 @@ static void live_select_path(struct list_head *replay, const char *path)
 		return;
 	length = strlen(path);
 	for (component = 1; component <= length; component++) {
-		if (component != 1 && component != length && path[component] != '/')
+		if (component != 1 && component != length &&
+		    path[component] != '/')
 			continue;
 		for (prefix = live_prefix_first(path, component, false);
-		     prefix && !strncmp(prefix->path, path, component) && !prefix->path[component];
+		     prefix && !strncmp(prefix->path, path, component) &&
+		     !prefix->path[component];
 		     prefix = live_prefix_next(prefix))
 			live_select_rule(prefix->rule, replay);
 	}
@@ -896,21 +932,24 @@ static void live_select_path(struct list_head *replay, const char *path)
 	     (length == 1 || prefix->path[length] == '/');
 	     prefix = live_prefix_next(prefix))
 		live_select_rule(prefix->rule, replay);
-	kasumi_rule_dependencies(path, kasumi_rules_generation(), live_select_materialized, replay);
+	kasumi_rule_dependencies(path, kasumi_rules_generation(),
+				 live_select_materialized, replay);
 }
 
-static int live_replay_order(void *unused,
-	const struct list_head *left, const struct list_head *right)
+static int live_replay_order(void *unused, const struct list_head *left,
+			     const struct list_head *right)
 {
-	const struct kasumi_live_rule *a = container_of(left, struct kasumi_live_rule, replay);
-	const struct kasumi_live_rule *b = container_of(right, struct kasumi_live_rule, replay);
+	const struct kasumi_live_rule *a =
+	    container_of(left, struct kasumi_live_rule, replay);
+	const struct kasumi_live_rule *b =
+	    container_of(right, struct kasumi_live_rule, replay);
 
 	(void)unused;
 	return a->sequence > b->sequence;
 }
 
-static int live_replay_order_legacy(void *unused,
-	struct list_head *left, struct list_head *right)
+static int live_replay_order_legacy(void *unused, struct list_head *left,
+				    struct list_head *right)
 {
 	return live_replay_order(unused, left, right);
 }
@@ -920,27 +959,31 @@ static bool live_select_dependencies(struct list_head *replay)
 	struct kasumi_live_rule *rule, *xattr;
 	bool xattrs = false;
 
-	/* Appending newly discovered rules extends this walk to a fixed point. */
-	list_for_each_entry(rule, replay, replay) {
+	/* Appending newly discovered rules extends this walk to a fixed point.
+	 */
+	list_for_each_entry (rule, replay, replay) {
 		struct kasumi_rule_lifetime *life;
 
 		live_select_path(replay, rule->visible_absolute);
 		live_select_path(replay, rule->visible_canonical);
-		list_for_each_entry(life, &rule->materialized, live_node)
+		list_for_each_entry (life, &rule->materialized, live_node)
 			live_select_path(replay, live_materialized_path(life));
 		if (rule->command == KSM_IOC_HIDE_OVERLAY_XATTRS && !xattrs) {
 			xattrs = true;
-			list_for_each_entry(xattr, &live_xattrs, xattr)
+			list_for_each_entry (xattr, &live_xattrs, xattr)
 				live_select_rule(xattr, replay);
 		}
 	}
-	/* Android backports the const comparator independently of kernel version.
-	 * Select the actual declared ABI so indirect CFI checks see the right type.
+	/* Android backports the const comparator independently of kernel
+	 * version. Select the actual declared ABI so indirect CFI checks see
+	 * the right type.
 	 */
-	list_sort(NULL, replay, __builtin_choose_expr(
-		__same_type(typeof(&list_sort),
-			    void (*)(void *, struct list_head *, typeof(&live_replay_order))),
-		live_replay_order, live_replay_order_legacy));
+	list_sort(NULL, replay,
+		  __builtin_choose_expr(
+		      __same_type(typeof(&list_sort),
+				  void (*)(void *, struct list_head *,
+					   typeof(&live_replay_order))),
+		      live_replay_order, live_replay_order_legacy));
 	return xattrs;
 }
 
@@ -950,13 +993,14 @@ static int live_clear_rule(struct kasumi_live_rule *rule)
 	u64 generation = kasumi_batch_generation();
 	int error;
 
-	list_for_each_entry(life, &rule->materialized, live_node) {
+	list_for_each_entry (life, &rule->materialized, live_node) {
 		const char *path = live_materialized_path(life);
 
 		if (!path || !kasumi_rule_visible(life, generation))
 			continue;
 		if (life->batch_store != KASUMI_BATCH_MERGE) {
-			error = kasumi_dirhijack_batch_del(kasumi_batch_dir(), path);
+			error = kasumi_dirhijack_batch_del(kasumi_batch_dir(),
+							   path);
 			if (error && error != -ENOENT)
 				return error;
 		}
@@ -971,13 +1015,14 @@ static void live_prune_rule(struct kasumi_live_rule *rule)
 {
 	struct kasumi_rule_lifetime *life;
 
-	list_for_each_entry(life, &rule->materialized, live_node) {
+	list_for_each_entry (life, &rule->materialized, live_node) {
 		const char *path = live_materialized_path(life);
 
 		if (!path)
 			continue;
 		if (life->batch_store == KASUMI_BATCH_MERGE) {
-			struct kasumi_merge_entry *merge = container_of(life, struct kasumi_merge_entry, life);
+			struct kasumi_merge_entry *merge =
+			    container_of(life, struct kasumi_merge_entry, life);
 
 			kasumi_prune_inject_dir(path);
 			if (merge->resolved_src)
@@ -1005,10 +1050,10 @@ static int live_rebuild(void)
 	spin_unlock_irqrestore(&live_dirty_lock, flags);
 	all = scope_epoch != live_scope_applied;
 	if (all) {
-		list_for_each_entry(rule, &live_rules, node)
+		list_for_each_entry (rule, &live_rules, node)
 			live_select_rule(rule, &replay);
 	} else {
-		list_for_each_entry(rule, &pending, dirty)
+		list_for_each_entry (rule, &pending, dirty)
 			live_select_rule(rule, &replay);
 	}
 	if (list_empty(&replay))
@@ -1025,7 +1070,7 @@ static int live_rebuild(void)
 		if (xattrs)
 			error = kasumi_batch_clear_xattrs();
 		if (!error) {
-			list_for_each_entry(rule, &replay, replay) {
+			list_for_each_entry (rule, &replay, replay) {
 				error = live_clear_rule(rule);
 				if (error)
 					break;
@@ -1033,7 +1078,7 @@ static int live_rebuild(void)
 		}
 	}
 	if (!error) {
-		list_for_each_entry(rule, &replay, replay) {
+		list_for_each_entry (rule, &replay, replay) {
 			error = live_replay_rule(rule);
 			if (error)
 				break;
@@ -1041,7 +1086,7 @@ static int live_rebuild(void)
 		}
 	}
 	if (!error && !all) {
-		list_for_each_entry(rule, &replay, replay)
+		list_for_each_entry (rule, &replay, replay)
 			live_prune_rule(rule);
 	}
 	if (!error && epoch != atomic64_read(&live_dirty))
@@ -1050,10 +1095,11 @@ static int live_rebuild(void)
 	if (!error && all)
 		live_scope_applied = scope_epoch;
 restore:
-	list_for_each_entry_safe(rule, next, &replay, replay)
+	list_for_each_entry_safe (rule, next, &replay, replay)
 		list_del_init(&rule->replay);
 	/* Failed transactions retain their original rule references and queue
-	 * membership. A later event retries without allocating in the callback. */
+	 * membership. A later event retries without allocating in the callback.
+	 */
 	spin_lock_irqsave(&live_dirty_lock, flags);
 	list_splice_tail_init(&pending, &live_dirty_rules);
 	spin_unlock_irqrestore(&live_dirty_lock, flags);
@@ -1070,7 +1116,7 @@ static void live_worker(struct work_struct *work)
 	if (!live_running || list_empty(&live_rules))
 		goto out;
 	epoch = atomic64_read(&live_dirty);
-	list_for_each_entry(scope, &live_scopes, node) {
+	list_for_each_entry (scope, &live_scopes, node) {
 		error = kasumi_hide_events_ack(&scope->events);
 		if (error < 0)
 			goto done;
@@ -1082,8 +1128,9 @@ static void live_worker(struct work_struct *work)
 	}
 done:
 	WRITE_ONCE(live_error, error);
-	/* A later event retries a failed generation. Only events arriving during
-	 * this attempt schedule another run, so ENOMEM cannot cause a busy loop. */
+	/* A later event retries a failed generation. Only events arriving
+	 * during this attempt schedule another run, so ENOMEM cannot cause a
+	 * busy loop. */
 	if (epoch != atomic64_read(&live_dirty))
 		queue_work(live_workqueue, &live_work);
 out:
@@ -1109,7 +1156,7 @@ void kasumi_live_rules_clear(void)
 {
 	struct kasumi_live_rule *rule, *next;
 
-	list_for_each_entry_safe(rule, next, &live_rules, node) {
+	list_for_each_entry_safe (rule, next, &live_rules, node) {
 		list_del(&rule->node);
 		hash_del(&rule->hash);
 		live_rule_free(rule);
@@ -1141,7 +1188,7 @@ void kasumi_live_rules_stop(void)
 
 	mutex_lock(&kasumi_mutation_mutex);
 	WRITE_ONCE(live_running, false);
-	list_for_each_entry(scope, &live_scopes, node)
+	list_for_each_entry (scope, &live_scopes, node)
 		kasumi_hide_events_stop(&scope->events);
 	mutex_unlock(&kasumi_mutation_mutex);
 	if (live_workqueue)
@@ -1153,7 +1200,7 @@ bool kasumi_live_rules_quiesce(void)
 	struct kasumi_live_scope *scope;
 
 	WRITE_ONCE(live_running, false);
-	list_for_each_entry(scope, &live_scopes, node)
+	list_for_each_entry (scope, &live_scopes, node)
 		kasumi_hide_events_stop(&scope->events);
 	if (!live_workqueue)
 		return true;

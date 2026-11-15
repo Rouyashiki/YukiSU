@@ -25,13 +25,15 @@ struct kasumi_io_unlink_guard {
 static DEFINE_SPINLOCK(kasumi_io_unlink_guard_lock);
 static HLIST_HEAD(kasumi_io_unlink_guards);
 
-static bool kasumi_io_unlink_guarded(struct fsnotify_mark_connector __rcu **object)
+static bool
+kasumi_io_unlink_guarded(struct fsnotify_mark_connector __rcu **object)
 {
 	struct kasumi_io_unlink_guard *guard;
 	bool found = false;
 
 	spin_lock(&kasumi_io_unlink_guard_lock);
-	hlist_for_each_entry(guard, &kasumi_io_unlink_guards, node) {
+	hlist_for_each_entry(guard, &kasumi_io_unlink_guards, node)
+	{
 		if (guard->task == current && guard->object == object) {
 			found = true;
 			break;
@@ -44,7 +46,8 @@ static bool kasumi_io_unlink_guarded(struct fsnotify_mark_connector __rcu **obje
 static void KASUMI_NOCFI kasumi_io_notify_native_delete(struct inode *inode)
 {
 	struct kasumi_io_unlink_guard guard = {
-		.task = current, .object = &inode->i_fsnotify_marks,
+	    .task = current,
+	    .object = &inode->i_fsnotify_marks,
 	};
 
 	spin_lock(&kasumi_io_unlink_guard_lock);
@@ -61,13 +64,15 @@ static void KASUMI_NOCFI kasumi_io_notify_native_delete(struct inode *inode)
  * user marks already received DELETE_SELF and retain their native teardown.
  * The owner reference pins keep->connector throughout this traversal.
  */
-static void KASUMI_NOCFI kasumi_io_notify_clear_others(struct fsnotify_mark *keep)
+static void KASUMI_NOCFI
+kasumi_io_notify_clear_others(struct fsnotify_mark *keep)
 {
 	struct fsnotify_mark_connector *connector = keep->connector;
 	struct fsnotify_mark *mark, *previous = NULL;
 
 	spin_lock(&connector->lock);
-	hlist_for_each_entry(mark, &connector->list, obj_list) {
+	hlist_for_each_entry(mark, &connector->list, obj_list)
+	{
 		if (mark == keep)
 			continue;
 		kasumi_io_get_mark(mark);
@@ -99,7 +104,8 @@ static void KASUMI_NOCFI kasumi_io_notify_delete_inode(struct inode *inode)
 		wake_up_all(&kasumi_io_unlink_wait);
 }
 
-static int kasumi_io_notify_delete_pre(struct kprobe *probe, struct pt_regs *regs)
+static int kasumi_io_notify_delete_pre(struct kprobe *probe,
+				       struct pt_regs *regs)
 {
 #ifdef CONFIG_ARM64
 	struct fsnotify_mark_connector __rcu **object = (void *)regs->regs[0];
@@ -122,7 +128,8 @@ static int kasumi_io_notify_delete_pre(struct kprobe *probe, struct pt_regs *reg
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 			inode = connector->obj;
 #else
-			inode = container_of(connector->obj, struct inode, i_fsnotify_marks);
+			inode = container_of(connector->obj, struct inode,
+					     i_fsnotify_marks);
 #endif
 		}
 		spin_unlock(&connector->lock);
@@ -137,7 +144,8 @@ static int kasumi_io_notify_delete_pre(struct kprobe *probe, struct pt_regs *reg
 		return 0;
 	atomic_inc(&kasumi_io_unlink_active);
 	regs->regs[0] = (unsigned long)inode;
-	instruction_pointer_set(regs, (unsigned long)kasumi_io_notify_delete_inode);
+	instruction_pointer_set(regs,
+				(unsigned long)kasumi_io_notify_delete_inode);
 	return 1;
 #else
 	(void)probe;
@@ -147,8 +155,8 @@ static int kasumi_io_notify_delete_pre(struct kprobe *probe, struct pt_regs *reg
 }
 
 static struct kprobe kasumi_io_unlink_probe = {
-	.symbol_name = "fsnotify_destroy_marks",
-	.pre_handler = kasumi_io_notify_delete_pre,
+    .symbol_name = "fsnotify_destroy_marks",
+    .pre_handler = kasumi_io_notify_delete_pre,
 };
 
 int kasumi_io_notify_unlink_init(void)
@@ -159,12 +167,16 @@ int kasumi_io_notify_unlink_init(void)
 		return 0;
 	if (!IS_ENABLED(CONFIG_ARM64))
 		return -EOPNOTSUPP;
-	kasumi_io_destroy_marks = (void *)kasumi_lookup_callable_quiet("fsnotify_destroy_marks");
-	kasumi_io_get_mark = (void *)kasumi_lookup_callable_quiet("fsnotify_get_mark");
-	kasumi_io_unlink_barrier = (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
-	kasumi_io_mark_srcu = (void *)kasumi_lookup_name_quiet("fsnotify_mark_srcu");
-	if (!kasumi_io_destroy_marks || !kasumi_io_get_mark || !kasumi_io_unlink_barrier ||
-	    !kasumi_io_mark_srcu)
+	kasumi_io_destroy_marks =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_destroy_marks");
+	kasumi_io_get_mark =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_get_mark");
+	kasumi_io_unlink_barrier =
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	kasumi_io_mark_srcu =
+	    (void *)kasumi_lookup_name_quiet("fsnotify_mark_srcu");
+	if (!kasumi_io_destroy_marks || !kasumi_io_get_mark ||
+	    !kasumi_io_unlink_barrier || !kasumi_io_mark_srcu)
 		return -EOPNOTSUPP;
 	kasumi_io_unlink_probe.addr = NULL;
 	error = register_kprobe(&kasumi_io_unlink_probe);
@@ -179,6 +191,7 @@ void KASUMI_NOCFI kasumi_io_notify_unlink_exit(void)
 		return;
 	unregister_kprobe(&kasumi_io_unlink_probe);
 	kasumi_io_unlink_registered = false;
-	wait_event(kasumi_io_unlink_wait, !atomic_read(&kasumi_io_unlink_active));
+	wait_event(kasumi_io_unlink_wait,
+		   !atomic_read(&kasumi_io_unlink_active));
 	kasumi_io_unlink_barrier();
 }

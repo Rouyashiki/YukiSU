@@ -56,27 +56,32 @@ static u32 kasumi_identity_hash(dev_t dev, u64 ino, const char *path)
 	return jhash_3words(dev, ino, ino >> 32, 0x696e6f);
 }
 
-static struct kasumi_inode_identity *
-kasumi_identity_find(dev_t dev, u64 ino, const char *path, u32 hash, bool acquire)
+static struct kasumi_inode_identity *kasumi_identity_find(dev_t dev, u64 ino,
+							  const char *path,
+							  u32 hash,
+							  bool acquire)
 {
 	struct kasumi_inode_identity *identity;
 
-	hash_for_each_possible_rcu(kasumi_identities, identity, node, hash) {
+	hash_for_each_possible_rcu(kasumi_identities, identity, node, hash)
+	{
 		if (!READ_ONCE(identity->published) || identity->hash != hash ||
 		    identity->virtual_path != !!path)
 			continue;
-		if (path ? strcmp(identity->path, path) != 0 :
-		    identity->source_dev != dev || identity->source_ino != ino)
+		if (path ? strcmp(identity->path, path) != 0
+			 : identity->source_dev != dev ||
+			       identity->source_ino != ino)
 			continue;
-		if (acquire ? refcount_inc_not_zero(&identity->references) :
-		    refcount_read(&identity->references) != 0)
+		if (acquire ? refcount_inc_not_zero(&identity->references)
+			    : refcount_read(&identity->references) != 0)
 			return identity;
 	}
 	return NULL;
 }
 
 static int kasumi_identity_acquire(dev_t dev, u64 ino, const char *path,
-				   gfp_t flags, struct kasumi_inode_identity **result)
+				   gfp_t flags,
+				   struct kasumi_inode_identity **result)
 {
 	struct kasumi_inode_identity *identity, *candidate;
 	size_t length = path ? strlen(path) + 1 : 0;
@@ -169,8 +174,9 @@ int kasumi_identity_source_reserve(struct kasumi_inode_identity **result)
 	return 0;
 }
 
-struct kasumi_inode_identity *kasumi_identity_source_bind(
-	struct kasumi_inode_identity *reservation, dev_t dev, u64 ino)
+struct kasumi_inode_identity *
+kasumi_identity_source_bind(struct kasumi_inode_identity *reservation,
+			    dev_t dev, u64 ino)
 {
 	struct kasumi_inode_identity *existing;
 	unsigned long flags;
@@ -218,9 +224,10 @@ void kasumi_identity_put(struct kasumi_inode_identity *identity)
 	kfree_rcu(identity, rcu);
 }
 
-/* Domains retain numbers across dcache reclaim without pinning source objects. */
+/* Domains retain numbers across dcache reclaim without pinning source objects.
+ */
 int kasumi_identity_domain_create(struct kasumi_inode_identity *root,
-	struct kasumi_identity_domain **result)
+				  struct kasumi_identity_domain **result)
 {
 	struct kasumi_identity_domain *domain, *candidate;
 	unsigned long flags;
@@ -246,8 +253,8 @@ int kasumi_identity_domain_create(struct kasumi_inode_identity *root,
 	return 0;
 }
 
-struct kasumi_identity_domain *kasumi_identity_domain_find(
-	struct kasumi_inode_identity *identity)
+struct kasumi_identity_domain *
+kasumi_identity_domain_find(struct kasumi_inode_identity *identity)
 {
 	struct kasumi_identity_domain *domain;
 	struct kasumi_identity_hold *hold;
@@ -258,7 +265,7 @@ struct kasumi_identity_domain *kasumi_identity_domain_find(
 	if (domain && !refcount_inc_not_zero(&domain->references))
 		domain = NULL;
 	if (!domain) {
-		list_for_each_entry(hold, &identity->owners, owner) {
+		list_for_each_entry (hold, &identity->owners, owner) {
 			if (refcount_inc_not_zero(&hold->domain->references)) {
 				domain = hold->domain;
 				break;
@@ -279,7 +286,7 @@ static void kasumi_identity_holds_free(struct list_head *holds)
 {
 	struct kasumi_identity_hold *hold, *next;
 
-	list_for_each_entry_safe(hold, next, holds, owner) {
+	list_for_each_entry_safe (hold, next, holds, owner) {
 		list_del(&hold->owner);
 		kasumi_identity_put(hold->identity);
 		kfree(hold);
@@ -309,8 +316,10 @@ void kasumi_identity_domain_put(struct kasumi_identity_domain *domain)
 	kfree(domain);
 }
 
-static bool kasumi_identity_domain_attach(struct kasumi_identity_domain *domain,
-	struct kasumi_inode_identity *identity, struct kasumi_identity_hold *hold)
+static bool
+kasumi_identity_domain_attach(struct kasumi_identity_domain *domain,
+			      struct kasumi_inode_identity *identity,
+			      struct kasumi_identity_hold *hold)
 {
 	struct rb_node **link = &domain->children.rb_node, *parent = NULL;
 	struct kasumi_identity_hold *existing;
@@ -320,8 +329,9 @@ static bool kasumi_identity_domain_attach(struct kasumi_identity_domain *domain,
 		existing = rb_entry(parent, struct kasumi_identity_hold, node);
 		if (identity->ino == existing->identity->ino)
 			return true;
-		link = identity->ino < existing->identity->ino ?
-			&parent->rb_left : &parent->rb_right;
+		link = identity->ino < existing->identity->ino
+			   ? &parent->rb_left
+			   : &parent->rb_right;
 	}
 	if (hold) {
 		hold->domain = domain;
@@ -335,7 +345,8 @@ static bool kasumi_identity_domain_attach(struct kasumi_identity_domain *domain,
 }
 
 int kasumi_identity_domain_source_get(struct kasumi_identity_domain *domain,
-	dev_t dev, u64 ino, gfp_t allocation, struct kasumi_inode_identity **result)
+				      dev_t dev, u64 ino, gfp_t allocation,
+				      struct kasumi_inode_identity **result)
 {
 	struct kasumi_inode_identity *identity;
 	struct kasumi_identity_hold *hold;
@@ -375,7 +386,7 @@ fail:
 
 /* Reserve the domain membership before a source mutation can commit. */
 int kasumi_identity_domain_reserve(struct kasumi_identity_domain *domain,
-	struct kasumi_identity_hold **result)
+				   struct kasumi_identity_hold **result)
 {
 	struct kasumi_identity_hold *hold;
 
@@ -400,7 +411,7 @@ void kasumi_identity_hold_free(struct kasumi_identity_hold *hold)
 }
 
 void kasumi_identity_domain_commit(struct kasumi_identity_hold *hold,
-	struct kasumi_inode_identity *identity)
+				   struct kasumi_inode_identity *identity)
 {
 	struct kasumi_identity_domain *domain;
 	unsigned long flags;
@@ -418,7 +429,7 @@ void kasumi_identity_domain_commit(struct kasumi_identity_hold *hold,
 }
 
 static void kasumi_identity_withdraw(struct kasumi_inode_identity *identity,
-	struct list_head *discard)
+				     struct list_head *discard)
 {
 	struct kasumi_identity_hold *hold, *next;
 
@@ -426,7 +437,7 @@ static void kasumi_identity_withdraw(struct kasumi_inode_identity *identity,
 	identity->retired = true;
 	hash_del_rcu(&identity->node);
 	atomic_dec(&kasumi_identity_count);
-	list_for_each_entry_safe(hold, next, &identity->owners, owner) {
+	list_for_each_entry_safe (hold, next, &identity->owners, owner) {
 		rb_erase(&hold->node, &hold->domain->children);
 		list_move(&hold->owner, discard);
 	}
@@ -441,8 +452,8 @@ void kasumi_identity_source_evict(dev_t dev, u64 ino)
 
 	spin_lock_irqsave(&kasumi_identity_lock, flags);
 	rcu_read_lock();
-	identity = kasumi_identity_find(dev, ino, NULL,
-		kasumi_identity_hash(dev, ino, NULL), true);
+	identity = kasumi_identity_find(
+	    dev, ino, NULL, kasumi_identity_hash(dev, ino, NULL), true);
 	rcu_read_unlock();
 	if (identity)
 		kasumi_identity_withdraw(identity, &discard);
@@ -460,7 +471,8 @@ void kasumi_identity_source_unmount(dev_t dev)
 	LIST_HEAD(discard);
 
 	spin_lock_irqsave(&kasumi_identity_lock, flags);
-	hash_for_each_safe(kasumi_identities, bucket, next, identity, node) {
+	hash_for_each_safe(kasumi_identities, bucket, next, identity, node)
+	{
 		if (identity->virtual_path || identity->source_dev != dev ||
 		    !refcount_inc_not_zero(&identity->references))
 			continue;
@@ -482,14 +494,15 @@ unsigned long kasumi_identity_ino(const struct kasumi_inode_identity *identity)
 	return identity ? identity->ino : 0;
 }
 
-static unsigned long kasumi_identity_lookup(dev_t dev, u64 ino, const char *path)
+static unsigned long kasumi_identity_lookup(dev_t dev, u64 ino,
+					    const char *path)
 {
 	struct kasumi_inode_identity *identity;
 	unsigned long result = 0;
 
 	rcu_read_lock();
-	identity = kasumi_identity_find(dev, ino, path,
-				       kasumi_identity_hash(dev, ino, path), false);
+	identity = kasumi_identity_find(
+	    dev, ino, path, kasumi_identity_hash(dev, ino, path), false);
 	if (identity)
 		result = identity->ino;
 	rcu_read_unlock();

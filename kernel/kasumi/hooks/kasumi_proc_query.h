@@ -7,28 +7,30 @@
 #include <linux/mm.h>
 #include <linux/uaccess.h>
 
-#define KASUMI_QUERY_VMA_FLAGS (PROCMAP_QUERY_VMA_READABLE | \
-	PROCMAP_QUERY_VMA_WRITABLE | PROCMAP_QUERY_VMA_EXECUTABLE | \
-	PROCMAP_QUERY_VMA_SHARED)
-#define KASUMI_QUERY_FLAGS (KASUMI_QUERY_VMA_FLAGS | \
-	PROCMAP_QUERY_COVERING_OR_NEXT_VMA | PROCMAP_QUERY_FILE_BACKED_VMA)
+#define KASUMI_QUERY_VMA_FLAGS                                                 \
+	(PROCMAP_QUERY_VMA_READABLE | PROCMAP_QUERY_VMA_WRITABLE |             \
+	 PROCMAP_QUERY_VMA_EXECUTABLE | PROCMAP_QUERY_VMA_SHARED)
+#define KASUMI_QUERY_FLAGS                                                     \
+	(KASUMI_QUERY_VMA_FLAGS | PROCMAP_QUERY_COVERING_OR_NEXT_VMA |         \
+	 PROCMAP_QUERY_FILE_BACKED_VMA)
 
 static struct kprobe kasumi_seq_query_probe;
 static bool kasumi_seq_query_registered;
-static long (*kasumi_seq_query_original)(struct file *, unsigned int, unsigned long);
+static long (*kasumi_seq_query_original)(struct file *, unsigned int,
+					 unsigned long);
 static void (*kasumi_query_name)(struct vm_area_struct *, const struct path **,
-				const char **, const char **);
+				 const char **, const char **);
 static int (*kasumi_query_build_id)(struct file *, unsigned char *, __u32 *);
 static int (*kasumi_query_build_id_vma)(struct vm_area_struct *,
 					unsigned char *, __u32 *);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 static struct vm_area_struct *(*kasumi_query_match)(
-	struct proc_maps_locking_ctx *, unsigned long, u32);
+    struct proc_maps_locking_ctx *, unsigned long, u32);
 static void (*kasumi_query_unlock)(struct proc_maps_locking_ctx *);
 #else
 static int (*kasumi_query_lock)(struct mm_struct *);
-static struct vm_area_struct *(*kasumi_query_match)(
-	struct mm_struct *, unsigned long, u32);
+static struct vm_area_struct *(*kasumi_query_match)(struct mm_struct *,
+						    unsigned long, u32);
 static void (*kasumi_query_unlock)(struct mm_struct *, struct vm_area_struct *);
 #endif
 
@@ -41,7 +43,7 @@ static int kasumi_query_lock_mm(struct mm_struct *mm)
 
 static KASUMI_NOCFI int
 kasumi_query_execute(struct file *file, void __user *argument,
-		    const struct kasumi_maps_snapshot *snapshot)
+		     const struct kasumi_maps_snapshot *snapshot)
 {
 	struct seq_file *seq = file->private_data;
 	struct proc_maps_private *private = seq->private;
@@ -67,7 +69,8 @@ kasumi_query_execute(struct file *file, void __user *argument,
 		return -E2BIG;
 	if (user_size < offsetofend(struct procmap_query, query_addr))
 		return -EINVAL;
-	error = copy_struct_from_user(&query, sizeof(query), argument, user_size);
+	error =
+	    copy_struct_from_user(&query, sizeof(query), argument, user_size);
 	if (error)
 		return error;
 	if (query.query_flags & ~KASUMI_QUERY_FLAGS)
@@ -133,8 +136,8 @@ kasumi_query_execute(struct file *file, void __user *argument,
 		query.dev_minor = 0;
 		query.inode = 0;
 	}
-	rule = kasumi_maps_rules_lookup(snapshot,
-		MKDEV(query.dev_major, query.dev_minor), query.inode);
+	rule = kasumi_maps_rules_lookup(
+	    snapshot, MKDEV(query.dev_major, query.dev_minor), query.inode);
 	if (rule && (rule->fields & KSM_MAPS_FIELD_DEV)) {
 		query.dev_major = MAJOR(rule->spoofed_dev);
 		query.dev_minor = MINOR(rule->spoofed_dev);
@@ -169,8 +172,9 @@ kasumi_query_execute(struct file *file, void __user *argument,
 				}
 				length = name_buffer + capacity - name;
 			} else if (name || name_format) {
-				length = 1 + snprintf(name_buffer, capacity,
-						      name_format ?: "%s", name);
+				length =
+				    1 + snprintf(name_buffer, capacity,
+						 name_format ?: "%s", name);
 				name = name_buffer;
 			}
 		}
@@ -225,7 +229,8 @@ unlock:
 		error = -EFAULT;
 		goto finish;
 	}
-	if (copy_to_user(argument, &query, min_t(size_t, sizeof(query), user_size)))
+	if (copy_to_user(argument, &query,
+			 min_t(size_t, sizeof(query), user_size)))
 		error = -EFAULT;
 finish:
 	if (mapped_file)
@@ -234,8 +239,9 @@ finish:
 	return error;
 }
 
-static KASUMI_NOCFI long kasumi_seq_query(struct file *file, unsigned int command,
-					unsigned long argument)
+static KASUMI_NOCFI long kasumi_seq_query(struct file *file,
+					  unsigned int command,
+					  unsigned long argument)
 {
 	struct kasumi_seq_guard guard;
 	struct kasumi_maps_snapshot *snapshot = NULL;
@@ -246,7 +252,8 @@ static KASUMI_NOCFI long kasumi_seq_query(struct file *file, unsigned int comman
 	kasumi_seq_guard_enter(&guard, &kasumi_seq_query_probe);
 	for (attempt = 0; attempt < 3; attempt++) {
 		generation = kasumi_rules_generation();
-		if (!READ_ONCE(kasumi_seq_stopping) && kasumi_config_enabled() &&
+		if (!READ_ONCE(kasumi_seq_stopping) &&
+		    kasumi_config_enabled() &&
 		    (kasumi_config_features() & KSM_FEATURE_MAPS_SPOOF) &&
 		    kasumi_policy_current_scope() == KASUMI_POLICY_SCOPE_SPOOF)
 			snapshot = kasumi_maps_rules_get();
@@ -258,7 +265,8 @@ static KASUMI_NOCFI long kasumi_seq_query(struct file *file, unsigned int comman
 	if (attempt == 3)
 		goto out;
 	if (snapshot)
-		result = kasumi_query_execute(file, (void __user *)argument, snapshot);
+		result = kasumi_query_execute(file, (void __user *)argument,
+					      snapshot);
 	else
 		result = kasumi_seq_query_original(file, command, argument);
 	kasumi_maps_rules_put(snapshot);
@@ -270,20 +278,21 @@ out:
 static int kasumi_query_resolve(void)
 {
 	kasumi_seq_query_original =
-		(void *)kasumi_lookup_callable_quiet("procfs_procmap_ioctl");
-	kasumi_query_name = (void *)kasumi_lookup_callable_quiet("get_vma_name");
+	    (void *)kasumi_lookup_callable_quiet("procfs_procmap_ioctl");
+	kasumi_query_name =
+	    (void *)kasumi_lookup_callable_quiet("get_vma_name");
 	kasumi_query_build_id =
-		(void *)kasumi_lookup_callable_quiet("build_id_parse_file");
+	    (void *)kasumi_lookup_callable_quiet("build_id_parse_file");
 	if (!kasumi_query_build_id)
 		kasumi_query_build_id_vma =
 		    (void *)kasumi_lookup_callable_quiet("build_id_parse");
 	kasumi_query_match =
-		(void *)kasumi_lookup_callable_quiet("query_matching_vma");
+	    (void *)kasumi_lookup_callable_quiet("query_matching_vma");
 	kasumi_query_unlock =
-		(void *)kasumi_lookup_callable_quiet("query_vma_teardown");
+	    (void *)kasumi_lookup_callable_quiet("query_vma_teardown");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
 	kasumi_query_lock =
-		(void *)kasumi_lookup_callable_quiet("query_vma_setup");
+	    (void *)kasumi_lookup_callable_quiet("query_vma_setup");
 	if (!kasumi_query_lock)
 		kasumi_query_lock = kasumi_query_lock_mm;
 #endif

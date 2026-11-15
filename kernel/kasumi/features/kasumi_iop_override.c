@@ -42,18 +42,18 @@ static struct kasumi_iop_meta *kasumi_iop_lookup_rcu(struct inode *inode)
 {
 	struct kasumi_iop_meta *meta;
 
-	hash_for_each_possible_rcu(kasumi_iop_table, meta, node, (unsigned long)inode)
-		if (meta->inode == inode)
-			return meta;
+	hash_for_each_possible_rcu(kasumi_iop_table, meta, node,
+				   (unsigned long)inode) if (meta->inode ==
+							     inode) return meta;
 	return NULL;
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
 KASUMI_NOCFI static int kasumi_shadow_getattr(struct mnt_idmap *idmap,
-					  const struct path *path,
-					  struct kstat *stat,
-					  u32 request_mask,
-					  unsigned int query_flags)
+					      const struct path *path,
+					      struct kstat *stat,
+					      u32 request_mask,
+					      unsigned int query_flags)
 {
 	struct inode *inode = d_inode(path->dentry);
 	struct kasumi_iop_meta *m;
@@ -71,7 +71,8 @@ KASUMI_NOCFI static int kasumi_shadow_getattr(struct mnt_idmap *idmap,
 	rcu_read_unlock();
 
 	if (orig && orig->getattr)
-		ret = orig->getattr(idmap, path, stat, request_mask, query_flags);
+		ret =
+		    orig->getattr(idmap, path, stat, request_mask, query_flags);
 	else {
 		generic_fillattr(idmap, request_mask, inode, stat);
 		ret = 0;
@@ -89,10 +90,10 @@ KASUMI_NOCFI static int kasumi_shadow_getattr(struct mnt_idmap *idmap,
 }
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0))
 KASUMI_NOCFI static int kasumi_shadow_getattr(struct user_namespace *userns,
-					  const struct path *path,
-					  struct kstat *stat,
-					  u32 request_mask,
-					  unsigned int query_flags)
+					      const struct path *path,
+					      struct kstat *stat,
+					      u32 request_mask,
+					      unsigned int query_flags)
 {
 	struct inode *inode = d_inode(path->dentry);
 	struct kasumi_iop_meta *m;
@@ -110,7 +111,8 @@ KASUMI_NOCFI static int kasumi_shadow_getattr(struct user_namespace *userns,
 	rcu_read_unlock();
 
 	if (orig && orig->getattr)
-		ret = orig->getattr(userns, path, stat, request_mask, query_flags);
+		ret = orig->getattr(userns, path, stat, request_mask,
+				    query_flags);
 	else {
 		generic_fillattr(userns, inode, stat);
 		ret = 0;
@@ -128,9 +130,9 @@ KASUMI_NOCFI static int kasumi_shadow_getattr(struct user_namespace *userns,
 }
 #else
 KASUMI_NOCFI static int kasumi_shadow_getattr(const struct path *path,
-					  struct kstat *stat,
-					  u32 request_mask,
-					  unsigned int query_flags)
+					      struct kstat *stat,
+					      u32 request_mask,
+					      unsigned int query_flags)
 {
 	struct inode *inode = d_inode(path->dentry);
 	struct kasumi_iop_meta *m;
@@ -169,12 +171,14 @@ KASUMI_NOCFI static int kasumi_shadow_getattr(const struct path *path,
 static int kasumi_iop_publish(struct kasumi_iop_meta *meta)
 {
 	int ret = kasumi_dirhijack_replace_iops(meta->inode, meta->orig_iop,
-					       &meta->shadow_iop);
+						&meta->shadow_iop);
 
 	if (!ret) {
 		meta->published = true;
-		set_bit(AS_FLAGS_KASUMI_IOP_INSTALLED, &meta->inode->i_mapping->flags);
-		set_bit(AS_FLAGS_KASUMI_SPOOF_KSTAT, &meta->inode->i_mapping->flags);
+		set_bit(AS_FLAGS_KASUMI_IOP_INSTALLED,
+			&meta->inode->i_mapping->flags);
+		set_bit(AS_FLAGS_KASUMI_SPOOF_KSTAT,
+			&meta->inode->i_mapping->flags);
 	}
 	return ret;
 }
@@ -185,11 +189,14 @@ static int kasumi_iop_withdraw(struct kasumi_iop_meta *meta)
 
 	if (!meta->published)
 		return 0;
-	ret = kasumi_dirhijack_replace_iops(meta->inode, &meta->shadow_iop, meta->orig_iop);
+	ret = kasumi_dirhijack_replace_iops(meta->inode, &meta->shadow_iop,
+					    meta->orig_iop);
 	if (!ret) {
 		meta->published = false;
-		clear_bit(AS_FLAGS_KASUMI_IOP_INSTALLED, &meta->inode->i_mapping->flags);
-		clear_bit(AS_FLAGS_KASUMI_SPOOF_KSTAT, &meta->inode->i_mapping->flags);
+		clear_bit(AS_FLAGS_KASUMI_IOP_INSTALLED,
+			  &meta->inode->i_mapping->flags);
+		clear_bit(AS_FLAGS_KASUMI_SPOOF_KSTAT,
+			  &meta->inode->i_mapping->flags);
 	}
 	return ret;
 }
@@ -201,16 +208,19 @@ static void kasumi_iop_retire_workfn(struct work_struct *work)
 	mutex_lock(&kasumi_iop_quiesce_lock);
 	if (list_empty(&kasumi_iop_retiring))
 		goto unlock;
-	/* Keep the lookup table intact until every stale callback has entered. */
+	/* Keep the lookup table intact until every stale callback has entered.
+	 */
 	synchronize_rcu_tasks();
 	kasumi_dirhijack_synchronize_iops();
-	list_for_each_entry(meta, &kasumi_iop_retiring, retire_node)
-		wait_event(kasumi_iop_quiesce_wait, !atomic_read(&meta->active));
+	list_for_each_entry (meta, &kasumi_iop_retiring, retire_node)
+		wait_event(kasumi_iop_quiesce_wait,
+			   !atomic_read(&meta->active));
 	synchronize_rcu_tasks();
-	list_for_each_entry(meta, &kasumi_iop_retiring, retire_node)
+	list_for_each_entry (meta, &kasumi_iop_retiring, retire_node)
 		hash_del_rcu(&meta->node);
 	synchronize_rcu();
-	list_for_each_entry_safe(meta, next, &kasumi_iop_retiring, retire_node) {
+	list_for_each_entry_safe (meta, next, &kasumi_iop_retiring,
+				  retire_node) {
 		list_del_init(&meta->retire_node);
 		atomic_dec(&kasumi_iop_live);
 		path_put(&meta->retiring_path);
@@ -236,21 +246,24 @@ void kasumi_iop_retire_batch_end(void)
 	mutex_unlock(&kasumi_iop_quiesce_lock);
 }
 
-const struct inode_operations *kasumi_iop_original_iops(const struct inode *inode)
+const struct inode_operations *
+kasumi_iop_original_iops(const struct inode *inode)
 {
 	const struct inode_operations *operations;
 	struct kasumi_iop_meta *meta;
 
 	rcu_read_lock();
 	meta = kasumi_iop_lookup_rcu((struct inode *)inode);
-	operations = meta ? meta->orig_iop : kasumi_dirhijack_original_iops(inode);
+	operations =
+	    meta ? meta->orig_iop : kasumi_dirhijack_original_iops(inode);
 	rcu_read_unlock();
 	return operations;
 }
 
 int kasumi_iop_get(const struct path *path)
 {
-	struct inode *inode = path && path->dentry ? d_inode(path->dentry) : NULL;
+	struct inode *inode =
+	    path && path->dentry ? d_inode(path->dentry) : NULL;
 	struct kasumi_iop_meta *meta;
 	int ret = 0;
 
@@ -272,7 +285,8 @@ int kasumi_iop_get(const struct path *path)
 		if (meta->retiring_path.dentry) {
 			list_del_init(&meta->retire_node);
 			path_put(&meta->retiring_path);
-			memset(&meta->retiring_path, 0, sizeof(meta->retiring_path));
+			memset(&meta->retiring_path, 0,
+			       sizeof(meta->retiring_path));
 		}
 		goto unlock;
 	}
@@ -372,7 +386,8 @@ void kasumi_iop_override_stop_new(void)
 	WRITE_ONCE(kasumi_iop_ready, false);
 	if (kasumi_iop_callbacks_quiesced)
 		goto unlock;
-	hash_for_each(kasumi_iop_table, bucket, meta, node) {
+	hash_for_each(kasumi_iop_table, bucket, meta, node)
+	{
 		if (kasumi_iop_withdraw(meta)) {
 			restored = false;
 			continue;
@@ -386,7 +401,8 @@ void kasumi_iop_override_stop_new(void)
 		goto unlock;
 	synchronize_rcu_tasks();
 	kasumi_dirhijack_synchronize_iops();
-	wait_event(kasumi_iop_quiesce_wait, !atomic_read(&kasumi_iop_active_callbacks));
+	wait_event(kasumi_iop_quiesce_wait,
+		   !atomic_read(&kasumi_iop_active_callbacks));
 	synchronize_rcu_tasks();
 	kasumi_iop_callbacks_quiesced = true;
 unlock:

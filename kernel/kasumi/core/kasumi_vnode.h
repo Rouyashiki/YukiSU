@@ -60,8 +60,8 @@ struct kasumi_vnode_info {
  * the superblock destroy_inode shim calling kasumi_vnode_free_info().
  */
 struct inode *kasumi_vnode_new(struct super_block *sb,
-			       const struct path *source,
-			       umode_t mode, u8 flags);
+			       const struct path *source, umode_t mode,
+			       u8 flags);
 
 /*
  * Allocate a pure-virtual directory inode (KASUMI_VNODE_F_VIRTUAL_DIR) on @sb
@@ -94,7 +94,8 @@ int kasumi_vnode_aio_init(void);
 bool kasumi_vnode_aio_busy(void);
 void kasumi_vnode_aio_exit(void);
 
-/* Return 1 with a pinned source, 0 for an unbacked inode, or a negative error. */
+/* Return 1 with a pinned source, 0 for an unbacked inode, or a negative error.
+ */
 int kasumi_vnode_source_path(const struct dentry *dentry, struct path *source);
 int kasumi_vnode_refresh_label(const struct dentry *dentry);
 

@@ -37,8 +37,8 @@ struct kasumi_view_guard {
 
 static DEFINE_HASHTABLE(kasumi_view_guards, 6);
 static spinlock_t kasumi_view_guard_locks[HASH_SIZE(kasumi_view_guards)] = {
-	[0 ... HASH_SIZE(kasumi_view_guards) - 1] =
-		__SPIN_LOCK_UNLOCKED(kasumi_view_guard_locks),
+    [0 ... HASH_SIZE(kasumi_view_guards) - 1] =
+	__SPIN_LOCK_UNLOCKED(kasumi_view_guard_locks),
 };
 static atomic_t kasumi_view_active = ATOMIC_INIT(0);
 static atomic_t kasumi_xattr_owned = ATOMIC_INIT(0);
@@ -70,8 +70,8 @@ static typeof(vfs_setxattr) *kasumi_view_setxattr_orig;
 static typeof(vfs_removexattr) *kasumi_view_removexattr_orig;
 static typeof(mnt_want_write) *kasumi_view_want_write;
 static typeof(mnt_drop_write) *kasumi_view_drop_write;
-static int (*kasumi_view_xattr_permission)(KASUMI_XATTR_IDMAP_ARG
-	struct inode *, const char *, int);
+static int (*kasumi_view_xattr_permission)(
+    KASUMI_XATTR_IDMAP_ARG struct inode *, const char *, int);
 static typeof(security_inode_getxattr) *kasumi_view_security_get;
 static typeof(security_inode_listxattr) *kasumi_view_security_list;
 static typeof(security_inode_setxattr) *kasumi_view_security_set;
@@ -89,8 +89,8 @@ static bool kasumi_view_statfs_registered;
 
 static bool kasumi_view_guarded(void)
 {
-	spinlock_t *lock = &kasumi_view_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_view_guards))];
+	spinlock_t *lock = &kasumi_view_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_view_guards))];
 	struct kasumi_view_guard *guard;
 	unsigned long flags;
 	bool found = false;
@@ -110,8 +110,8 @@ static bool kasumi_view_guarded(void)
 
 static void kasumi_view_enter(struct kasumi_view_guard *guard)
 {
-	spinlock_t *lock = &kasumi_view_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_view_guards))];
+	spinlock_t *lock = &kasumi_view_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_view_guards))];
 	unsigned long flags;
 
 	guard->task = current;
@@ -122,8 +122,8 @@ static void kasumi_view_enter(struct kasumi_view_guard *guard)
 
 static void kasumi_view_leave(struct kasumi_view_guard *guard)
 {
-	spinlock_t *lock = &kasumi_view_guard_locks[
-		hash_min((unsigned long)guard->task, HASH_BITS(kasumi_view_guards))];
+	spinlock_t *lock = &kasumi_view_guard_locks[hash_min(
+	    (unsigned long)guard->task, HASH_BITS(kasumi_view_guards))];
 	unsigned long flags;
 
 	spin_lock_irqsave(lock, flags);
@@ -156,8 +156,9 @@ static bool kasumi_xattr_target(struct dentry *dentry)
 	return found;
 }
 
-static KASUMI_NOCFI ssize_t kasumi_view_getxattr(KASUMI_XATTR_IDMAP_ARG
-	struct dentry *dentry, const char *name, void *value, size_t size)
+static KASUMI_NOCFI ssize_t
+kasumi_view_getxattr(KASUMI_XATTR_IDMAP_ARG struct dentry *dentry,
+		     const char *name, void *value, size_t size)
 {
 	struct kasumi_view_guard guard;
 	struct kasumi_internal_vfs_guard source_guard;
@@ -167,30 +168,33 @@ static KASUMI_NOCFI ssize_t kasumi_view_getxattr(KASUMI_XATTR_IDMAP_ARG
 	int handled;
 
 	kasumi_view_enter(&guard);
-	handled = READ_ONCE(kasumi_source_xattr_ready) ?
-		kasumi_vnode_source_path(dentry, &source) : 0;
+	handled = READ_ONCE(kasumi_source_xattr_ready)
+		      ? kasumi_vnode_source_path(dentry, &source)
+		      : 0;
 	if (handled < 0) {
 		ret = handled;
 		goto out;
 	}
 	if (handled) {
-		ret = kasumi_view_xattr_permission(KASUMI_XATTR_IDMAP_CALL
-			d_inode(dentry), name, MAY_READ);
+		ret = kasumi_view_xattr_permission(
+		    KASUMI_XATTR_IDMAP_CALL d_inode(dentry), name, MAY_READ);
 		if (!ret)
 			ret = kasumi_view_security_get(dentry, name);
 		if (ret)
 			goto out;
 		data = source.dentry;
 		kasumi_vfs_internal_enter(&source_guard);
-		ret = kasumi_view_getxattr_orig(KASUMI_XATTR_SOURCE_IDMAP(source.mnt)
-			data, name, value, size);
+		ret = kasumi_view_getxattr_orig(
+		    KASUMI_XATTR_SOURCE_IDMAP(source.mnt) data, name, value,
+		    size);
 		kasumi_vfs_internal_leave(&source_guard);
 	} else {
-		ret = kasumi_view_getxattr_orig(KASUMI_XATTR_IDMAP_CALL
-			dentry, name, value, size);
+		ret = kasumi_view_getxattr_orig(KASUMI_XATTR_IDMAP_CALL dentry,
+						name, value, size);
 	}
 	if ((ret >= 0 || ret == -ERANGE) && kasumi_overlay_name(name) &&
-	    (kasumi_xattr_target(dentry) || (handled && kasumi_xattr_target(data))))
+	    (kasumi_xattr_target(dentry) ||
+	     (handled && kasumi_xattr_target(data))))
 		ret = -ENODATA;
 out:
 	if (source.dentry)
@@ -199,8 +203,10 @@ out:
 	return ret;
 }
 
-static KASUMI_NOCFI int kasumi_view_setxattr(KASUMI_XATTR_IDMAP_ARG
-	struct dentry *dentry, const char *name, const void *value, size_t size, int flags)
+static KASUMI_NOCFI int
+kasumi_view_setxattr(KASUMI_XATTR_IDMAP_ARG struct dentry *dentry,
+		     const char *name, const void *value, size_t size,
+		     int flags)
 {
 	struct kasumi_view_guard guard;
 	struct kasumi_internal_vfs_guard source_guard;
@@ -210,15 +216,17 @@ static KASUMI_NOCFI int kasumi_view_setxattr(KASUMI_XATTR_IDMAP_ARG
 	kasumi_view_enter(&guard);
 	handled = kasumi_vnode_source_path(dentry, &source);
 	if (handled <= 0) {
-		ret = handled ?: kasumi_view_setxattr_orig(KASUMI_XATTR_IDMAP_CALL
-			dentry, name, value, size, flags);
+		ret = handled
+			  ?: kasumi_view_setxattr_orig(
+				 KASUMI_XATTR_IDMAP_CALL dentry, name, value,
+				 size, flags);
 		goto out;
 	}
-	ret = kasumi_view_xattr_permission(KASUMI_XATTR_IDMAP_CALL
-		d_inode(dentry), name, MAY_WRITE);
+	ret = kasumi_view_xattr_permission(
+	    KASUMI_XATTR_IDMAP_CALL d_inode(dentry), name, MAY_WRITE);
 	if (!ret)
-		ret = kasumi_view_security_set(KASUMI_XATTR_IDMAP_CALL
-			dentry, name, value, size, flags);
+		ret = kasumi_view_security_set(KASUMI_XATTR_IDMAP_CALL dentry,
+					       name, value, size, flags);
 	if (ret)
 		goto out;
 	ret = kasumi_view_want_write(source.mnt);
@@ -226,7 +234,8 @@ static KASUMI_NOCFI int kasumi_view_setxattr(KASUMI_XATTR_IDMAP_ARG
 		goto out;
 	kasumi_vfs_internal_enter(&source_guard);
 	ret = kasumi_view_setxattr_orig(KASUMI_XATTR_SOURCE_IDMAP(source.mnt)
-		source.dentry, name, value, size, flags);
+					    source.dentry,
+					name, value, size, flags);
 	kasumi_vfs_internal_leave(&source_guard);
 	kasumi_view_drop_write(source.mnt);
 	if (!ret && !strcmp(name, "security.selinux"))
@@ -238,8 +247,9 @@ out:
 	return ret;
 }
 
-static KASUMI_NOCFI int kasumi_view_removexattr(KASUMI_XATTR_IDMAP_ARG
-	struct dentry *dentry, const char *name)
+static KASUMI_NOCFI int
+kasumi_view_removexattr(KASUMI_XATTR_IDMAP_ARG struct dentry *dentry,
+			const char *name)
 {
 	struct kasumi_view_guard guard;
 	struct kasumi_internal_vfs_guard source_guard;
@@ -249,22 +259,24 @@ static KASUMI_NOCFI int kasumi_view_removexattr(KASUMI_XATTR_IDMAP_ARG
 	kasumi_view_enter(&guard);
 	handled = kasumi_vnode_source_path(dentry, &source);
 	if (handled <= 0) {
-		ret = handled ?: kasumi_view_removexattr_orig(KASUMI_XATTR_IDMAP_CALL
-			dentry, name);
+		ret = handled
+			  ?: kasumi_view_removexattr_orig(
+				 KASUMI_XATTR_IDMAP_CALL dentry, name);
 		goto out;
 	}
-	ret = kasumi_view_xattr_permission(KASUMI_XATTR_IDMAP_CALL
-		d_inode(dentry), name, MAY_WRITE);
+	ret = kasumi_view_xattr_permission(
+	    KASUMI_XATTR_IDMAP_CALL d_inode(dentry), name, MAY_WRITE);
 	if (!ret)
-		ret = kasumi_view_security_remove(KASUMI_XATTR_IDMAP_CALL dentry, name);
+		ret = kasumi_view_security_remove(
+		    KASUMI_XATTR_IDMAP_CALL dentry, name);
 	if (ret)
 		goto out;
 	ret = kasumi_view_want_write(source.mnt);
 	if (ret)
 		goto out;
 	kasumi_vfs_internal_enter(&source_guard);
-	ret = kasumi_view_removexattr_orig(KASUMI_XATTR_SOURCE_IDMAP(source.mnt)
-		source.dentry, name);
+	ret = kasumi_view_removexattr_orig(
+	    KASUMI_XATTR_SOURCE_IDMAP(source.mnt) source.dentry, name);
 	kasumi_vfs_internal_leave(&source_guard);
 	kasumi_view_drop_write(source.mnt);
 	if (!ret && !strcmp(name, "security.selinux"))
@@ -291,8 +303,9 @@ static KASUMI_NOCFI ssize_t kasumi_view_listxattr(struct dentry *dentry,
 	bool filter, source_active = false;
 
 	kasumi_view_enter(&guard);
-	handled = READ_ONCE(kasumi_source_xattr_ready) ?
-		kasumi_vnode_source_path(dentry, &source) : 0;
+	handled = READ_ONCE(kasumi_source_xattr_ready)
+		      ? kasumi_vnode_source_path(dentry, &source)
+		      : 0;
 	if (handled < 0) {
 		ret = handled;
 		goto out;
@@ -303,7 +316,8 @@ static KASUMI_NOCFI ssize_t kasumi_view_listxattr(struct dentry *dentry,
 			goto out;
 		data = source.dentry;
 	}
-	filter = kasumi_xattr_target(dentry) || (handled && kasumi_xattr_target(data));
+	filter = kasumi_xattr_target(dentry) ||
+		 (handled && kasumi_xattr_target(data));
 	if (handled) {
 		kasumi_vfs_internal_enter(&source_guard);
 		source_active = true;
@@ -364,10 +378,10 @@ out:
 static bool kasumi_statfs_projection_active(void)
 {
 	return kasumi_mount_projection_active() ||
-		(kasumi_mount_view_available() && kasumi_statfs_view_available() &&
-		 kasumi_config_enabled() &&
-		 (kasumi_config_features() & KSM_FEATURE_STATFS_SPOOF) &&
-		 kasumi_policy_current_is_spoof_target());
+	       (kasumi_mount_view_available() &&
+		kasumi_statfs_view_available() && kasumi_config_enabled() &&
+		(kasumi_config_features() & KSM_FEATURE_STATFS_SPOOF) &&
+		kasumi_policy_current_is_spoof_target());
 }
 
 static KASUMI_NOCFI int kasumi_view_statfs(const struct path *path,
@@ -407,7 +421,8 @@ static KASUMI_NOCFI int kasumi_view_statfs(const struct path *path,
 		ret = -EAGAIN;
 		goto out;
 	}
-	record = kasumi_mount_view_find(view, real_mount(path->mnt)->mnt_id, false);
+	record =
+	    kasumi_mount_view_find(view, real_mount(path->mnt)->mnt_id, false);
 	alias = kasumi_mount_view_representative(view, record);
 	if (alias && alias != record) {
 		projected.mnt = alias->mount;
@@ -439,8 +454,7 @@ static int kasumi_view_pre(struct kprobe *probe, struct pt_regs *regs)
 	const char *name;
 
 	if (READ_ONCE(kasumi_view_stopped) || !current->mm ||
-	    kasumi_vfs_internal_current() ||
-	    kasumi_view_guarded())
+	    kasumi_vfs_internal_current() || kasumi_view_guarded())
 		return 0;
 #if defined(CONFIG_ARM64)
 	if (regs->pstate & PSR_I_BIT)
@@ -454,7 +468,8 @@ static int kasumi_view_pre(struct kprobe *probe, struct pt_regs *regs)
 	} else if (probe == &kasumi_view_list_probe) {
 		dentry = (void *)regs->regs[0];
 		if (!(READ_ONCE(kasumi_source_xattr_ready) &&
-		      kasumi_vnode_is_ours(d_inode(dentry))) && !kasumi_xattr_target(dentry))
+		      kasumi_vnode_is_ours(d_inode(dentry))) &&
+		    !kasumi_xattr_target(dentry))
 			return 0;
 		target = (unsigned long)kasumi_view_listxattr;
 	} else {
@@ -465,17 +480,19 @@ static int kasumi_view_pre(struct kprobe *probe, struct pt_regs *regs)
 		dentry = (void *)regs->regs[0];
 		name = (void *)regs->regs[1];
 #endif
-		if (probe == &kasumi_view_set_probe || probe == &kasumi_view_remove_probe) {
+		if (probe == &kasumi_view_set_probe ||
+		    probe == &kasumi_view_remove_probe) {
 			if (!READ_ONCE(kasumi_source_xattr_ready) ||
 			    !kasumi_vnode_is_ours(d_inode(dentry)))
 				return 0;
-			target = probe == &kasumi_view_set_probe ?
-				(unsigned long)kasumi_view_setxattr :
-				(unsigned long)kasumi_view_removexattr;
+			target = probe == &kasumi_view_set_probe
+				     ? (unsigned long)kasumi_view_setxattr
+				     : (unsigned long)kasumi_view_removexattr;
 		} else {
 			if (!(READ_ONCE(kasumi_source_xattr_ready) &&
 			      kasumi_vnode_is_ours(d_inode(dentry))) &&
-			    (!kasumi_overlay_name(name) || !kasumi_xattr_target(dentry)))
+			    (!kasumi_overlay_name(name) ||
+			     !kasumi_xattr_target(dentry)))
 				return 0;
 			target = (unsigned long)kasumi_view_getxattr;
 		}
@@ -518,8 +535,10 @@ KASUMI_NOCFI int kasumi_overlay_xattr_mark_at(const char *name, u64 generation)
 		hash_for_each_safe(kasumi_xattr_sbs, bucket, tmp, entry, node)
 		{
 			if (kasumi_rule_visible(&entry->life, generation)) {
-				kasumi_batch_track(&entry->life, KASUMI_BATCH_XATTR);
-				WRITE_ONCE(entry->life.last_generation, generation - 1);
+				kasumi_batch_track(&entry->life,
+						   KASUMI_BATCH_XATTR);
+				WRITE_ONCE(entry->life.last_generation,
+					   generation - 1);
 			}
 		}
 		mutex_unlock(&kasumi_config_mutex);
@@ -607,7 +626,7 @@ int kasumi_vfs_view_init(void)
 	return -EOPNOTSUPP;
 #endif
 	kasumi_view_tasks_barrier =
-		(void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
 	if (!kasumi_view_tasks_barrier)
 		return -ENOENT;
 	kasumi_xattr_wq = alloc_workqueue("kasumi_xattr_free",
@@ -621,19 +640,19 @@ int kasumi_vfs_view_init(void)
 	kasumi_view_want_write = kasumi_mnt_want_write_addr;
 	kasumi_view_drop_write = kasumi_mnt_drop_write_addr;
 	kasumi_view_xattr_permission =
-		(void *)kasumi_lookup_callable_quiet("xattr_permission");
+	    (void *)kasumi_lookup_callable_quiet("xattr_permission");
 	kasumi_view_security_get =
-		(void *)kasumi_lookup_callable_quiet("security_inode_getxattr");
+	    (void *)kasumi_lookup_callable_quiet("security_inode_getxattr");
 	kasumi_view_security_list =
-		(void *)kasumi_lookup_callable_quiet("security_inode_listxattr");
+	    (void *)kasumi_lookup_callable_quiet("security_inode_listxattr");
 	kasumi_view_security_set =
-		(void *)kasumi_lookup_callable_quiet("security_inode_setxattr");
+	    (void *)kasumi_lookup_callable_quiet("security_inode_setxattr");
 	kasumi_view_security_remove =
-		(void *)kasumi_lookup_callable_quiet("security_inode_removexattr");
+	    (void *)kasumi_lookup_callable_quiet("security_inode_removexattr");
 	kasumi_view_statfs_orig =
 	    (void *)kasumi_lookup_callable_quiet("vfs_statfs");
 	kasumi_statfs_namespace_lock =
-		(void *)kasumi_lookup_name_quiet("namespace_sem");
+	    (void *)kasumi_lookup_name_quiet("namespace_sem");
 	WRITE_ONCE(kasumi_view_stopped, false);
 	if (kasumi_view_getxattr_orig && kasumi_view_listxattr_orig) {
 		ret = kasumi_view_register(&kasumi_view_get_probe,
@@ -651,10 +670,12 @@ int kasumi_vfs_view_init(void)
 	    kasumi_view_drop_write && kasumi_view_xattr_permission &&
 	    kasumi_view_security_get && kasumi_view_security_list &&
 	    kasumi_view_security_set && kasumi_view_security_remove) {
-		ret = kasumi_view_register(&kasumi_view_set_probe, "vfs_setxattr");
+		ret = kasumi_view_register(&kasumi_view_set_probe,
+					   "vfs_setxattr");
 		kasumi_view_set_registered = !ret;
 		if (!ret) {
-			ret = kasumi_view_register(&kasumi_view_remove_probe, "vfs_removexattr");
+			ret = kasumi_view_register(&kasumi_view_remove_probe,
+						   "vfs_removexattr");
 			kasumi_view_remove_registered = !ret;
 			if (ret) {
 				unregister_kprobe(&kasumi_view_set_probe);
@@ -670,7 +691,8 @@ int kasumi_vfs_view_init(void)
 		kasumi_view_statfs_registered = !ret;
 		WRITE_ONCE(kasumi_statfs_ready, !ret);
 		if (!ret)
-			kasumi_mount_view_publish_capabilities(KASUMI_MOUNT_CAP_STATFS, 0);
+			kasumi_mount_view_publish_capabilities(
+			    KASUMI_MOUNT_CAP_STATFS, 0);
 	}
 	pr_info("kasumi: VFS views: overlay xattrs=%d statfs=%d\n",
 		kasumi_xattr_ready, kasumi_statfs_ready);

@@ -58,9 +58,10 @@ struct kasumi_hook_stats kasumi_hook_stats;
 
 static DEFINE_HASHTABLE(kasumi_internal_vfs_tasks,
 			KASUMI_INTERNAL_VFS_HASH_BITS);
-static spinlock_t kasumi_internal_vfs_locks[1 << KASUMI_INTERNAL_VFS_HASH_BITS] = {
-	[0 ... (1 << KASUMI_INTERNAL_VFS_HASH_BITS) - 1] =
-		__SPIN_LOCK_UNLOCKED(kasumi_internal_vfs_locks),
+static spinlock_t
+    kasumi_internal_vfs_locks[1 << KASUMI_INTERNAL_VFS_HASH_BITS] = {
+	[0 ...(1 << KASUMI_INTERNAL_VFS_HASH_BITS) - 1] =
+	    __SPIN_LOCK_UNLOCKED(kasumi_internal_vfs_locks),
 };
 static atomic_t kasumi_internal_vfs_active = ATOMIC_INIT(0);
 static u64 kasumi_rules_epoch = 1;
@@ -85,8 +86,8 @@ void kasumi_rules_publish(u64 generation)
 
 void kasumi_vfs_internal_enter(struct kasumi_internal_vfs_guard *guard)
 {
-	spinlock_t *lock = &kasumi_internal_vfs_locks[
-		hash_min((unsigned long)current, KASUMI_INTERNAL_VFS_HASH_BITS)];
+	spinlock_t *lock = &kasumi_internal_vfs_locks[hash_min(
+	    (unsigned long)current, KASUMI_INTERNAL_VFS_HASH_BITS)];
 	unsigned long flags;
 
 	guard->task = current;
@@ -99,8 +100,8 @@ void kasumi_vfs_internal_enter(struct kasumi_internal_vfs_guard *guard)
 
 void kasumi_vfs_internal_leave(struct kasumi_internal_vfs_guard *guard)
 {
-	spinlock_t *lock = &kasumi_internal_vfs_locks[
-		hash_min((unsigned long)guard->task, KASUMI_INTERNAL_VFS_HASH_BITS)];
+	spinlock_t *lock = &kasumi_internal_vfs_locks[hash_min(
+	    (unsigned long)guard->task, KASUMI_INTERNAL_VFS_HASH_BITS)];
 	unsigned long flags;
 
 	spin_lock_irqsave(lock, flags);
@@ -111,8 +112,8 @@ void kasumi_vfs_internal_leave(struct kasumi_internal_vfs_guard *guard)
 
 bool kasumi_vfs_internal_current(void)
 {
-	spinlock_t *lock = &kasumi_internal_vfs_locks[
-		hash_min((unsigned long)current, KASUMI_INTERNAL_VFS_HASH_BITS)];
+	spinlock_t *lock = &kasumi_internal_vfs_locks[hash_min(
+	    (unsigned long)current, KASUMI_INTERNAL_VFS_HASH_BITS)];
 	struct kasumi_internal_vfs_guard *guard;
 	unsigned long flags;
 	bool found = false;
@@ -233,7 +234,6 @@ unsigned int kasumi_vnode_live(void)
 {
 	return (unsigned int)atomic_read(&kasumi_vnode_live_count);
 }
-
 
 atomic_long_t kasumi_ioctl_tgid = ATOMIC_LONG_INIT(0);
 
@@ -441,7 +441,7 @@ int KASUMI_NOCFI kasumi_entry_capture_source(struct kasumi_entry *entry,
 	path_get(&entry->source_path);
 	if (S_ISDIR(inode->i_mode)) {
 		ret = kasumi_identity_domain_create(entry->source_identity,
-			&entry->source_domain);
+						    &entry->source_domain);
 		if (ret)
 			goto fail_identity;
 	}
@@ -544,8 +544,9 @@ int KASUMI_NOCFI kasumi_entry_capture_source(struct kasumi_entry *entry,
 		nofollow_inode = d_inode(nofollow_path.dentry);
 		if (nofollow_inode && S_ISLNK(nofollow_inode->i_mode)) {
 			ret = kasumi_identity_source_get(
-				nofollow_inode->i_sb ? nofollow_inode->i_sb->s_dev : 0,
-				nofollow_inode->i_ino, &entry->nofollow_identity);
+			    nofollow_inode->i_sb ? nofollow_inode->i_sb->s_dev
+						 : 0,
+			    nofollow_inode->i_ino, &entry->nofollow_identity);
 			if (ret) {
 				path_put(&nofollow_path);
 				goto fail_identity;
@@ -587,7 +588,8 @@ int KASUMI_NOCFI kasumi_entry_capture_source(struct kasumi_entry *entry,
 				    1U << nofollow_inode->i_blkbits;
 				entry->source_nofollow_stat_valid = true;
 			}
-			entry->nofollow_visible_ino = kasumi_identity_ino(entry->nofollow_identity);
+			entry->nofollow_visible_ino =
+			    kasumi_identity_ino(entry->nofollow_identity);
 			entry->nofollow_visible_dev =
 			    kasumi_vnode_visible_dev(entry->src);
 			entry->source_nofollow_stat.ino =
@@ -624,7 +626,8 @@ fail_identity:
 	}
 	if (entry->source_nofollow_path_valid) {
 		path_put(&entry->source_nofollow_path);
-		memset(&entry->source_nofollow_path, 0, sizeof(entry->source_nofollow_path));
+		memset(&entry->source_nofollow_path, 0,
+		       sizeof(entry->source_nofollow_path));
 		entry->source_nofollow_path_valid = false;
 	}
 	kasumi_identity_put(entry->nofollow_identity);
@@ -721,7 +724,8 @@ static void kasumi_merge_entry_destroy(struct kasumi_merge_entry *e)
 	kfree(e);
 }
 
-static void kasumi_spoof_kstat_entry_destroy(struct kasumi_spoof_kstat_entry *entry)
+static void
+kasumi_spoof_kstat_entry_destroy(struct kasumi_spoof_kstat_entry *entry)
 {
 	if (entry->iop_owned)
 		kasumi_iop_put(&entry->captured_path);
@@ -741,19 +745,18 @@ static void kasumi_store_free_workfn(struct work_struct *work)
 
 	kasumi_iop_retire_batch_begin();
 	while ((head = llist_del_all(&kasumi_entries_to_free))) {
-		llist_for_each_safe(node, next, head)
-			kasumi_entry_destroy(container_of(
-				node, struct kasumi_entry, free_node));
+		llist_for_each_safe(node, next, head) kasumi_entry_destroy(
+		    container_of(node, struct kasumi_entry, free_node));
 	}
 	while ((head = llist_del_all(&kasumi_merges_to_free))) {
 		llist_for_each_safe(node, next, head)
-			kasumi_merge_entry_destroy(container_of(
-				node, struct kasumi_merge_entry, free_node));
+		    kasumi_merge_entry_destroy(container_of(
+			node, struct kasumi_merge_entry, free_node));
 	}
 	while ((head = llist_del_all(&kasumi_kstats_to_free))) {
 		llist_for_each_safe(node, next, head)
-			kasumi_spoof_kstat_entry_destroy(container_of(
-				node, struct kasumi_spoof_kstat_entry, free_node));
+		    kasumi_spoof_kstat_entry_destroy(container_of(
+			node, struct kasumi_spoof_kstat_entry, free_node));
 	}
 	kasumi_iop_retire_batch_end();
 }
@@ -762,7 +765,8 @@ static DECLARE_WORK(kasumi_store_free_work, kasumi_store_free_workfn);
 
 void kasumi_entry_free_rcu(struct rcu_head *head)
 {
-	struct kasumi_entry *entry = container_of(head, struct kasumi_entry, rcu);
+	struct kasumi_entry *entry =
+	    container_of(head, struct kasumi_entry, rcu);
 
 	llist_add(&entry->free_node, &kasumi_entries_to_free);
 	schedule_work(&kasumi_store_free_work);
@@ -771,7 +775,7 @@ void kasumi_entry_free_rcu(struct rcu_head *head)
 void kasumi_merge_entry_free_rcu(struct rcu_head *head)
 {
 	struct kasumi_merge_entry *entry =
-		container_of(head, struct kasumi_merge_entry, rcu);
+	    container_of(head, struct kasumi_merge_entry, rcu);
 
 	llist_add(&entry->free_node, &kasumi_merges_to_free);
 	schedule_work(&kasumi_store_free_work);
@@ -783,7 +787,6 @@ void kasumi_store_drain(void)
 	flush_work(&kasumi_store_free_work);
 	kasumi_iop_override_drain();
 }
-
 
 void kasumi_spoof_kstat_entry_free_rcu(struct rcu_head *head)
 {
@@ -824,9 +827,10 @@ kasumi_spoof_kstat_lookup_by_ino(unsigned long ino, unsigned long dev)
 
 	if (!ino)
 		return NULL;
-	hlist_for_each_entry_rcu(entry,
-		&kasumi_spoof_kstat_ino[hash_min(ino, KASUMI_HASH_BITS)],
-		ino_node) {
+	hlist_for_each_entry_rcu(
+	    entry, &kasumi_spoof_kstat_ino[hash_min(ino, KASUMI_HASH_BITS)],
+	    ino_node)
+	{
 		if (!kasumi_rule_visible(&entry->life, generation) ||
 		    entry->target_ino != ino)
 			continue;
@@ -838,7 +842,8 @@ kasumi_spoof_kstat_lookup_by_ino(unsigned long ino, unsigned long dev)
 	return wildcard;
 }
 
-int kasumi_spoof_kstat_validate(const struct kasumi_transaction_kstat_rule *rule)
+int kasumi_spoof_kstat_validate(
+    const struct kasumi_transaction_kstat_rule *rule)
 {
 	if (!memchr(rule->target_pathname, '\0', sizeof(rule->target_pathname)))
 		return -ENAMETOOLONG;
@@ -849,15 +854,18 @@ int kasumi_spoof_kstat_validate(const struct kasumi_transaction_kstat_rule *rule
 	    rule->target_dev > U32_MAX || rule->spoofed_dev > U32_MAX ||
 	    rule->spoofed_nlink > U32_MAX || rule->spoofed_blksize > U32_MAX)
 		return -EINVAL;
-	if (((rule->fields & KSM_KSTAT_FIELD_ATIME) && rule->spoofed_atime_nsec >= NSEC_PER_SEC) ||
-	    ((rule->fields & KSM_KSTAT_FIELD_MTIME) && rule->spoofed_mtime_nsec >= NSEC_PER_SEC) ||
-	    ((rule->fields & KSM_KSTAT_FIELD_CTIME) && rule->spoofed_ctime_nsec >= NSEC_PER_SEC))
+	if (((rule->fields & KSM_KSTAT_FIELD_ATIME) &&
+	     rule->spoofed_atime_nsec >= NSEC_PER_SEC) ||
+	    ((rule->fields & KSM_KSTAT_FIELD_MTIME) &&
+	     rule->spoofed_mtime_nsec >= NSEC_PER_SEC) ||
+	    ((rule->fields & KSM_KSTAT_FIELD_CTIME) &&
+	     rule->spoofed_ctime_nsec >= NSEC_PER_SEC))
 		return -EINVAL;
 	return 0;
 }
 
 int kasumi_spoof_kstat_stage(const struct kasumi_transaction_kstat_rule *rule,
-			   u64 *resolved_ino)
+			     u64 *resolved_ino)
 {
 	struct kasumi_spoof_kstat_entry *entry, *old = NULL;
 	struct kasumi_internal_vfs_guard guard;
@@ -879,20 +887,23 @@ int kasumi_spoof_kstat_stage(const struct kasumi_transaction_kstat_rule *rule,
 	entry->target_dev = rule->target_dev;
 	entry->target_dev_valid = !(rule->match_flags & KSM_MATCH_ANY_DEVICE);
 	if (have_path) {
-		entry->target_pathname = kstrdup(rule->target_pathname, GFP_KERNEL);
+		entry->target_pathname =
+		    kstrdup(rule->target_pathname, GFP_KERNEL);
 		if (!entry->target_pathname) {
 			ret = -ENOMEM;
 			goto free_entry;
 		}
-		entry->path_hash = full_name_hash(NULL, entry->target_pathname,
-						 strlen(entry->target_pathname));
+		entry->path_hash =
+		    full_name_hash(NULL, entry->target_pathname,
+				   strlen(entry->target_pathname));
 		kasumi_vfs_internal_enter(&guard);
 #ifdef KASUMI_EMBEDDED
 		ret = kern_path(entry->target_pathname, LOOKUP_FOLLOW, &path);
 #else
-		ret = kasumi_kern_path ?
-		      kasumi_kern_path(entry->target_pathname, LOOKUP_FOLLOW, &path) :
-		      -EOPNOTSUPP;
+		ret = kasumi_kern_path
+			  ? kasumi_kern_path(entry->target_pathname,
+					     LOOKUP_FOLLOW, &path)
+			  : -EOPNOTSUPP;
 #endif
 		kasumi_vfs_internal_leave(&guard);
 		if (!ret) {
@@ -932,13 +943,17 @@ int kasumi_spoof_kstat_stage(const struct kasumi_transaction_kstat_rule *rule,
 		struct kasumi_spoof_kstat_entry *candidate;
 
 		hlist_for_each_entry(candidate,
-			&kasumi_spoof_kstat_ino[hash_min(entry->target_ino,
-						       KASUMI_HASH_BITS)], ino_node) {
+				     &kasumi_spoof_kstat_ino[hash_min(
+					 entry->target_ino, KASUMI_HASH_BITS)],
+				     ino_node)
+		{
 			if (kasumi_rule_visible(&candidate->life, generation) &&
 			    candidate->target_ino == entry->target_ino &&
 			    !candidate->target_pathname &&
-			    candidate->target_dev_valid == entry->target_dev_valid &&
-			    (!entry->target_dev_valid || candidate->target_dev == entry->target_dev)) {
+			    candidate->target_dev_valid ==
+				entry->target_dev_valid &&
+			    (!entry->target_dev_valid ||
+			     candidate->target_dev == entry->target_dev)) {
 				old = candidate;
 				break;
 			}
@@ -947,10 +962,12 @@ int kasumi_spoof_kstat_stage(const struct kasumi_transaction_kstat_rule *rule,
 	kasumi_batch_track(&entry->life, KASUMI_BATCH_KSTAT);
 	if (have_path)
 		hlist_add_head_rcu(&entry->path_node,
-			&kasumi_spoof_kstat_path[hash_min(entry->path_hash, KASUMI_HASH_BITS)]);
+				   &kasumi_spoof_kstat_path[hash_min(
+				       entry->path_hash, KASUMI_HASH_BITS)]);
 	if (entry->target_ino)
 		hlist_add_head_rcu(&entry->ino_node,
-			&kasumi_spoof_kstat_ino[hash_min(entry->target_ino, KASUMI_HASH_BITS)]);
+				   &kasumi_spoof_kstat_ino[hash_min(
+				       entry->target_ino, KASUMI_HASH_BITS)]);
 	if (old)
 		kasumi_batch_expire(&old->life, KASUMI_BATCH_KSTAT);
 	atomic_inc(&kasumi_spoof_kstat_count);
@@ -973,7 +990,8 @@ int kasumi_spoof_kstat_upsert(struct kasumi_spoof_kstat *rule)
 
 	value.match_flags = KSM_MATCH_ANY_DEVICE;
 	value.target_ino = rule->target_ino;
-	memcpy(value.target_pathname, rule->target_pathname, sizeof(value.target_pathname));
+	memcpy(value.target_pathname, rule->target_pathname,
+	       sizeof(value.target_pathname));
 	value.spoofed_ino = rule->spoofed_ino;
 	if (rule->spoofed_ino)
 		value.fields |= KSM_KSTAT_FIELD_INO;
@@ -1055,8 +1073,8 @@ int kasumi_store_upsert(struct kasumi_entry *replacement)
 	struct kasumi_entry *entry, *old = NULL;
 	u32 hash = replacement->src_hash;
 	u64 batch_generation = kasumi_batch_generation();
-	u64 generation = batch_generation ? batch_generation :
-			 kasumi_rules_generation();
+	u64 generation =
+	    batch_generation ? batch_generation : kasumi_rules_generation();
 	bool changed = true;
 	unsigned long h1, h2;
 
@@ -1067,8 +1085,9 @@ int kasumi_store_upsert(struct kasumi_entry *replacement)
 		return -EOVERFLOW;
 	}
 	replacement->sequence = ++kasumi_rule_sequence;
-	hlist_for_each_entry(entry,
-		&kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)], node) {
+	hlist_for_each_entry(
+	    entry, &kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)], node)
+	{
 		if (!kasumi_rule_visible(&entry->life, generation) ||
 		    entry->src_hash != hash ||
 		    strcmp(entry->src, replacement->src))
@@ -1081,13 +1100,13 @@ int kasumi_store_upsert(struct kasumi_entry *replacement)
 		kasumi_batch_expire(&old->life, KASUMI_BATCH_PATH);
 	kasumi_batch_track(&replacement->life, KASUMI_BATCH_PATH);
 	hlist_add_head_rcu(&replacement->node,
-		&kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)]);
+			   &kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)]);
 #ifndef KASUMI_EMBEDDED
 	hlist_add_head_rcu(&replacement->target_node,
-		&kasumi_targets[hash_min(
-			full_name_hash(NULL, replacement->target,
-				       strlen(replacement->target)),
-			KASUMI_HASH_BITS)]);
+			   &kasumi_targets[hash_min(
+			       full_name_hash(NULL, replacement->target,
+					      strlen(replacement->target)),
+			       KASUMI_HASH_BITS)]);
 #endif
 	if (old && !batch_generation) {
 		hlist_del_rcu(&old->node);
@@ -1096,7 +1115,7 @@ int kasumi_store_upsert(struct kasumi_entry *replacement)
 #endif
 		if (changed)
 			kasumi_clear_inode_flags_for_path(
-				old->target, AS_FLAGS_KASUMI_SPOOF_KSTAT);
+			    old->target, AS_FLAGS_KASUMI_SPOOF_KSTAT);
 		kasumi_rule_index_remove(&old->life);
 		kasumi_live_rules_untrack(&old->life);
 		call_rcu(&old->rcu, kasumi_entry_free_rcu);
@@ -1192,7 +1211,6 @@ void kasumi_cleanup_locked(void)
 		}
 		atomic_set(&kasumi_spoof_kstat_count, 0);
 	}
-
 
 	kasumi_maps_rules_clear();
 

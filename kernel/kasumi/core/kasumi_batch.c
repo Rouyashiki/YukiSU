@@ -45,8 +45,9 @@ static struct kasumi_view_settings kasumi_config_settings(void)
 	batch = rcu_dereference(kasumi_pending_batch);
 	generation = kasumi_rules_generation();
 	if (batch) {
-		settings = generation >= batch->generation ?
-			   batch->settings : batch->previous_settings;
+		settings = generation >= batch->generation
+			       ? batch->settings
+			       : batch->previous_settings;
 	} else {
 		settings.features = READ_ONCE(kasumi_feature_enabled_mask);
 		settings.enabled = smp_load_acquire(&kasumi_enabled);
@@ -159,7 +160,8 @@ struct kasumi_batch *kasumi_batch_begin(void)
 	return batch;
 }
 
-int kasumi_batch_configure(const struct kasumi_batch_configuration *configuration)
+int kasumi_batch_configure(
+    const struct kasumi_batch_configuration *configuration)
 {
 	struct kasumi_batch *batch = kasumi_current_batch;
 	struct kasumi_view_settings settings;
@@ -168,42 +170,50 @@ int kasumi_batch_configure(const struct kasumi_batch_configuration *configuratio
 
 	if (!kasumi_batch_generation())
 		return -EINVAL;
-	settings = configuration->fields & KSM_TX_CONFIG_SETTINGS ?
-		   configuration->settings : batch->settings;
+	settings = configuration->fields & KSM_TX_CONFIG_SETTINGS
+		       ? configuration->settings
+		       : batch->settings;
 	if (configuration->fields & KSM_TX_CONFIG_SETTINGS) {
 		features = settings.features;
-		if (features & ~(KSM_FEATURE_MOUNT_HIDE | KSM_FEATURE_MAPS_SPOOF |
-				 KSM_FEATURE_STATFS_SPOOF | KSM_FEATURE_SELINUX_FIX))
+		if (features &
+		    ~(KSM_FEATURE_MOUNT_HIDE | KSM_FEATURE_MAPS_SPOOF |
+		      KSM_FEATURE_STATFS_SPOOF | KSM_FEATURE_SELINUX_FIX))
 			return -EINVAL;
 		if ((features & KSM_FEATURE_MAPS_SPOOF) &&
 		    !kasumi_proc_maps_available())
 			return -EOPNOTSUPP;
-		if ((features & KSM_FEATURE_STATFS_SPOOF) && !kasumi_statfs_view_available())
+		if ((features & KSM_FEATURE_STATFS_SPOOF) &&
+		    !kasumi_statfs_view_available())
 			return -EOPNOTSUPP;
 		if ((features & KSM_FEATURE_SELINUX_FIX) &&
 		    !kasumi_fake_selinuxfs_proc_attr_active())
 			return -EOPNOTSUPP;
 		if (features & KSM_FEATURE_MOUNT_HIDE) {
-			u64 required = kasumi_mount_view_required_capabilities();
+			u64 required =
+			    kasumi_mount_view_required_capabilities();
 
 			if (!kasumi_mount_view_available() ||
-			    (kasumi_mount_view_capabilities() & required) != required)
+			    (kasumi_mount_view_capabilities() & required) !=
+				required)
 				return -EOPNOTSUPP;
 		}
 	}
 #ifdef KASUMI_EMBEDDED
-	if (configuration->fields & (KSM_TX_CONFIG_POLICY | KSM_TX_CONFIG_RESET_POLICY))
+	if (configuration->fields &
+	    (KSM_TX_CONFIG_POLICY | KSM_TX_CONFIG_RESET_POLICY))
 		return -EOPNOTSUPP;
 #else
-	if ((configuration->fields & (KSM_TX_CONFIG_POLICY | KSM_TX_CONFIG_RESET_POLICY)) ||
+	if ((configuration->fields &
+	     (KSM_TX_CONFIG_POLICY | KSM_TX_CONFIG_RESET_POLICY)) ||
 	    settings.enabled != batch->previous_settings.enabled) {
-		batch->policy = kasumi_policy_batch_prepare(batch->generation,
-			!!(configuration->fields & KSM_TX_CONFIG_POLICY),
-			!!(configuration->fields & KSM_TX_CONFIG_RESET_POLICY),
-			configuration->policy_owner, configuration->policy_flags,
-			configuration->allow_uids, configuration->allow_count,
-			configuration->deny_uids, configuration->deny_count,
-			settings.enabled);
+		batch->policy = kasumi_policy_batch_prepare(
+		    batch->generation,
+		    !!(configuration->fields & KSM_TX_CONFIG_POLICY),
+		    !!(configuration->fields & KSM_TX_CONFIG_RESET_POLICY),
+		    configuration->policy_owner, configuration->policy_flags,
+		    configuration->allow_uids, configuration->allow_count,
+		    configuration->deny_uids, configuration->deny_count,
+		    settings.enabled);
 		if (IS_ERR(batch->policy)) {
 			error = PTR_ERR(batch->policy);
 			batch->policy = NULL;
@@ -212,9 +222,9 @@ int kasumi_batch_configure(const struct kasumi_batch_configuration *configuratio
 	}
 #endif
 	if (configuration->fields & KSM_TX_CONFIG_MAPS) {
-		batch->maps = kasumi_maps_batch_prepare(configuration->maps_rules,
-						 configuration->maps_count,
-						 batch->generation);
+		batch->maps = kasumi_maps_batch_prepare(
+		    configuration->maps_rules, configuration->maps_count,
+		    batch->generation);
 		if (IS_ERR(batch->maps)) {
 			error = PTR_ERR(batch->maps);
 			batch->maps = NULL;
@@ -226,11 +236,12 @@ int kasumi_batch_configure(const struct kasumi_batch_configuration *configuratio
 		int bucket;
 
 		hash_for_each(kasumi_spoof_kstat_path, bucket, entry, path_node)
-			kasumi_batch_expire(&entry->life, KASUMI_BATCH_KSTAT);
+		    kasumi_batch_expire(&entry->life, KASUMI_BATCH_KSTAT);
 		hash_for_each(kasumi_spoof_kstat_ino, bucket, entry, ino_node)
-			kasumi_batch_expire(&entry->life, KASUMI_BATCH_KSTAT);
+		    kasumi_batch_expire(&entry->life, KASUMI_BATCH_KSTAT);
 		for (index = 0; index < configuration->kstat_count; index++) {
-			error = kasumi_spoof_kstat_stage(&configuration->kstat_rules[index], NULL);
+			error = kasumi_spoof_kstat_stage(
+			    &configuration->kstat_rules[index], NULL);
 			if (error)
 				return error;
 		}
@@ -252,7 +263,8 @@ int kasumi_batch_clear_paths(void)
 	if (!generation)
 		return -EINVAL;
 	kasumi_live_rules_clear_paths(kasumi_current_batch->live);
-	hash_for_each(kasumi_paths, bucket, entry, node) {
+	hash_for_each(kasumi_paths, bucket, entry, node)
+	{
 		if (!kasumi_rule_visible(&entry->life, generation))
 			continue;
 		result = kasumi_dirhijack_batch_del(directories, entry->src);
@@ -260,7 +272,8 @@ int kasumi_batch_clear_paths(void)
 			return result;
 		kasumi_batch_expire(&entry->life, KASUMI_BATCH_PATH);
 	}
-	hash_for_each(kasumi_hide_paths, bucket, hide, node) {
+	hash_for_each(kasumi_hide_paths, bucket, hide, node)
+	{
 		if (!kasumi_rule_visible(&hide->life, generation))
 			continue;
 		result = kasumi_dirhijack_batch_del(directories, hide->path);
@@ -269,9 +282,9 @@ int kasumi_batch_clear_paths(void)
 		kasumi_batch_expire(&hide->life, KASUMI_BATCH_HIDE);
 	}
 	hash_for_each(kasumi_inject_dirs, bucket, inject, node)
-		kasumi_batch_expire(&inject->life, KASUMI_BATCH_INJECT);
+	    kasumi_batch_expire(&inject->life, KASUMI_BATCH_INJECT);
 	hash_for_each(kasumi_merge_dirs, bucket, merge, node)
-		kasumi_batch_expire(&merge->life, KASUMI_BATCH_MERGE);
+	    kasumi_batch_expire(&merge->life, KASUMI_BATCH_MERGE);
 	return kasumi_batch_clear_xattrs();
 }
 
@@ -285,7 +298,7 @@ int kasumi_batch_clear_xattrs(void)
 		return -EINVAL;
 	kasumi_live_rules_clear_xattrs(kasumi_current_batch->live);
 	hash_for_each(kasumi_xattr_sbs, bucket, xattr, node)
-		kasumi_batch_expire(&xattr->life, KASUMI_BATCH_XATTR);
+	    kasumi_batch_expire(&xattr->life, KASUMI_BATCH_XATTR);
 	return 0;
 }
 
@@ -295,7 +308,8 @@ static void kasumi_batch_retire(struct kasumi_rule_lifetime *life)
 	kasumi_rule_index_remove(life);
 	switch (life->batch_store) {
 	case KASUMI_BATCH_PATH: {
-		struct kasumi_entry *entry = container_of(life, struct kasumi_entry, life);
+		struct kasumi_entry *entry =
+		    container_of(life, struct kasumi_entry, life);
 
 		hlist_del_rcu(&entry->node);
 #ifndef KASUMI_EMBEDDED
@@ -306,7 +320,8 @@ static void kasumi_batch_retire(struct kasumi_rule_lifetime *life)
 		break;
 	}
 	case KASUMI_BATCH_HIDE: {
-		struct kasumi_hide_entry *entry = container_of(life, struct kasumi_hide_entry, life);
+		struct kasumi_hide_entry *entry =
+		    container_of(life, struct kasumi_hide_entry, life);
 
 		hlist_del_rcu(&entry->node);
 		atomic_dec(&kasumi_hide_count);
@@ -314,7 +329,8 @@ static void kasumi_batch_retire(struct kasumi_rule_lifetime *life)
 		break;
 	}
 	case KASUMI_BATCH_INJECT: {
-		struct kasumi_inject_entry *entry = container_of(life, struct kasumi_inject_entry, life);
+		struct kasumi_inject_entry *entry =
+		    container_of(life, struct kasumi_inject_entry, life);
 
 		hlist_del_rcu(&entry->node);
 		atomic_dec(&kasumi_rule_count);
@@ -324,14 +340,16 @@ static void kasumi_batch_retire(struct kasumi_rule_lifetime *life)
 		break;
 	}
 	case KASUMI_BATCH_MERGE: {
-		struct kasumi_merge_entry *entry = container_of(life, struct kasumi_merge_entry, life);
+		struct kasumi_merge_entry *entry =
+		    container_of(life, struct kasumi_merge_entry, life);
 
 		hlist_del_rcu(&entry->node);
 		call_rcu(&entry->rcu, kasumi_merge_entry_free_rcu);
 		break;
 	}
 	case KASUMI_BATCH_XATTR: {
-		struct kasumi_xattr_sb_entry *entry = container_of(life, struct kasumi_xattr_sb_entry, life);
+		struct kasumi_xattr_sb_entry *entry =
+		    container_of(life, struct kasumi_xattr_sb_entry, life);
 
 		hlist_del_rcu(&entry->node);
 		call_rcu(&entry->rcu, kasumi_xattr_sb_entry_free_rcu);
@@ -339,7 +357,7 @@ static void kasumi_batch_retire(struct kasumi_rule_lifetime *life)
 	}
 	case KASUMI_BATCH_KSTAT: {
 		struct kasumi_spoof_kstat_entry *entry =
-			container_of(life, struct kasumi_spoof_kstat_entry, life);
+		    container_of(life, struct kasumi_spoof_kstat_entry, life);
 
 		if (!hlist_unhashed(&entry->path_node))
 			hlist_del_rcu(&entry->path_node);
@@ -366,22 +384,25 @@ void kasumi_batch_finish(struct kasumi_batch *batch, bool publish)
 	kasumi_policy_batch_finish(batch->policy, publish);
 #endif
 	if (publish) {
-		WRITE_ONCE(kasumi_feature_enabled_mask, batch->settings.features);
+		WRITE_ONCE(kasumi_feature_enabled_mask,
+			   batch->settings.features);
 		WRITE_ONCE(kasumi_stealth_enabled, batch->settings.stealth);
 		WRITE_ONCE(kasumi_debug_enabled, batch->settings.debug);
 		smp_store_release(&kasumi_enabled, batch->settings.enabled);
 	}
 	rcu_assign_pointer(kasumi_pending_batch, NULL);
 	mutex_lock(&kasumi_config_mutex);
-	list_for_each_entry_safe(life, next, &batch->changes, batch_node) {
-		bool retire = publish ?
-			life->last_generation && life->last_generation < batch->generation :
-			life->first_generation == batch->generation;
+	list_for_each_entry_safe (life, next, &batch->changes, batch_node) {
+		bool retire =
+		    publish ? life->last_generation &&
+				  life->last_generation < batch->generation
+			    : life->first_generation == batch->generation;
 
 		list_del_init(&life->batch_node);
 		life->batch_generation = 0;
 		if (!publish)
-			WRITE_ONCE(life->last_generation, life->previous_last_generation);
+			WRITE_ONCE(life->last_generation,
+				   life->previous_last_generation);
 		if (retire)
 			kasumi_batch_retire(life);
 	}

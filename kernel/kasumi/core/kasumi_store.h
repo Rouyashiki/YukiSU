@@ -50,9 +50,10 @@ extern unsigned long kasumi_hide_bloom[BITS_TO_LONGS(KASUMI_BLOOM_SIZE)];
 struct kasumi_spoof_kstat_entry *
 kasumi_spoof_kstat_lookup_by_path(const char *path_str);
 int kasumi_spoof_kstat_upsert(struct kasumi_spoof_kstat *rule);
-int kasumi_spoof_kstat_validate(const struct kasumi_transaction_kstat_rule *rule);
+int kasumi_spoof_kstat_validate(
+    const struct kasumi_transaction_kstat_rule *rule);
 int kasumi_spoof_kstat_stage(const struct kasumi_transaction_kstat_rule *rule,
-			   u64 *resolved_ino);
+			     u64 *resolved_ino);
 struct kasumi_spoof_kstat_entry *
 kasumi_spoof_kstat_lookup_by_ino(unsigned long ino, unsigned long dev);
 

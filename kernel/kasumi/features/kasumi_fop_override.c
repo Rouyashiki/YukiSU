@@ -119,24 +119,29 @@ kasumi_fop_template_lookup_locked(const struct file_operations *orig)
 	return NULL;
 }
 
-static const struct file_operations *kasumi_fop_original(const struct file *file)
+static const struct file_operations *
+kasumi_fop_original(const struct file *file)
 {
 	const struct kasumi_fop_template *template = container_of(
-		READ_ONCE(file->f_op), struct kasumi_fop_template, shadow_fop);
+	    READ_ONCE(file->f_op), struct kasumi_fop_template, shadow_fop);
 
 	return template->orig_fop;
 }
 
-const struct file_operations *kasumi_fop_original_operations(const struct file *file)
+const struct file_operations *
+kasumi_fop_original_operations(const struct file *file)
 {
 	const struct file_operations *operations = READ_ONCE(file->f_op);
 
-	if (operations && operations->iterate_shared == kasumi_shadow_iterate_shared)
+	if (operations &&
+	    operations->iterate_shared == kasumi_shadow_iterate_shared)
 		return kasumi_fop_original(file);
 	return operations;
 }
 
-static ssize_t KASUMI_NOCFI kasumi_shadow_read(struct file *file, char __user *buffer, size_t count, loff_t *position)
+static ssize_t KASUMI_NOCFI kasumi_shadow_read(struct file *file,
+					       char __user *buffer,
+					       size_t count, loff_t *position)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -148,7 +153,9 @@ static ssize_t KASUMI_NOCFI kasumi_shadow_read(struct file *file, char __user *b
 	return result;
 }
 
-static ssize_t KASUMI_NOCFI kasumi_shadow_write(struct file *file, const char __user *buffer, size_t count, loff_t *position)
+static ssize_t KASUMI_NOCFI kasumi_shadow_write(struct file *file,
+						const char __user *buffer,
+						size_t count, loff_t *position)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -160,7 +167,8 @@ static ssize_t KASUMI_NOCFI kasumi_shadow_write(struct file *file, const char __
 	return result;
 }
 
-static ssize_t KASUMI_NOCFI kasumi_shadow_read_iter(struct kiocb *iocb, struct iov_iter *iter)
+static ssize_t KASUMI_NOCFI kasumi_shadow_read_iter(struct kiocb *iocb,
+						    struct iov_iter *iter)
 {
 	struct file *file = iocb->ki_filp;
 	const struct file_operations *original = kasumi_fop_original(file);
@@ -173,7 +181,8 @@ static ssize_t KASUMI_NOCFI kasumi_shadow_read_iter(struct kiocb *iocb, struct i
 	return result;
 }
 
-static ssize_t KASUMI_NOCFI kasumi_shadow_write_iter(struct kiocb *iocb, struct iov_iter *iter)
+static ssize_t KASUMI_NOCFI kasumi_shadow_write_iter(struct kiocb *iocb,
+						     struct iov_iter *iter)
 {
 	struct file *file = iocb->ki_filp;
 	const struct file_operations *original = kasumi_fop_original(file);
@@ -186,7 +195,8 @@ static ssize_t KASUMI_NOCFI kasumi_shadow_write_iter(struct kiocb *iocb, struct 
 	return result;
 }
 
-static __poll_t KASUMI_NOCFI kasumi_shadow_poll(struct file *file, struct poll_table_struct *table)
+static __poll_t KASUMI_NOCFI kasumi_shadow_poll(struct file *file,
+						struct poll_table_struct *table)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -198,7 +208,9 @@ static __poll_t KASUMI_NOCFI kasumi_shadow_poll(struct file *file, struct poll_t
 	return result;
 }
 
-static long KASUMI_NOCFI kasumi_shadow_unlocked_ioctl(struct file *file, unsigned int command, unsigned long argument)
+static long KASUMI_NOCFI kasumi_shadow_unlocked_ioctl(struct file *file,
+						      unsigned int command,
+						      unsigned long argument)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -210,7 +222,9 @@ static long KASUMI_NOCFI kasumi_shadow_unlocked_ioctl(struct file *file, unsigne
 	return result;
 }
 
-static long KASUMI_NOCFI kasumi_shadow_compat_ioctl(struct file *file, unsigned int command, unsigned long argument)
+static long KASUMI_NOCFI kasumi_shadow_compat_ioctl(struct file *file,
+						    unsigned int command,
+						    unsigned long argument)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -222,7 +236,8 @@ static long KASUMI_NOCFI kasumi_shadow_compat_ioctl(struct file *file, unsigned 
 	return result;
 }
 
-static int KASUMI_NOCFI kasumi_shadow_mmap(struct file *file, struct vm_area_struct *area)
+static int KASUMI_NOCFI kasumi_shadow_mmap(struct file *file,
+					   struct vm_area_struct *area)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -246,7 +261,8 @@ static int KASUMI_NOCFI kasumi_shadow_flush(struct file *file, fl_owner_t owner)
 	return result;
 }
 
-static int KASUMI_NOCFI kasumi_shadow_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+static int KASUMI_NOCFI kasumi_shadow_fsync(struct file *file, loff_t start,
+					    loff_t end, int datasync)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -258,7 +274,8 @@ static int KASUMI_NOCFI kasumi_shadow_fsync(struct file *file, loff_t start, lof
 	return result;
 }
 
-static int KASUMI_NOCFI kasumi_shadow_fasync(int fd, struct file *file, int flag)
+static int KASUMI_NOCFI kasumi_shadow_fasync(int fd, struct file *file,
+					     int flag)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -270,7 +287,8 @@ static int KASUMI_NOCFI kasumi_shadow_fasync(int fd, struct file *file, int flag
 	return result;
 }
 
-static int KASUMI_NOCFI kasumi_shadow_lock(struct file *file, int command, struct file_lock *lock)
+static int KASUMI_NOCFI kasumi_shadow_lock(struct file *file, int command,
+					   struct file_lock *lock)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -282,7 +300,8 @@ static int KASUMI_NOCFI kasumi_shadow_lock(struct file *file, int command, struc
 	return result;
 }
 
-static int KASUMI_NOCFI kasumi_shadow_flock(struct file *file, int command, struct file_lock *lock)
+static int KASUMI_NOCFI kasumi_shadow_flock(struct file *file, int command,
+					    struct file_lock *lock)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -294,19 +313,24 @@ static int KASUMI_NOCFI kasumi_shadow_flock(struct file *file, int command, stru
 	return result;
 }
 
-static unsigned long KASUMI_NOCFI kasumi_shadow_get_unmapped_area(struct file *file, unsigned long address, unsigned long length, unsigned long offset, unsigned long flags)
+static unsigned long KASUMI_NOCFI kasumi_shadow_get_unmapped_area(
+    struct file *file, unsigned long address, unsigned long length,
+    unsigned long offset, unsigned long flags)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
 	unsigned long result;
 
 	kasumi_dir_native_enter(file, &guard);
-	result = original->get_unmapped_area(file, address, length, offset, flags);
+	result =
+	    original->get_unmapped_area(file, address, length, offset, flags);
 	kasumi_dir_native_leave(file, &guard);
 	return result;
 }
 
-static ssize_t KASUMI_NOCFI kasumi_shadow_splice_write(struct pipe_inode_info *pipe, struct file *file, loff_t *position, size_t length, unsigned int flags)
+static ssize_t KASUMI_NOCFI
+kasumi_shadow_splice_write(struct pipe_inode_info *pipe, struct file *file,
+			   loff_t *position, size_t length, unsigned int flags)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -318,7 +342,9 @@ static ssize_t KASUMI_NOCFI kasumi_shadow_splice_write(struct pipe_inode_info *p
 	return result;
 }
 
-static ssize_t KASUMI_NOCFI kasumi_shadow_splice_read(struct file *file, loff_t *position, struct pipe_inode_info *pipe, size_t length, unsigned int flags)
+static ssize_t KASUMI_NOCFI kasumi_shadow_splice_read(
+    struct file *file, loff_t *position, struct pipe_inode_info *pipe,
+    size_t length, unsigned int flags)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -330,7 +356,8 @@ static ssize_t KASUMI_NOCFI kasumi_shadow_splice_read(struct file *file, loff_t 
 	return result;
 }
 
-static long KASUMI_NOCFI kasumi_shadow_fallocate(struct file *file, int mode, loff_t offset, loff_t length)
+static long KASUMI_NOCFI kasumi_shadow_fallocate(struct file *file, int mode,
+						 loff_t offset, loff_t length)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -342,7 +369,8 @@ static long KASUMI_NOCFI kasumi_shadow_fallocate(struct file *file, int mode, lo
 	return result;
 }
 
-static void KASUMI_NOCFI kasumi_shadow_show_fdinfo(struct seq_file *seq, struct file *file)
+static void KASUMI_NOCFI kasumi_shadow_show_fdinfo(struct seq_file *seq,
+						   struct file *file)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -352,7 +380,8 @@ static void KASUMI_NOCFI kasumi_shadow_show_fdinfo(struct seq_file *seq, struct 
 	kasumi_dir_native_leave(file, &guard);
 }
 
-static int KASUMI_NOCFI kasumi_shadow_fadvise(struct file *file, loff_t offset, loff_t length, int advice)
+static int KASUMI_NOCFI kasumi_shadow_fadvise(struct file *file, loff_t offset,
+					      loff_t length, int advice)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -365,7 +394,8 @@ static int KASUMI_NOCFI kasumi_shadow_fadvise(struct file *file, loff_t offset, 
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 5, 0)
-static int KASUMI_NOCFI kasumi_shadow_iterate(struct file *file, struct dir_context *ctx)
+static int KASUMI_NOCFI kasumi_shadow_iterate(struct file *file,
+					      struct dir_context *ctx)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -379,7 +409,10 @@ static int KASUMI_NOCFI kasumi_shadow_iterate(struct file *file, struct dir_cont
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 5, 0)
-static ssize_t KASUMI_NOCFI kasumi_shadow_sendpage(struct file *file, struct page *page, int offset, size_t length, loff_t *position, int more)
+static ssize_t KASUMI_NOCFI kasumi_shadow_sendpage(struct file *file,
+						   struct page *page,
+						   int offset, size_t length,
+						   loff_t *position, int more)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -405,7 +438,8 @@ static void KASUMI_NOCFI kasumi_shadow_splice_eof(struct file *file)
 #endif
 
 #if !defined(CONFIG_MMU)
-static unsigned int KASUMI_NOCFI kasumi_shadow_mmap_capabilities(struct file *file)
+static unsigned int
+    KASUMI_NOCFI kasumi_shadow_mmap_capabilities(struct file *file)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -419,7 +453,8 @@ static unsigned int KASUMI_NOCFI kasumi_shadow_mmap_capabilities(struct file *fi
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)
-static int KASUMI_NOCFI kasumi_shadow_uring_cmd(struct io_uring_cmd *command, unsigned int flags)
+static int KASUMI_NOCFI kasumi_shadow_uring_cmd(struct io_uring_cmd *command,
+						unsigned int flags)
 {
 	struct file *file = command->file;
 	const struct file_operations *original = kasumi_fop_original(file);
@@ -434,7 +469,10 @@ static int KASUMI_NOCFI kasumi_shadow_uring_cmd(struct io_uring_cmd *command, un
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
-static int KASUMI_NOCFI kasumi_shadow_uring_cmd_iopoll(struct io_uring_cmd *command, struct io_comp_batch *batch, unsigned int flags)
+static int
+    KASUMI_NOCFI kasumi_shadow_uring_cmd_iopoll(struct io_uring_cmd *command,
+						struct io_comp_batch *batch,
+						unsigned int flags)
 {
 	struct file *file = command->file;
 	const struct file_operations *original = kasumi_fop_original(file);
@@ -449,7 +487,8 @@ static int KASUMI_NOCFI kasumi_shadow_uring_cmd_iopoll(struct io_uring_cmd *comm
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-static int KASUMI_NOCFI kasumi_shadow_mmap_prepare(struct vm_area_desc *description)
+static int
+    KASUMI_NOCFI kasumi_shadow_mmap_prepare(struct vm_area_desc *description)
 {
 	struct file *file = description->file;
 	const struct file_operations *original = kasumi_fop_original(file);
@@ -479,7 +518,9 @@ static int KASUMI_NOCFI kasumi_shadow_iopoll(struct kiocb *iocb, bool spin)
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
-static int KASUMI_NOCFI kasumi_shadow_iopoll(struct kiocb *iocb, struct io_comp_batch *batch, unsigned int flags)
+static int KASUMI_NOCFI kasumi_shadow_iopoll(struct kiocb *iocb,
+					     struct io_comp_batch *batch,
+					     unsigned int flags)
 {
 	struct file *file = iocb->ki_filp;
 	const struct file_operations *original = kasumi_fop_original(file);
@@ -495,16 +536,16 @@ static int KASUMI_NOCFI kasumi_shadow_iopoll(struct kiocb *iocb, struct io_comp_
 
 static int KASUMI_NOCFI kasumi_shadow_setlease(struct file *file,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-	int argument,
+					       int argument,
 #else
-	long argument,
+					       long argument,
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
-	struct file_lease **lease,
+					       struct file_lease **lease,
 #else
-	struct file_lock **lease,
+					       struct file_lock **lease,
 #endif
-	void **private)
+					       void **private)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -517,55 +558,59 @@ static int KASUMI_NOCFI kasumi_shadow_setlease(struct file *file,
 }
 
 static ssize_t KASUMI_NOCFI kasumi_shadow_copy_file_range(
-	struct file *input, loff_t input_offset, struct file *output,
-	loff_t output_offset, size_t length, unsigned int flags)
+    struct file *input, loff_t input_offset, struct file *output,
+    loff_t output_offset, size_t length, unsigned int flags)
 {
 	const struct file_operations *original = kasumi_fop_original(output);
-	struct file *first = (unsigned long)input < (unsigned long)output ? input : output;
+	struct file *first =
+	    (unsigned long)input < (unsigned long)output ? input : output;
 	struct file *second = first == input ? output : input;
 	struct kasumi_dir_native_guard first_guard, second_guard;
 	ssize_t result;
 
 	kasumi_dir_native_enter(first, &first_guard);
 	kasumi_dir_native_enter(second, &second_guard);
-	result = original->copy_file_range(input, input_offset, output, output_offset,
-					 length, flags);
+	result = original->copy_file_range(input, input_offset, output,
+					   output_offset, length, flags);
 	kasumi_dir_native_leave(second, &second_guard);
 	kasumi_dir_native_leave(first, &first_guard);
 	return result;
 }
 
 static loff_t KASUMI_NOCFI kasumi_shadow_remap_file_range(
-	struct file *input, loff_t input_offset, struct file *output,
-	loff_t output_offset, loff_t length, unsigned int flags)
+    struct file *input, loff_t input_offset, struct file *output,
+    loff_t output_offset, loff_t length, unsigned int flags)
 {
-	const struct file_operations *original = kasumi_fop_original(
-		(flags & REMAP_FILE_DEDUP) ? output : input);
-	struct file *first = (unsigned long)input < (unsigned long)output ? input : output;
+	const struct file_operations *original =
+	    kasumi_fop_original((flags & REMAP_FILE_DEDUP) ? output : input);
+	struct file *first =
+	    (unsigned long)input < (unsigned long)output ? input : output;
 	struct file *second = first == input ? output : input;
 	struct kasumi_dir_native_guard first_guard, second_guard;
 	loff_t result;
 
 	kasumi_dir_native_enter(first, &first_guard);
 	kasumi_dir_native_enter(second, &second_guard);
-	result = original->remap_file_range(input, input_offset, output, output_offset,
-					 length, flags);
+	result = original->remap_file_range(input, input_offset, output,
+					    output_offset, length, flags);
 	kasumi_dir_native_leave(second, &second_guard);
 	kasumi_dir_native_leave(first, &first_guard);
 	return result;
 }
 
-static loff_t KASUMI_NOCFI kasumi_shadow_llseek(struct file *file, loff_t offset, int whence)
+static loff_t KASUMI_NOCFI kasumi_shadow_llseek(struct file *file,
+						loff_t offset, int whence)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 
 	if (kasumi_vnode_is_ours(file_inode(file)))
-		return original->llseek ? original->llseek(file, offset, whence) : -ESPIPE;
-	return kasumi_dir_view_llseek(file, file, original,
-				      offset, whence);
+		return original->llseek ? original->llseek(file, offset, whence)
+					: -ESPIPE;
+	return kasumi_dir_view_llseek(file, file, original, offset, whence);
 }
 
-static int KASUMI_NOCFI kasumi_shadow_release(struct inode *inode, struct file *file)
+static int KASUMI_NOCFI kasumi_shadow_release(struct inode *inode,
+					      struct file *file)
 {
 	const struct file_operations *original = kasumi_fop_original(file);
 	struct kasumi_dir_native_guard guard;
@@ -609,7 +654,8 @@ kasumi_fop_template_alloc(const struct file_operations *orig)
 	if (orig->poll)
 		template->shadow_fop.poll = kasumi_shadow_poll;
 	if (orig->unlocked_ioctl)
-		template->shadow_fop.unlocked_ioctl = kasumi_shadow_unlocked_ioctl;
+		template->shadow_fop.unlocked_ioctl =
+		    kasumi_shadow_unlocked_ioctl;
 	if (orig->compat_ioctl)
 		template->shadow_fop.compat_ioctl = kasumi_shadow_compat_ioctl;
 	if (orig->mmap)
@@ -625,7 +671,8 @@ kasumi_fop_template_alloc(const struct file_operations *orig)
 	if (orig->flock)
 		template->shadow_fop.flock = kasumi_shadow_flock;
 	if (orig->get_unmapped_area)
-		template->shadow_fop.get_unmapped_area = kasumi_shadow_get_unmapped_area;
+		template->shadow_fop.get_unmapped_area =
+		    kasumi_shadow_get_unmapped_area;
 	if (orig->splice_write)
 		template->shadow_fop.splice_write = kasumi_shadow_splice_write;
 	if (orig->splice_read)
@@ -650,7 +697,8 @@ kasumi_fop_template_alloc(const struct file_operations *orig)
 #endif
 #if !defined(CONFIG_MMU)
 	if (orig->mmap_capabilities)
-		template->shadow_fop.mmap_capabilities = kasumi_shadow_mmap_capabilities;
+		template->shadow_fop.mmap_capabilities =
+		    kasumi_shadow_mmap_capabilities;
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)
 	if (orig->uring_cmd)
@@ -658,7 +706,8 @@ kasumi_fop_template_alloc(const struct file_operations *orig)
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	if (orig->uring_cmd_iopoll)
-		template->shadow_fop.uring_cmd_iopoll = kasumi_shadow_uring_cmd_iopoll;
+		template->shadow_fop.uring_cmd_iopoll =
+		    kasumi_shadow_uring_cmd_iopoll;
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	if (orig->mmap_prepare)
@@ -669,9 +718,11 @@ kasumi_fop_template_alloc(const struct file_operations *orig)
 	if (orig->setlease)
 		template->shadow_fop.setlease = kasumi_shadow_setlease;
 	if (orig->copy_file_range)
-		template->shadow_fop.copy_file_range = kasumi_shadow_copy_file_range;
+		template->shadow_fop.copy_file_range =
+		    kasumi_shadow_copy_file_range;
 	if (orig->remap_file_range)
-		template->shadow_fop.remap_file_range = kasumi_shadow_remap_file_range;
+		template->shadow_fop.remap_file_range =
+		    kasumi_shadow_remap_file_range;
 	template->shadow_fop.llseek = kasumi_shadow_llseek;
 	template->shadow_fop.release = kasumi_shadow_release;
 
@@ -741,7 +792,7 @@ KASUMI_NOCFI static int kasumi_shadow_iterate_shared(struct file *file,
 
 	atomic64_inc(&kasumi_hook_stats.iterate_fop_wrapped);
 	ret = kasumi_dir_view_iterate(file, file, orig, ctx,
-				     kasumi_dirhijack_collect, NULL, NULL);
+				      kasumi_dirhijack_collect, NULL, NULL);
 out:
 	srcu_read_unlock(&kasumi_fop_client_srcu, srcu_idx);
 	return ret;

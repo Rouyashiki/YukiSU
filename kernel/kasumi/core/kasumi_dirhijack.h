@@ -22,8 +22,8 @@ kasumi_dirhijack_original_iops(const struct inode *inode);
  * until replacement, the lower owner's callback drain and this SRCU drain end.
  */
 int kasumi_dirhijack_replace_iops(struct inode *inode,
-	const struct inode_operations *expected,
-	const struct inode_operations *replacement);
+				  const struct inode_operations *expected,
+				  const struct inode_operations *replacement);
 void kasumi_dirhijack_synchronize_iops(void);
 
 /*
@@ -71,14 +71,15 @@ int kasumi_dirhijack_add_shadow(const char *visible_path,
 struct kasumi_dirhijack_batch;
 struct kasumi_dirhijack_batch *kasumi_dirhijack_batch_begin(u64 generation);
 int kasumi_dirhijack_batch_add(struct kasumi_dirhijack_batch *batch,
-	const char *visible_path, const struct path *source,
-	unsigned long ino, u8 flags, bool lookup_only);
+			       const char *visible_path,
+			       const struct path *source, unsigned long ino,
+			       u8 flags, bool lookup_only);
 int kasumi_dirhijack_batch_hide(struct kasumi_dirhijack_batch *batch,
-	const char *visible_path, u32 rule_flags);
+				const char *visible_path, u32 rule_flags);
 int kasumi_dirhijack_batch_del(struct kasumi_dirhijack_batch *batch,
-	const char *visible_path);
+			       const char *visible_path);
 void kasumi_dirhijack_batch_finish(struct kasumi_dirhijack_batch *batch,
-	bool published);
+				   bool published);
 
 /* Remove one registered child (by visible path). */
 int kasumi_dirhijack_del(const char *visible_path);

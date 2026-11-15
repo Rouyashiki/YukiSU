@@ -44,15 +44,16 @@ kasumi_transaction_find(const struct file *file)
 	struct kasumi_transaction_state *state;
 
 	hash_for_each_possible(kasumi_transactions, state, node,
-			       (unsigned long)file) {
+			       (unsigned long)file)
+	{
 		if (state->file == file)
 			return state;
 	}
 	return NULL;
 }
 
-static void kasumi_transaction_configuration_free(
-	struct kasumi_transaction_state *state)
+static void
+kasumi_transaction_configuration_free(struct kasumi_transaction_state *state)
 {
 	kfree(state->configuration.allow_uids);
 	kfree(state->configuration.deny_uids);
@@ -63,7 +64,7 @@ static void kasumi_transaction_configuration_free(
 }
 
 static int kasumi_transaction_stage_configuration(const struct file *file,
-						 void __user *argument)
+						  void __user *argument)
 {
 	struct kasumi_transaction_configuration request;
 	struct kasumi_batch_configuration configuration = {};
@@ -81,8 +82,8 @@ static int kasumi_transaction_stage_configuration(const struct file *file,
 	    request.fields & ~(KSM_TX_CONFIG_SETTINGS | KSM_TX_CONFIG_POLICY |
 			       KSM_TX_CONFIG_MAPS | KSM_TX_CONFIG_KSTAT |
 			       KSM_TX_CONFIG_RESET_POLICY) ||
-	    request.reserved1 || request.reserved2 ||
-	    request.reserved[0] || request.reserved[1])
+	    request.reserved1 || request.reserved2 || request.reserved[0] ||
+	    request.reserved[1])
 		return -EINVAL;
 	state = kasumi_transaction_find(file);
 	if (!state || state->status.id != request.id)
@@ -90,7 +91,8 @@ static int kasumi_transaction_stage_configuration(const struct file *file,
 	if (state->status.state != KSM_TX_STATE_STAGING)
 		return -EALREADY;
 #ifdef KASUMI_EMBEDDED
-	if (request.fields & (KSM_TX_CONFIG_POLICY | KSM_TX_CONFIG_RESET_POLICY))
+	if (request.fields &
+	    (KSM_TX_CONFIG_POLICY | KSM_TX_CONFIG_RESET_POLICY))
 		return -EOPNOTSUPP;
 #endif
 	if (request.enabled > 1 || request.stealth > 1 || request.debug > 1 ||
@@ -110,14 +112,15 @@ static int kasumi_transaction_stage_configuration(const struct file *file,
 	configuration.policy_flags = request.policy_flags;
 	if (request.fields & KSM_TX_CONFIG_POLICY) {
 		if (request.allow_count) {
-			allow = memdup_user(u64_to_user_ptr(request.allow_uids),
-					   request.allow_count * sizeof(*allow));
+			allow =
+			    memdup_user(u64_to_user_ptr(request.allow_uids),
+					request.allow_count * sizeof(*allow));
 			if (IS_ERR(allow))
 				return PTR_ERR(allow);
 		}
 		if (request.deny_count) {
 			deny = memdup_user(u64_to_user_ptr(request.deny_uids),
-					  request.deny_count * sizeof(*deny));
+					   request.deny_count * sizeof(*deny));
 			if (IS_ERR(deny)) {
 				result = PTR_ERR(deny);
 				deny = NULL;
@@ -128,10 +131,12 @@ static int kasumi_transaction_stage_configuration(const struct file *file,
 		configuration.allow_count = request.allow_count;
 		configuration.deny_uids = deny;
 		configuration.deny_count = request.deny_count;
-		bytes += (request.allow_count + request.deny_count) * sizeof(u32);
+		bytes +=
+		    (request.allow_count + request.deny_count) * sizeof(u32);
 	}
 	if ((request.fields & KSM_TX_CONFIG_MAPS) && request.maps_count) {
-		maps = kvmalloc_array(request.maps_count, sizeof(*maps), GFP_KERNEL);
+		maps = kvmalloc_array(request.maps_count, sizeof(*maps),
+				      GFP_KERNEL);
 		if (!maps) {
 			result = -ENOMEM;
 			goto fail;
@@ -160,7 +165,8 @@ static int kasumi_transaction_stage_configuration(const struct file *file,
 		bytes += request.maps_count * sizeof(*maps);
 	}
 	if ((request.fields & KSM_TX_CONFIG_KSTAT) && request.kstat_count) {
-		kstats = kvmalloc_array(request.kstat_count, sizeof(*kstats), GFP_KERNEL);
+		kstats = kvmalloc_array(request.kstat_count, sizeof(*kstats),
+					GFP_KERNEL);
 		if (!kstats) {
 			result = -ENOMEM;
 			goto fail;
@@ -202,7 +208,7 @@ static void kasumi_staged_rules_free(struct list_head *rules)
 {
 	struct kasumi_staged_rule *rule, *next;
 
-	list_for_each_entry_safe(rule, next, rules, node) {
+	list_for_each_entry_safe (rule, next, rules, node) {
 		list_del(&rule->node);
 		kfree(rule->visible);
 		kfree(rule->source);
@@ -211,8 +217,8 @@ static void kasumi_staged_rules_free(struct list_head *rules)
 }
 
 static int kasumi_transaction_result(void __user *argument,
-				    struct kasumi_transaction_state *state,
-				    int result)
+				     struct kasumi_transaction_state *state,
+				     int result)
 {
 	if (copy_to_user(argument, &state->status, sizeof(state->status)))
 		return -EFAULT;
@@ -220,19 +226,20 @@ static int kasumi_transaction_result(void __user *argument,
 }
 
 static int kasumi_transaction_begin(const struct file *file,
-				   struct kasumi_transaction *request,
-				   void __user *argument)
+				    struct kasumi_transaction *request,
+				    void __user *argument)
 {
 	struct kasumi_transaction_state *state = kasumi_transaction_find(file);
 	u64 generation = kasumi_rules_generation();
 
-	if ((request->flags & ~(KSM_TX_REPLACE_PATH_RULES |
-			 KSM_TX_REPLACE_XATTR_RULES)) ||
+	if ((request->flags &
+	     ~(KSM_TX_REPLACE_PATH_RULES | KSM_TX_REPLACE_XATTR_RULES)) ||
 	    request->reserved[0] || request->reserved[1])
 		return -EINVAL;
 	if (request->id)
-		return state && state->status.id == request->id ?
-		       kasumi_transaction_result(argument, state, 0) : -ESTALE;
+		return state && state->status.id == request->id
+			   ? kasumi_transaction_result(argument, state, 0)
+			   : -ESTALE;
 	if (state && state->status.state == KSM_TX_STATE_STAGING)
 		return kasumi_transaction_result(argument, state, -EBUSY);
 	if (request->expected_generation &&
@@ -246,7 +253,8 @@ static int kasumi_transaction_begin(const struct file *file,
 			return -ENOMEM;
 		state->file = file;
 		INIT_LIST_HEAD(&state->rules);
-		hash_add(kasumi_transactions, &state->node, (unsigned long)file);
+		hash_add(kasumi_transactions, &state->node,
+			 (unsigned long)file);
 	}
 	kasumi_staged_rules_free(&state->rules);
 	kasumi_transaction_configuration_free(state);
@@ -284,7 +292,8 @@ static struct kasumi_staged_rule *
 kasumi_transaction_copy_rule(const struct kasumi_transaction_rule *request)
 {
 	struct kasumi_staged_rule *rule;
-	unsigned int command = kasumi_transaction_rule_command(request->operation);
+	unsigned int command =
+	    kasumi_transaction_rule_command(request->operation);
 	bool source_required = request->operation == KSM_TX_REDIRECT ||
 			       request->operation == KSM_TX_MERGE;
 	int error = -EINVAL;
@@ -292,7 +301,7 @@ kasumi_transaction_copy_rule(const struct kasumi_transaction_rule *request)
 	if (!command || !request->visible_path ||
 	    request->flags & ~KSM_RULE_FLAGS_MASK ||
 	    (request->flags && (request->operation == KSM_TX_DELETE ||
-			       request->operation == KSM_TX_HIDE_XATTRS)) ||
+				request->operation == KSM_TX_HIDE_XATTRS)) ||
 	    source_required != !!request->source_path)
 		return ERR_PTR(-EINVAL);
 	rule = kzalloc(sizeof(*rule), GFP_KERNEL);
@@ -300,7 +309,8 @@ kasumi_transaction_copy_rule(const struct kasumi_transaction_rule *request)
 		return ERR_PTR(-ENOMEM);
 	rule->command = command;
 	rule->flags = request->flags;
-	rule->visible = strndup_user(u64_to_user_ptr(request->visible_path), PATH_MAX);
+	rule->visible =
+	    strndup_user(u64_to_user_ptr(request->visible_path), PATH_MAX);
 	if (IS_ERR(rule->visible)) {
 		error = PTR_ERR(rule->visible);
 		rule->visible = NULL;
@@ -309,7 +319,8 @@ kasumi_transaction_copy_rule(const struct kasumi_transaction_rule *request)
 	if (rule->visible[0] != '/')
 		goto fail;
 	if (source_required) {
-		rule->source = strndup_user(u64_to_user_ptr(request->source_path), PATH_MAX);
+		rule->source = strndup_user(
+		    u64_to_user_ptr(request->source_path), PATH_MAX);
 		if (IS_ERR(rule->source)) {
 			error = PTR_ERR(rule->source);
 			rule->source = NULL;
@@ -330,7 +341,8 @@ fail:
 	return ERR_PTR(error);
 }
 
-static int kasumi_transaction_stage(const struct file *file, void __user *argument)
+static int kasumi_transaction_stage(const struct file *file,
+				    void __user *argument)
 {
 	struct kasumi_transaction_stage request;
 	struct kasumi_transaction_rule *rules;
@@ -350,14 +362,16 @@ static int kasumi_transaction_stage(const struct file *file, void __user *argume
 		return -ESTALE;
 	if (state->status.state != KSM_TX_STATE_STAGING)
 		return -EALREADY;
-	if (request.count > KSM_TX_MAX_OPERATIONS - state->status.operation_count)
+	if (request.count >
+	    KSM_TX_MAX_OPERATIONS - state->status.operation_count)
 		return -E2BIG;
 	rules = memdup_user(u64_to_user_ptr(request.rules),
 			    request.count * sizeof(*rules));
 	if (IS_ERR(rules))
 		return PTR_ERR(rules);
 	for (index = 0; index < request.count; index++) {
-		struct kasumi_staged_rule *rule = kasumi_transaction_copy_rule(&rules[index]);
+		struct kasumi_staged_rule *rule =
+		    kasumi_transaction_copy_rule(&rules[index]);
 
 		if (IS_ERR(rule)) {
 			result = PTR_ERR(rule);
@@ -412,9 +426,9 @@ static int kasumi_transaction_commit(struct kasumi_transaction_state *state)
 			goto finish;
 	}
 	index = 0;
-	list_for_each_entry(rule, &state->rules, node) {
+	list_for_each_entry (rule, &state->rules, node) {
 		result = kasumi_apply_path_rule(rule->command, rule->visible,
-					       rule->source, rule->flags);
+						rule->source, rule->flags);
 		if (result)
 			break;
 		index++;
@@ -424,7 +438,8 @@ finish:
 	state->status.error = result;
 	state->status.failed_operation = result ? index : U32_MAX;
 	state->status.generation = kasumi_rules_generation();
-	state->status.state = result ? KSM_TX_STATE_FAILED : KSM_TX_STATE_COMMITTED;
+	state->status.state =
+	    result ? KSM_TX_STATE_FAILED : KSM_TX_STATE_COMMITTED;
 	kasumi_staged_rules_free(&state->rules);
 	kasumi_transaction_configuration_free(state);
 	state->bytes = 0;
@@ -475,20 +490,19 @@ long kasumi_transaction_ioctl(const struct file *file, unsigned int command,
 
 	if (command == KSM_IOC_GET_CAPABILITIES) {
 		struct kasumi_capabilities capabilities = {
-			.size = sizeof(capabilities),
-			.version = KSM_CAPABILITIES_VERSION,
-			.capabilities = KSM_CAP_ATOMIC_PATH_RULES |
-					KSM_CAP_ATOMIC_SETTINGS | KSM_CAP_ATOMIC_MAPS |
-					KSM_CAP_ATOMIC_KSTAT,
-			.generation = kasumi_rules_generation(),
-			.operations = (1ULL << KSM_TX_REDIRECT) |
-				      (1ULL << KSM_TX_MERGE) |
-				      (1ULL << KSM_TX_HIDE) |
-				      (1ULL << KSM_TX_DELETE) |
-				      (1ULL << KSM_TX_HIDE_XATTRS),
-			.max_stage = KSM_TX_MAX_STAGE,
-			.max_operations = KSM_TX_MAX_OPERATIONS,
-			.max_bytes = KSM_TX_MAX_BYTES,
+		    .size = sizeof(capabilities),
+		    .version = KSM_CAPABILITIES_VERSION,
+		    .capabilities = KSM_CAP_ATOMIC_PATH_RULES |
+				    KSM_CAP_ATOMIC_SETTINGS |
+				    KSM_CAP_ATOMIC_MAPS | KSM_CAP_ATOMIC_KSTAT,
+		    .generation = kasumi_rules_generation(),
+		    .operations =
+			(1ULL << KSM_TX_REDIRECT) | (1ULL << KSM_TX_MERGE) |
+			(1ULL << KSM_TX_HIDE) | (1ULL << KSM_TX_DELETE) |
+			(1ULL << KSM_TX_HIDE_XATTRS),
+		    .max_stage = KSM_TX_MAX_STAGE,
+		    .max_operations = KSM_TX_MAX_OPERATIONS,
+		    .max_bytes = KSM_TX_MAX_BYTES,
 		};
 		u32 size;
 
@@ -504,22 +518,30 @@ long kasumi_transaction_ioctl(const struct file *file, unsigned int command,
 		if (kasumi_live_rules_available())
 			capabilities.capabilities |= KSM_CAP_LIVE_RULES;
 		if (kasumi_file_lock_ready())
-			capabilities.capabilities |= KSM_CAP_SOURCE_LOCKS |
-				KSM_CAP_SOURCE_LEASES;
+			capabilities.capabilities |=
+			    KSM_CAP_SOURCE_LOCKS | KSM_CAP_SOURCE_LEASES;
 		if (kasumi_notify_view_capabilities() & KASUMI_NOTIFY_INOTIFY)
 			capabilities.capabilities |= KSM_CAP_SOURCE_INOTIFY;
-		if (kasumi_notify_view_capabilities() & KASUMI_NOTIFY_FANOTIFY_INODE)
-			capabilities.capabilities |= KSM_CAP_SOURCE_FANOTIFY_INODE;
-		if (kasumi_notify_view_capabilities() & KASUMI_NOTIFY_MULTISOURCE_INOTIFY)
-			capabilities.capabilities |= KSM_CAP_MULTISOURCE_INOTIFY;
-		if (kasumi_notify_view_capabilities() & KASUMI_NOTIFY_MULTISOURCE_FANOTIFY)
-			capabilities.capabilities |= KSM_CAP_MULTISOURCE_FANOTIFY;
+		if (kasumi_notify_view_capabilities() &
+		    KASUMI_NOTIFY_FANOTIFY_INODE)
+			capabilities.capabilities |=
+			    KSM_CAP_SOURCE_FANOTIFY_INODE;
+		if (kasumi_notify_view_capabilities() &
+		    KASUMI_NOTIFY_MULTISOURCE_INOTIFY)
+			capabilities.capabilities |=
+			    KSM_CAP_MULTISOURCE_INOTIFY;
+		if (kasumi_notify_view_capabilities() &
+		    KASUMI_NOTIFY_MULTISOURCE_FANOTIFY)
+			capabilities.capabilities |=
+			    KSM_CAP_MULTISOURCE_FANOTIFY;
 		if (kasumi_source_xattr_available())
 			capabilities.capabilities |= KSM_CAP_SOURCE_XATTR;
 		if (kasumi_proc_seq_capabilities() & KASUMI_PROC_SEQ_CAP_QUERY)
 			capabilities.capabilities |= KSM_CAP_PROCMAP_QUERY;
-		return copy_to_user(argument, &capabilities, sizeof(capabilities)) ?
-		       -EFAULT : 0;
+		return copy_to_user(argument, &capabilities,
+				    sizeof(capabilities))
+			   ? -EFAULT
+			   : 0;
 	}
 	if (command == KSM_IOC_STAGE_TRANSACTION)
 		return kasumi_transaction_stage(file, argument);

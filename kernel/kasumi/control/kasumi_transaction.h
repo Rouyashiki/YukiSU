@@ -10,6 +10,6 @@ long kasumi_transaction_ioctl(const struct file *file, unsigned int command,
 			      void __user *argument);
 void kasumi_transaction_release(const struct file *file);
 int kasumi_apply_path_rule(unsigned int command, const char *visible,
-			  const char *source, u32 flags);
+			   const char *source, u32 flags);
 
 #endif

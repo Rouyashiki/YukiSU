@@ -20,10 +20,9 @@ static bool kasumi_io_notify_admitting;
  */
 static void kasumi_io_notify_source(const struct path *source, u32 mask)
 {
-	fsnotify_parent(source->dentry, mask & KASUMI_IO_NOTIFY_MASK,
-		source, FSNOTIFY_EVENT_PATH);
+	fsnotify_parent(source->dentry, mask & KASUMI_IO_NOTIFY_MASK, source,
+			FSNOTIFY_EVENT_PATH);
 }
-
 
 struct kasumi_io_notify {
 	unsigned int users;
@@ -39,8 +38,10 @@ static atomic_t kasumi_io_notify_marks = ATOMIC_INIT(0);
 static DECLARE_WAIT_QUEUE_HEAD(kasumi_io_notify_wait);
 
 static int kasumi_io_notify_event(struct fsnotify_group *group, u32 mask,
-	const void *data, int data_type, struct inode *dir,
-	const struct qstr *name, u32 cookie, struct fsnotify_iter_info *iterator)
+				  const void *data, int data_type,
+				  struct inode *dir, const struct qstr *name,
+				  u32 cookie,
+				  struct fsnotify_iter_info *iterator)
 {
 	struct fsnotify_mark *mark = fsnotify_iter_inode_mark(iterator);
 	struct kasumi_io_notify *relay;
@@ -53,7 +54,8 @@ static int kasumi_io_notify_event(struct fsnotify_group *group, u32 mask,
 	/* Metadata operations can also emit MODIFY with INODE/DENTRY data after
 	 * the delegated source operation already sent its native notification.
 	 */
-	if (!mark || data_type != FSNOTIFY_EVENT_PATH || !(mask & KASUMI_IO_NOTIFY_MASK))
+	if (!mark || data_type != FSNOTIFY_EVENT_PATH ||
+	    !(mask & KASUMI_IO_NOTIFY_MASK))
 		return 0;
 	relay = container_of(mark, struct kasumi_io_notify, mark);
 	kasumi_io_notify_source(&relay->source, mask);
@@ -62,7 +64,8 @@ static int kasumi_io_notify_event(struct fsnotify_group *group, u32 mask,
 
 static void kasumi_io_notify_free(struct fsnotify_mark *mark)
 {
-	struct kasumi_io_notify *relay = container_of(mark, struct kasumi_io_notify, mark);
+	struct kasumi_io_notify *relay =
+	    container_of(mark, struct kasumi_io_notify, mark);
 
 	path_put(&relay->source);
 	kfree(relay);
@@ -71,20 +74,24 @@ static void kasumi_io_notify_free(struct fsnotify_mark *mark)
 }
 
 static const struct fsnotify_ops kasumi_io_notify_ops = {
-	.handle_event = kasumi_io_notify_event,
-	.free_mark = kasumi_io_notify_free,
+    .handle_event = kasumi_io_notify_event,
+    .free_mark = kasumi_io_notify_free,
 };
 
-struct fsnotify_mark *kasumi_io_notify_alive_mark(struct kasumi_io_notify *relay)
+struct fsnotify_mark *
+kasumi_io_notify_alive_mark(struct kasumi_io_notify *relay)
 {
-	unsigned int needed = FSNOTIFY_MARK_FLAG_ATTACHED | FSNOTIFY_MARK_FLAG_ALIVE;
+	unsigned int needed =
+	    FSNOTIFY_MARK_FLAG_ATTACHED | FSNOTIFY_MARK_FLAG_ALIVE;
 
-	return relay && (READ_ONCE(relay->mark.flags) & needed) == needed ?
-		&relay->mark : NULL;
+	return relay && (READ_ONCE(relay->mark.flags) & needed) == needed
+		   ? &relay->mark
+		   : NULL;
 }
 
 int KASUMI_NOCFI kasumi_io_notify_attach(struct inode *inode,
-	const struct path *source, struct kasumi_io_notify **result)
+					 const struct path *source,
+					 struct kasumi_io_notify **result)
 {
 	struct kasumi_io_notify *relay;
 	unsigned int nofs;
@@ -93,7 +100,8 @@ int KASUMI_NOCFI kasumi_io_notify_attach(struct inode *inode,
 	*result = NULL;
 	if (!READ_ONCE(kasumi_io_notify_admitting))
 		return -ESHUTDOWN;
-	if (!source || !source->dentry || !source->mnt || !d_inode(source->dentry))
+	if (!source || !source->dentry || !source->mnt ||
+	    !d_inode(source->dentry))
 		return -EINVAL;
 	/* Sources are immutable and already published before a new vnode is
 	 * attached, so nested vnode sources form an acyclic ownership chain.
@@ -111,13 +119,15 @@ int KASUMI_NOCFI kasumi_io_notify_attach(struct inode *inode,
 #ifdef FSNOTIFY_MARK_FLAG_NO_IREF
 	relay->mark.flags |= FSNOTIFY_MARK_FLAG_NO_IREF;
 #endif
-	/* Child publication can still hold the delegated source directory lock. */
+	/* Child publication can still hold the delegated source directory lock.
+	 */
 	nofs = memalloc_nofs_save();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	error = kasumi_io_add_mark(&relay->mark, inode, FSNOTIFY_OBJ_TYPE_INODE, 0);
+	error =
+	    kasumi_io_add_mark(&relay->mark, inode, FSNOTIFY_OBJ_TYPE_INODE, 0);
 #else
 	error = kasumi_io_add_mark(&relay->mark, &inode->i_fsnotify_marks,
-		FSNOTIFY_OBJ_TYPE_INODE, 0, NULL);
+				   FSNOTIFY_OBJ_TYPE_INODE, 0, NULL);
 #endif
 	memalloc_nofs_restore(nofs);
 	if (error) {
@@ -125,7 +135,8 @@ int KASUMI_NOCFI kasumi_io_notify_attach(struct inode *inode,
 		return error;
 	}
 	/* The initial reference belongs to vnode_info until detach. It also
-	 * keeps this pointer valid if eviction or unmount detaches the mark first.
+	 * keeps this pointer valid if eviction or unmount detaches the mark
+	 * first.
 	 */
 	*result = relay;
 	return 0;
@@ -145,13 +156,18 @@ int KASUMI_NOCFI kasumi_io_notify_init(void)
 
 	if (kasumi_io_notify_group)
 		return 0;
-	kasumi_io_alloc_group = (void *)kasumi_lookup_callable_quiet("fsnotify_alloc_group");
-	kasumi_io_destroy_group = (void *)kasumi_lookup_callable_quiet("fsnotify_destroy_group");
-	kasumi_io_add_mark = (void *)kasumi_lookup_callable_quiet("fsnotify_add_mark");
-	if (!kasumi_io_alloc_group || !kasumi_io_destroy_group || !kasumi_io_add_mark)
+	kasumi_io_alloc_group =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_alloc_group");
+	kasumi_io_destroy_group =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_destroy_group");
+	kasumi_io_add_mark =
+	    (void *)kasumi_lookup_callable_quiet("fsnotify_add_mark");
+	if (!kasumi_io_alloc_group || !kasumi_io_destroy_group ||
+	    !kasumi_io_add_mark)
 		return -EOPNOTSUPP;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-	kasumi_io_notify_group = kasumi_io_alloc_group(&kasumi_io_notify_ops, 0);
+	kasumi_io_notify_group =
+	    kasumi_io_alloc_group(&kasumi_io_notify_ops, 0);
 #else
 	kasumi_io_notify_group = kasumi_io_alloc_group(&kasumi_io_notify_ops);
 #endif
@@ -179,7 +195,8 @@ void KASUMI_NOCFI kasumi_io_notify_exit(void)
 	kasumi_io_notify_unlink_exit();
 	kasumi_io_destroy_group(kasumi_io_notify_group);
 	kasumi_io_notify_group = NULL;
-	wait_event(kasumi_io_notify_wait, !atomic_read(&kasumi_io_notify_marks));
+	wait_event(kasumi_io_notify_wait,
+		   !atomic_read(&kasumi_io_notify_marks));
 }
 
 /* The caller holds its per-inode notification mutex. Each successful native
@@ -190,7 +207,7 @@ void KASUMI_NOCFI kasumi_io_notify_exit(void)
  * not rebuild connectors or repeatedly schedule native mark retirement.
  */
 int kasumi_io_notify_get(struct inode *inode, const struct path *source,
-	struct kasumi_io_notify **slot)
+			 struct kasumi_io_notify **slot)
 {
 	struct kasumi_io_notify *previous = *slot, *replacement;
 	int error;

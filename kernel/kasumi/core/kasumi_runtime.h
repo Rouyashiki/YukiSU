@@ -110,7 +110,7 @@ void kasumi_rules_changed(void);
 void kasumi_rules_publish(u64 generation);
 
 static inline bool kasumi_rule_visible(const struct kasumi_rule_lifetime *life,
-				      u64 generation)
+				       u64 generation)
 {
 	u64 last = READ_ONCE(life->last_generation);
 

@@ -16,8 +16,8 @@ struct kasumi_exec_guard {
 
 static DEFINE_HASHTABLE(kasumi_exec_guards, 6);
 static spinlock_t kasumi_exec_guard_locks[HASH_SIZE(kasumi_exec_guards)] = {
-	[0 ... HASH_SIZE(kasumi_exec_guards) - 1] =
-		__SPIN_LOCK_UNLOCKED(kasumi_exec_guard_locks),
+    [0 ... HASH_SIZE(kasumi_exec_guards) - 1] =
+	__SPIN_LOCK_UNLOCKED(kasumi_exec_guard_locks),
 };
 static DECLARE_WAIT_QUEUE_HEAD(kasumi_exec_wait);
 static atomic_t kasumi_exec_active = ATOMIC_INIT(0);
@@ -37,14 +37,16 @@ bool kasumi_exec_view_ready(void)
 
 static bool kasumi_exec_guarded(void)
 {
-	spinlock_t *lock = &kasumi_exec_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_exec_guards))];
+	spinlock_t *lock = &kasumi_exec_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_exec_guards))];
 	struct kasumi_exec_guard *guard;
 	unsigned long flags;
 	bool found = false;
 
 	spin_lock_irqsave(lock, flags);
-	hash_for_each_possible(kasumi_exec_guards, guard, node, (unsigned long)current) {
+	hash_for_each_possible(kasumi_exec_guards, guard, node,
+			       (unsigned long)current)
+	{
 		if (guard->task == current) {
 			found = true;
 			break;
@@ -57,9 +59,9 @@ static bool kasumi_exec_guarded(void)
 static KASUMI_NOCFI struct file *
 kasumi_exec_entry(int fd, struct filename *name, unsigned long argument)
 {
-	struct kasumi_exec_guard guard = { .task = current };
-	spinlock_t *lock = &kasumi_exec_guard_locks[
-		hash_min((unsigned long)guard.task, HASH_BITS(kasumi_exec_guards))];
+	struct kasumi_exec_guard guard = {.task = current};
+	spinlock_t *lock = &kasumi_exec_guard_locks[hash_min(
+	    (unsigned long)guard.task, HASH_BITS(kasumi_exec_guards))];
 	struct file *file;
 	unsigned long irqflags;
 
@@ -126,9 +128,10 @@ int kasumi_exec_view_init(void)
 #ifndef CONFIG_ARM64
 	return -EOPNOTSUPP;
 #endif
-	kasumi_exec_original = (void *)kasumi_lookup_callable_quiet("do_open_execat");
+	kasumi_exec_original =
+	    (void *)kasumi_lookup_callable_quiet("do_open_execat");
 	kasumi_exec_tasks_barrier =
-		(void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
 	kasumi_exec_open_fallback = !kasumi_exec_original;
 	if (kasumi_exec_open_fallback)
 		kasumi_exec_open_original =

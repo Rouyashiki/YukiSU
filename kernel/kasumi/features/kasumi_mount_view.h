@@ -49,10 +49,11 @@ u32 kasumi_mount_view_count(const struct kasumi_mount_view *view);
 const struct kasumi_mount_record *
 kasumi_mount_view_at(const struct kasumi_mount_view *view, u32 index);
 const struct kasumi_mount_record *
-kasumi_mount_view_find(const struct kasumi_mount_view *view, u64 id, bool unique);
+kasumi_mount_view_find(const struct kasumi_mount_view *view, u64 id,
+		       bool unique);
 const struct kasumi_mount_record *
 kasumi_mount_view_representative(const struct kasumi_mount_view *view,
-				const struct kasumi_mount_record *record);
+				 const struct kasumi_mount_record *record);
 struct mnt_namespace *
 kasumi_mount_view_namespace(const struct kasumi_mount_view *view);
 const struct path *kasumi_mount_view_root(const struct kasumi_mount_view *view);

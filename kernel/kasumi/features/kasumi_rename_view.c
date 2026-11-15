@@ -36,8 +36,8 @@ struct kasumi_rename_guard {
 
 static DEFINE_HASHTABLE(kasumi_rename_guards, 6);
 static spinlock_t kasumi_rename_guard_locks[HASH_SIZE(kasumi_rename_guards)] = {
-	[0 ... HASH_SIZE(kasumi_rename_guards) - 1] =
-		__SPIN_LOCK_UNLOCKED(kasumi_rename_guard_locks),
+    [0 ... HASH_SIZE(kasumi_rename_guards) - 1] =
+	__SPIN_LOCK_UNLOCKED(kasumi_rename_guard_locks),
 };
 static DECLARE_WAIT_QUEUE_HEAD(kasumi_rename_wait);
 static atomic_t kasumi_rename_active = ATOMIC_INIT(0);
@@ -46,13 +46,16 @@ static bool kasumi_rename_registered;
 static struct kprobe kasumi_rename_probe;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
 static struct filename *(*kasumi_rename_parent_native)(int, struct filename *,
-	unsigned int, struct path *, struct qstr *, int *);
+						       unsigned int,
+						       struct path *,
+						       struct qstr *, int *);
 #else
 static int (*kasumi_rename_parent_native)(int, struct filename *, unsigned int,
-	struct path *, struct qstr *, int *, const struct path *);
+					  struct path *, struct qstr *, int *,
+					  const struct path *);
 #endif
-static struct dentry *(*kasumi_rename_lookup)(const struct qstr *, struct dentry *,
-					     unsigned int);
+static struct dentry *(*kasumi_rename_lookup)(const struct qstr *,
+					      struct dentry *, unsigned int);
 static typeof(lock_rename) *kasumi_rename_lock;
 static typeof(unlock_rename) *kasumi_rename_unlock;
 static typeof(d_ancestor) *kasumi_rename_ancestor;
@@ -71,14 +74,16 @@ static void (*kasumi_rename_tasks_barrier)(void);
 
 static bool kasumi_rename_guarded(void)
 {
-	spinlock_t *lock = &kasumi_rename_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_rename_guards))];
+	spinlock_t *lock = &kasumi_rename_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_rename_guards))];
 	struct kasumi_rename_guard *guard;
 	unsigned long flags;
 	bool found = false;
 
 	spin_lock_irqsave(lock, flags);
-	hash_for_each_possible(kasumi_rename_guards, guard, node, (unsigned long)current) {
+	hash_for_each_possible(kasumi_rename_guards, guard, node,
+			       (unsigned long)current)
+	{
 		if (guard->task == current) {
 			found = true;
 			break;
@@ -89,13 +94,17 @@ static bool kasumi_rename_guarded(void)
 }
 
 static KASUMI_NOCFI int kasumi_rename_parent(int fd, struct filename **name,
-	unsigned int flags, struct path *parent, struct qstr *last, int *type)
+					     unsigned int flags,
+					     struct path *parent,
+					     struct qstr *last, int *type)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
-	*name = kasumi_rename_parent_native(fd, *name, flags, parent, last, type);
+	*name =
+	    kasumi_rename_parent_native(fd, *name, flags, parent, last, type);
 	return PTR_ERR_OR_ZERO(*name);
 #else
-	return kasumi_rename_parent_native(fd, *name, flags, parent, last, type, NULL);
+	return kasumi_rename_parent_native(fd, *name, flags, parent, last, type,
+					   NULL);
 #endif
 }
 
@@ -128,16 +137,17 @@ static int kasumi_rename_source_parent(struct path *path, struct path *visible,
 	return 0;
 }
 
-static KASUMI_NOCFI struct dentry *kasumi_rename_lookup_child(
-	const struct qstr *name, struct dentry *parent, bool projected,
-	unsigned int flags)
+static KASUMI_NOCFI struct dentry *
+kasumi_rename_lookup_child(const struct qstr *name, struct dentry *parent,
+			   bool projected, unsigned int flags)
 {
 	struct qstr source_name = *name;
 	int ret;
 
 	if (projected) {
 		/* Name hashes are salted with the parent dentry. */
-		source_name.hash = full_name_hash(parent, name->name, name->len);
+		source_name.hash =
+		    full_name_hash(parent, name->name, name->len);
 		if (parent->d_flags & DCACHE_OP_HASH) {
 			ret = parent->d_op->d_hash(parent, &source_name);
 			if (ret < 0)
@@ -148,11 +158,14 @@ static KASUMI_NOCFI struct dentry *kasumi_rename_lookup_child(
 }
 
 static KASUMI_NOCFI int kasumi_rename_security(const struct path *old_path,
-	struct dentry *old_dentry, const struct path *new_path,
-	struct dentry *new_dentry, unsigned int flags)
+					       struct dentry *old_dentry,
+					       const struct path *new_path,
+					       struct dentry *new_dentry,
+					       unsigned int flags)
 {
 #ifdef CONFIG_SECURITY_PATH
-	return kasumi_rename_path_security(old_path, old_dentry, new_path, new_dentry, flags);
+	return kasumi_rename_path_security(old_path, old_dentry, new_path,
+					   new_dentry, flags);
 #else
 	return 0;
 #endif
@@ -165,16 +178,20 @@ static KASUMI_NOCFI int kasumi_rename_visible_security(
 	int ret;
 
 	ret = inode_permission(KSM_RENAME_IDMAP(old_view->mnt)
-			       d_inode(old_view->dentry), MAY_WRITE | MAY_EXEC);
+				   d_inode(old_view->dentry),
+			       MAY_WRITE | MAY_EXEC);
 	if (!ret && new_view->dentry != old_view->dentry)
 		ret = inode_permission(KSM_RENAME_IDMAP(new_view->mnt)
-				       d_inode(new_view->dentry), MAY_WRITE | MAY_EXEC);
+					   d_inode(new_view->dentry),
+				       MAY_WRITE | MAY_EXEC);
 	if (ret)
 		return ret;
-	ret = kasumi_rename_security(old_view, old_child, new_view, new_child, flags);
+	ret = kasumi_rename_security(old_view, old_child, new_view, new_child,
+				     flags);
 	if (!ret)
-		ret = kasumi_rename_inode_security(d_inode(old_view->dentry), old_child,
-						   d_inode(new_view->dentry), new_child, flags);
+		ret = kasumi_rename_inode_security(
+		    d_inode(old_view->dentry), old_child,
+		    d_inode(new_view->dentry), new_child, flags);
 	return ret;
 }
 
@@ -279,7 +296,8 @@ static KASUMI_NOCFI int kasumi_rename_delegation(struct inode **delegated)
 	if (context) {
 		smp_mb();
 		if (!list_empty_careful(&context->flc_lease))
-			ret = kasumi_rename_break_lease(*delegated, O_WRONLY, FL_DELEG);
+			ret = kasumi_rename_break_lease(*delegated, O_WRONLY,
+							FL_DELEG);
 	}
 #endif
 	iput(*delegated);
@@ -287,9 +305,10 @@ static KASUMI_NOCFI int kasumi_rename_delegation(struct inode **delegated)
 	return ret;
 }
 
-static KASUMI_NOCFI int kasumi_rename_source(const struct path *old_path,
-	struct dentry *old_dentry, const struct path *new_path,
-	struct dentry *new_dentry, struct inode **delegated, unsigned int flags)
+static KASUMI_NOCFI int
+kasumi_rename_source(const struct path *old_path, struct dentry *old_dentry,
+		     const struct path *new_path, struct dentry *new_dentry,
+		     struct inode **delegated, unsigned int flags)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
 	struct renamedata rd = {};
@@ -316,12 +335,14 @@ static KASUMI_NOCFI int kasumi_rename_source(const struct path *old_path,
 	return kasumi_vfs_rename(&rd);
 #else
 	return kasumi_vfs_rename(d_inode(old_path->dentry), old_dentry,
-				 d_inode(new_path->dentry), new_dentry, delegated, flags);
+				 d_inode(new_path->dentry), new_dentry,
+				 delegated, flags);
 #endif
 }
 
 static KASUMI_NOCFI int kasumi_rename_execute(int oldfd, struct filename *from,
-				int newfd, struct filename *to, unsigned int flags)
+					      int newfd, struct filename *to,
+					      unsigned int flags)
 {
 	struct dentry *old_dentry, *new_dentry, *trap;
 	struct dentry *old_child = NULL, *new_child = NULL;
@@ -339,7 +360,8 @@ static KASUMI_NOCFI int kasumi_rename_execute(int oldfd, struct filename *from,
 
 	if (flags & ~(RENAME_NOREPLACE | RENAME_EXCHANGE | RENAME_WHITEOUT))
 		goto put_names;
-	if ((flags & (RENAME_NOREPLACE | RENAME_WHITEOUT)) && (flags & RENAME_EXCHANGE))
+	if ((flags & (RENAME_NOREPLACE | RENAME_WHITEOUT)) &&
+	    (flags & RENAME_EXCHANGE))
 		goto put_names;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	target_flags |= LOOKUP_CREATE;
@@ -349,10 +371,12 @@ static KASUMI_NOCFI int kasumi_rename_execute(int oldfd, struct filename *from,
 	if (flags & RENAME_EXCHANGE)
 		target_flags = 0;
 retry:
-	error = kasumi_rename_parent(oldfd, &from, lookup_flags, &old_path, &old_last, &old_type);
+	error = kasumi_rename_parent(oldfd, &from, lookup_flags, &old_path,
+				     &old_last, &old_type);
 	if (error)
 		goto put_names;
-	error = kasumi_rename_parent(newfd, &to, lookup_flags, &new_path, &new_last, &new_type);
+	error = kasumi_rename_parent(newfd, &to, lookup_flags, &new_path,
+				     &new_last, &new_type);
 	if (error)
 		goto exit_old;
 	error = -EXDEV;
@@ -371,7 +395,8 @@ retry:
 	visible_write = old_path.mnt;
 	error = kasumi_rename_source_parent(&old_path, &old_visible, &old_last);
 	if (!error)
-		error = kasumi_rename_source_parent(&new_path, &new_visible, &new_last);
+		error = kasumi_rename_source_parent(&new_path, &new_visible,
+						    &new_last);
 	if (error)
 		goto drop_visible_write;
 	error = -EXDEV;
@@ -448,7 +473,8 @@ retry_delegation:
 		kasumi_vfs_internal_enter(&internal);
 	}
 	old_dentry = kasumi_rename_lookup_child(&old_last, old_path.dentry,
-		old_visible.dentry != NULL, lookup_flags);
+						old_visible.dentry != NULL,
+						lookup_flags);
 	error = PTR_ERR(old_dentry);
 	if (IS_ERR(old_dentry))
 		goto unlock_sources;
@@ -458,13 +484,15 @@ retry_delegation:
 		goto put_old;
 #endif
 	new_dentry = kasumi_rename_lookup_child(&new_last, new_path.dentry,
-		new_visible.dentry != NULL, lookup_flags | target_flags);
+						new_visible.dentry != NULL,
+						lookup_flags | target_flags);
 	error = PTR_ERR(new_dentry);
 	if (IS_ERR(new_dentry))
 		goto put_old;
 	/* Static rule aliases cannot be renamed by an underlying filesystem. */
 	error = -EXDEV;
-	if (kasumi_vnode_is_ours(d_inode(old_dentry)) || kasumi_vnode_is_ours(d_inode(new_dentry)))
+	if (kasumi_vnode_is_ours(d_inode(old_dentry)) ||
+	    kasumi_vnode_is_ours(d_inode(new_dentry)))
 		goto put_new;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
 	error = -EEXIST;
@@ -482,8 +510,9 @@ retry_delegation:
 			goto put_new;
 		}
 	}
-	if (!d_is_dir(old_dentry) && (old_last.name[old_last.len] ||
-	    (!(flags & RENAME_EXCHANGE) && new_last.name[new_last.len]))) {
+	if (!d_is_dir(old_dentry) &&
+	    (old_last.name[old_last.len] ||
+	     (!(flags & RENAME_EXCHANGE) && new_last.name[new_last.len]))) {
 		error = -ENOTDIR;
 		goto put_new;
 	}
@@ -507,10 +536,11 @@ retry_delegation:
 	moved = d_inode(old_dentry) != d_inode(new_dentry);
 	if (projected)
 		kasumi_rename_sequence(&old_visible, &new_visible);
-	error = kasumi_rename_security(&old_path, old_dentry, &new_path, new_dentry, flags);
+	error = kasumi_rename_security(&old_path, old_dentry, &new_path,
+				       new_dentry, flags);
 	if (!error)
-		error = kasumi_rename_source(&old_path, old_dentry, &new_path, new_dentry,
-					     &delegated, flags);
+		error = kasumi_rename_source(&old_path, old_dentry, &new_path,
+					     new_dentry, &delegated, flags);
 	if (!error && projected && moved) {
 		if (flags & RENAME_EXCHANGE) {
 			kasumi_rename_exchange(old_child, new_child);
@@ -588,11 +618,12 @@ put_names:
 }
 
 static KASUMI_NOCFI int kasumi_rename_entry(int oldfd, struct filename *from,
-				int newfd, struct filename *to, unsigned int flags)
+					    int newfd, struct filename *to,
+					    unsigned int flags)
 {
-	struct kasumi_rename_guard guard = { .task = current };
-	spinlock_t *lock = &kasumi_rename_guard_locks[
-		hash_min((unsigned long)guard.task, HASH_BITS(kasumi_rename_guards))];
+	struct kasumi_rename_guard guard = {.task = current};
+	spinlock_t *lock = &kasumi_rename_guard_locks[hash_min(
+	    (unsigned long)guard.task, HASH_BITS(kasumi_rename_guards))];
 	unsigned long irqflags;
 	int ret;
 
@@ -643,11 +674,11 @@ int kasumi_rename_view_init(void)
 #ifndef CONFIG_ARM64
 	return -EOPNOTSUPP;
 #endif
-#define RESOLVE(member, symbol) \
-	do { \
-		member = (void *)kasumi_lookup_callable_quiet(symbol); \
-		if (!member) \
-			return -EOPNOTSUPP; \
+#define RESOLVE(member, symbol)                                                \
+	do {                                                                   \
+		member = (void *)kasumi_lookup_callable_quiet(symbol);         \
+		if (!member)                                                   \
+			return -EOPNOTSUPP;                                    \
 	} while (0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
 	RESOLVE(kasumi_rename_parent_native, "filename_parentat");
@@ -674,7 +705,8 @@ int kasumi_rename_view_init(void)
 #undef RESOLVE
 	if (!kasumi_vfs_rename)
 		return -EOPNOTSUPP;
-	kasumi_rename_probe.addr = (void *)kasumi_lookup_name_quiet("do_renameat2");
+	kasumi_rename_probe.addr =
+	    (void *)kasumi_lookup_name_quiet("do_renameat2");
 	kasumi_rename_probe.pre_handler = kasumi_rename_pre;
 	ret = register_kprobe(&kasumi_rename_probe);
 	if (ret)

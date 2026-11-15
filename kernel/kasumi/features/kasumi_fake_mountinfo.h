@@ -11,6 +11,7 @@ void kasumi_fake_mi_exit(void);
 bool kasumi_fake_mi_active(void);
 void kasumi_fake_mi_invalidate_all(void);
 u64 kasumi_fake_mi_generation(void);
-void kasumi_fake_mi_poll_wait(struct file *file, struct poll_table_struct *wait);
+void kasumi_fake_mi_poll_wait(struct file *file,
+			      struct poll_table_struct *wait);
 
 #endif

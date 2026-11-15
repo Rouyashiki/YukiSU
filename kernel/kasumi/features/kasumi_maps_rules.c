@@ -37,8 +37,10 @@ struct kasumi_maps_batch {
 
 static struct kasumi_maps_batch __rcu *kasumi_maps_pending;
 
-static int kasumi_maps_key_compare(unsigned long left_ino, unsigned long left_dev, u32 left_flags,
-				   unsigned long right_ino, unsigned long right_dev, u32 right_flags)
+static int kasumi_maps_key_compare(unsigned long left_ino,
+				   unsigned long left_dev, u32 left_flags,
+				   unsigned long right_ino,
+				   unsigned long right_dev, u32 right_flags)
 {
 	if (left_ino != right_ino)
 		return left_ino < right_ino ? -1 : 1;
@@ -53,10 +55,9 @@ static int kasumi_maps_entry_compare(const void *left, const void *right)
 {
 	const struct kasumi_maps_index_entry *a = left;
 	const struct kasumi_maps_index_entry *b = right;
-	int order = kasumi_maps_key_compare(a->rule.target_ino,
-					   a->rule.target_dev, a->rule.match_flags,
-					   b->rule.target_ino,
-					   b->rule.target_dev, b->rule.match_flags);
+	int order = kasumi_maps_key_compare(
+	    a->rule.target_ino, a->rule.target_dev, a->rule.match_flags,
+	    b->rule.target_ino, b->rule.target_dev, b->rule.match_flags);
 
 	if (order)
 		return order;
@@ -70,7 +71,8 @@ static struct kasumi_maps_snapshot *kasumi_maps_alloc(u32 count)
 	struct kasumi_maps_snapshot *snapshot;
 	size_t bytes;
 
-	if (check_mul_overflow((size_t)count, sizeof(snapshot->entries[0]), &bytes) ||
+	if (check_mul_overflow((size_t)count, sizeof(snapshot->entries[0]),
+			       &bytes) ||
 	    check_add_overflow(bytes, sizeof(*snapshot), &bytes))
 		return ERR_PTR(-E2BIG);
 	snapshot = kvzalloc(bytes, GFP_KERNEL);
@@ -82,7 +84,8 @@ static struct kasumi_maps_snapshot *kasumi_maps_alloc(u32 count)
 }
 
 struct kasumi_maps_snapshot *
-kasumi_maps_rules_prepare(const struct kasumi_transaction_maps_rule *rules, u32 count)
+kasumi_maps_rules_prepare(const struct kasumi_transaction_maps_rule *rules,
+			  u32 count)
 {
 	struct kasumi_maps_snapshot *snapshot;
 	u32 i, kept = 0;
@@ -113,14 +116,13 @@ kasumi_maps_rules_prepare(const struct kasumi_transaction_maps_rule *rules, u32 
 	sort(snapshot->entries, count, sizeof(snapshot->entries[0]),
 	     kasumi_maps_entry_compare, NULL);
 	for (i = 0; i < count; i++) {
-		if (kept &&
-		    !kasumi_maps_key_compare(
-			    snapshot->entries[kept - 1].rule.target_ino,
-			    snapshot->entries[kept - 1].rule.target_dev,
-			    snapshot->entries[kept - 1].rule.match_flags,
-			    snapshot->entries[i].rule.target_ino,
-			    snapshot->entries[i].rule.target_dev,
-			    snapshot->entries[i].rule.match_flags)) {
+		if (kept && !kasumi_maps_key_compare(
+				snapshot->entries[kept - 1].rule.target_ino,
+				snapshot->entries[kept - 1].rule.target_dev,
+				snapshot->entries[kept - 1].rule.match_flags,
+				snapshot->entries[i].rule.target_ino,
+				snapshot->entries[i].rule.target_dev,
+				snapshot->entries[i].rule.match_flags)) {
 			snapshot->entries[kept - 1] = snapshot->entries[i];
 			continue;
 		}
@@ -143,8 +145,8 @@ static void kasumi_maps_publish_locked(struct kasumi_maps_snapshot *snapshot)
 
 	if (snapshot)
 		snapshot->generation = generation;
-	old = rcu_dereference_protected(kasumi_maps_current,
-				       lockdep_is_held(&kasumi_maps_write_lock));
+	old = rcu_dereference_protected(
+	    kasumi_maps_current, lockdep_is_held(&kasumi_maps_write_lock));
 	rcu_assign_pointer(kasumi_maps_current, snapshot);
 	kasumi_maps_rules_put(old);
 	kasumi_rules_changed();
@@ -157,8 +159,9 @@ void kasumi_maps_rules_publish(struct kasumi_maps_snapshot *snapshot)
 	mutex_unlock(&kasumi_maps_write_lock);
 }
 
-struct kasumi_maps_batch *kasumi_maps_batch_prepare(
-	const struct kasumi_transaction_maps_rule *rules, u32 count, u64 generation)
+struct kasumi_maps_batch *
+kasumi_maps_batch_prepare(const struct kasumi_transaction_maps_rule *rules,
+			  u32 count, u64 generation)
 {
 	struct kasumi_maps_batch *batch;
 
@@ -173,8 +176,8 @@ struct kasumi_maps_batch *kasumi_maps_batch_prepare(
 		return ERR_PTR(error);
 	}
 	mutex_lock(&kasumi_maps_write_lock);
-	batch->previous = rcu_dereference_protected(kasumi_maps_current,
-		lockdep_is_held(&kasumi_maps_write_lock));
+	batch->previous = rcu_dereference_protected(
+	    kasumi_maps_current, lockdep_is_held(&kasumi_maps_write_lock));
 	if (batch->previous)
 		refcount_inc(&batch->previous->refs);
 	batch->generation = generation;
@@ -213,8 +216,10 @@ struct kasumi_maps_snapshot *kasumi_maps_rules_get(void)
 	do {
 		batch = rcu_dereference(kasumi_maps_pending);
 		if (batch)
-			snapshot = kasumi_rules_generation() >= batch->generation ?
-				   batch->replacement : batch->previous;
+			snapshot =
+			    kasumi_rules_generation() >= batch->generation
+				? batch->replacement
+				: batch->previous;
 		else
 			snapshot = rcu_dereference(kasumi_maps_current);
 	} while (snapshot && !refcount_inc_not_zero(&snapshot->refs));
@@ -224,16 +229,17 @@ struct kasumi_maps_snapshot *kasumi_maps_rules_get(void)
 
 static const struct kasumi_transaction_maps_rule *
 kasumi_maps_lookup_key(const struct kasumi_maps_snapshot *snapshot,
-		      unsigned long dev, unsigned long ino, u32 flags)
+		       unsigned long dev, unsigned long ino, u32 flags)
 {
 	u32 low = 0, high = snapshot->count;
 
 	while (low < high) {
 		u32 middle = low + (high - low) / 2;
 		const struct kasumi_transaction_maps_rule *rule =
-			&snapshot->entries[middle].rule;
-		int order = kasumi_maps_key_compare(ino, dev, flags, rule->target_ino,
-						   rule->target_dev, rule->match_flags);
+		    &snapshot->entries[middle].rule;
+		int order = kasumi_maps_key_compare(
+		    ino, dev, flags, rule->target_ino, rule->target_dev,
+		    rule->match_flags);
 
 		if (!order)
 			return rule;
@@ -247,7 +253,7 @@ kasumi_maps_lookup_key(const struct kasumi_maps_snapshot *snapshot,
 
 const struct kasumi_transaction_maps_rule *
 kasumi_maps_rules_lookup(const struct kasumi_maps_snapshot *snapshot,
-			unsigned long dev, unsigned long ino)
+			 unsigned long dev, unsigned long ino)
 {
 	const struct kasumi_transaction_maps_rule *rule;
 
@@ -255,7 +261,8 @@ kasumi_maps_rules_lookup(const struct kasumi_maps_snapshot *snapshot,
 		return NULL;
 	rule = kasumi_maps_lookup_key(snapshot, dev, ino, 0);
 	if (!rule)
-		rule = kasumi_maps_lookup_key(snapshot, 0, ino, KSM_MATCH_ANY_DEVICE);
+		rule = kasumi_maps_lookup_key(snapshot, 0, ino,
+					      KSM_MATCH_ANY_DEVICE);
 	return rule;
 }
 
@@ -271,8 +278,9 @@ u64 kasumi_maps_rules_generation(void)
 
 	rcu_read_lock();
 	batch = rcu_dereference(kasumi_maps_pending);
-	generation = batch && kasumi_rules_generation() >= batch->generation ?
-		     batch->maps_generation : atomic64_read(&kasumi_maps_generation);
+	generation = batch && kasumi_rules_generation() >= batch->generation
+			 ? batch->maps_generation
+			 : atomic64_read(&kasumi_maps_generation);
 	rcu_read_unlock();
 	return generation;
 }
@@ -296,14 +304,17 @@ int kasumi_maps_rules_upsert(const struct kasumi_maps_rule *legacy)
 	value.spoofed_dev = legacy->spoofed_dev;
 	memcpy(value.spoofed_pathname, legacy->spoofed_pathname,
 	       sizeof(value.spoofed_pathname));
-	if (!memchr(rule->spoofed_pathname, '\0', sizeof(rule->spoofed_pathname)))
+	if (!memchr(rule->spoofed_pathname, '\0',
+		    sizeof(rule->spoofed_pathname)))
 		return -ENAMETOOLONG;
 	mutex_lock(&kasumi_maps_write_lock);
-	old = rcu_dereference_protected(kasumi_maps_current,
-				       lockdep_is_held(&kasumi_maps_write_lock));
+	old = rcu_dereference_protected(
+	    kasumi_maps_current, lockdep_is_held(&kasumi_maps_write_lock));
 	count = old ? old->count : 0;
-	existing = old ? kasumi_maps_lookup_key(old, rule->target_dev,
-					      rule->target_ino, rule->match_flags) : NULL;
+	existing =
+	    old ? kasumi_maps_lookup_key(old, rule->target_dev,
+					 rule->target_ino, rule->match_flags)
+		: NULL;
 	if (!existing && count == U32_MAX) {
 		mutex_unlock(&kasumi_maps_write_lock);
 		return -E2BIG;
@@ -333,10 +344,11 @@ int kasumi_maps_rules_upsert(const struct kasumi_maps_rule *legacy)
 	return 0;
 }
 
-int kasumi_maps_rules_replace(const struct kasumi_transaction_maps_rule *rules, u32 count)
+int kasumi_maps_rules_replace(const struct kasumi_transaction_maps_rule *rules,
+			      u32 count)
 {
 	struct kasumi_maps_snapshot *snapshot =
-		kasumi_maps_rules_prepare(rules, count);
+	    kasumi_maps_rules_prepare(rules, count);
 
 	if (IS_ERR(snapshot))
 		return PTR_ERR(snapshot);

@@ -86,13 +86,16 @@ int kasumi_add_inject_rule(char *dir)
 	}
 	hash = full_name_hash(NULL, dir, strlen(dir));
 	mutex_lock(&kasumi_config_mutex);
-	hlist_for_each_entry(existing,
-		&kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node) {
+	hlist_for_each_entry(
+	    existing, &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)],
+	    node)
+	{
 		if (strcmp(existing->dir, dir))
 			continue;
 		if (generation) {
 			if (kasumi_rule_visible(&existing->life, generation))
-				kasumi_batch_expire(&existing->life, KASUMI_BATCH_INJECT);
+				kasumi_batch_expire(&existing->life,
+						    KASUMI_BATCH_INJECT);
 		} else {
 			struct inode *old = existing->fop_inode;
 
@@ -105,8 +108,9 @@ int kasumi_add_inject_rule(char *dir)
 		}
 	}
 	kasumi_batch_track(&entry->life, KASUMI_BATCH_INJECT);
-	hlist_add_head_rcu(&entry->node,
-		&kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)]);
+	hlist_add_head_rcu(
+	    &entry->node,
+	    &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)]);
 	atomic_inc(&kasumi_rule_count);
 	mutex_unlock(&kasumi_config_mutex);
 	return 0;
@@ -406,7 +410,8 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 		    &kasumi_inject_dirs[hash_min(dpath_hash, KASUMI_HASH_BITS)],
 		    node)
 		{
-			if (!kasumi_rule_visible(&inject_entry->life, generation))
+			if (!kasumi_rule_visible(&inject_entry->life,
+						 generation))
 				continue;
 			if (strcmp(inject_entry->dir, dpath_dir) == 0) {
 				should_inject = true;
@@ -481,14 +486,16 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 			item->ino = entry->source_nofollow_path_valid
 					? entry->nofollow_visible_ino
 					: entry->visible_ino;
-			item->type = entry->source_nofollow_stat_valid
-					 ? (unsigned char)((entry->source_nofollow_mode &
-							    S_IFMT) >> 12)
-					 : entry->source_stat_valid
-					 ? (unsigned char)((entry->source_mode &
-							    S_IFMT) >>
-							   12)
-					 : DT_UNKNOWN;
+			item->type =
+			    entry->source_nofollow_stat_valid
+				? (unsigned char)((entry->source_nofollow_mode &
+						   S_IFMT) >>
+						  12)
+			    : entry->source_stat_valid
+				? (unsigned char)((entry->source_mode &
+						   S_IFMT) >>
+						  12)
+				: DT_UNKNOWN;
 			if (item->name)
 				list_add(&item->list, head);
 			else
@@ -509,7 +516,8 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 					    &path, O_RDONLY | O_DIRECTORY,
 					    cred);
 					if (!IS_ERR(f)) {
-						struct kasumi_internal_vfs_guard guard;
+						struct kasumi_internal_vfs_guard
+						    guard;
 						struct kasumi_merge_ctx mctx = {
 						    .visible_dir = dir_path,
 						    .visible_parent =
@@ -528,9 +536,11 @@ KASUMI_NOCFI void kasumi_populate_injected_list(const char *dir_path,
 								  ->i_sb->s_dev
 							    : 0,
 						};
-						kasumi_vfs_internal_enter(&guard);
+						kasumi_vfs_internal_enter(
+						    &guard);
 						iterate_dir(f, &mctx.ctx);
-						kasumi_vfs_internal_leave(&guard);
+						kasumi_vfs_internal_leave(
+						    &guard);
 						fput(f);
 					}
 					put_cred(cred);
@@ -596,7 +606,7 @@ static KASUMI_NOCFI int kasumi_add_path_entry(const char *src, const char *tgt,
 		flags |= KASUMI_VNODE_F_BYPASS;
 	if (kasumi_batch_dir())
 		ret = kasumi_dirhijack_batch_add(kasumi_batch_dir(), src,
-					       &source, ino, flags, true);
+						 &source, ino, flags, true);
 	else
 		ret = kasumi_dirhijack_add_shadow(src, &source, ino, flags);
 	path_put(&source);
@@ -645,8 +655,8 @@ int kasumi_check_merge_target(const char *target)
  * injection of the module's contents on top.
  */
 static KASUMI_NOCFI int kasumi_register_nested_merge(const char *src_str,
-						      const char *target_str,
-						      u32 rule_flags)
+						     const char *target_str,
+						     u32 rule_flags)
 {
 	struct kasumi_merge_entry *me, *existing;
 	char *resolved_src = NULL;
@@ -684,10 +694,12 @@ static KASUMI_NOCFI int kasumi_register_nested_merge(const char *src_str,
 	{
 		if (strcmp(existing->src, src_str) == 0 &&
 		    strcmp(existing->target, target_str) == 0 &&
-		    kasumi_rule_visible(&existing->life,
+		    kasumi_rule_visible(
+			&existing->life,
 			generation ? generation : kasumi_rules_generation())) {
 			if (generation && existing->rule_flags != rule_flags) {
-				kasumi_batch_expire(&existing->life, KASUMI_BATCH_MERGE);
+				kasumi_batch_expire(&existing->life,
+						    KASUMI_BATCH_MERGE);
 				continue;
 			}
 			mutex_unlock(&kasumi_config_mutex);
@@ -724,8 +736,8 @@ static KASUMI_NOCFI int kasumi_register_nested_merge(const char *src_str,
 	if (created) {
 		ret = kasumi_add_inject_rule(kstrdup(src_str, GFP_KERNEL));
 		if (!ret && me->resolved_src)
-			ret = kasumi_add_inject_rule(kstrdup(me->resolved_src,
-							      GFP_KERNEL));
+			ret = kasumi_add_inject_rule(
+			    kstrdup(me->resolved_src, GFP_KERNEL));
 	}
 
 	kfree(resolved_src);
@@ -745,10 +757,10 @@ struct kasumi_mat_ctx {
 };
 
 static void KASUMI_NOCFI kasumi_materialize_child(struct kasumi_mat_ctx *mc,
-	const char *name, int namlen, unsigned int d_type)
+						  const char *name, int namlen,
+						  unsigned int d_type)
 {
 	char *src_path, *tgt_path, *inj_dir;
-
 
 	if (namlen <= 2 && name[0] == '.') {
 		if (namlen == 1 || (namlen == 2 && name[1] == '.'))
@@ -819,11 +831,12 @@ static void KASUMI_NOCFI kasumi_materialize_child(struct kasumi_mat_ctx *mc,
 			mc->error = kasumi_add_path_entry(src_path, tgt_path,
 							  mc->rule_flags);
 		} else if (mc->depth < 8) {
-			mc->error = kasumi_register_nested_merge(src_path, tgt_path,
-							  mc->rule_flags);
+			mc->error = kasumi_register_nested_merge(
+			    src_path, tgt_path, mc->rule_flags);
 			if (!mc->error)
 				mc->error = kasumi_materialize_merge(
-				    src_path, tgt_path, mc->depth + 1, mc->rule_flags);
+				    src_path, tgt_path, mc->depth + 1,
+				    mc->rule_flags);
 		} else {
 			mc->error = -ELOOP;
 		}
@@ -845,9 +858,10 @@ out:
 
 static KASUMI_NOCFI KASUMI_FILLDIR_RET_TYPE
 kasumi_mat_filldir(struct dir_context *ctx, const char *name, int namlen,
-	loff_t offset, u64 ino, unsigned int d_type)
+		   loff_t offset, u64 ino, unsigned int d_type)
 {
-	struct kasumi_mat_ctx *mc = container_of(ctx, struct kasumi_mat_ctx, ctx);
+	struct kasumi_mat_ctx *mc =
+	    container_of(ctx, struct kasumi_mat_ctx, ctx);
 	struct kasumi_dir_entry *entry;
 
 	(void)offset;
@@ -918,9 +932,9 @@ KASUMI_NOCFI int kasumi_materialize_merge(const char *src_prefix,
 	fput(f);
 	path_put(&path);
 	if (ret >= 0 && !mctx.error) {
-		list_for_each_entry(entry, &mctx.entries, list) {
-			kasumi_materialize_child(&mctx, entry->name, entry->name_len,
-				entry->type);
+		list_for_each_entry (entry, &mctx.entries, list) {
+			kasumi_materialize_child(&mctx, entry->name,
+						 entry->name_len, entry->type);
 			if (mctx.error)
 				break;
 			cond_resched();

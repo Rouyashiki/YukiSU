@@ -274,15 +274,15 @@ struct kasumi_conflict_ack_arg {
 #define KSM_TX_MAX_BYTES (64U * 1024U * 1024U)
 
 struct kasumi_capabilities {
-    __u32 size;
-    __u32 version;
-    __aligned_u64 capabilities;
-    __aligned_u64 generation;
-    __aligned_u64 operations;
-    __u32 max_stage;
-    __u32 max_operations;
-    __u32 max_bytes;
-    __u32 reserved[5];
+  __u32 size;
+  __u32 version;
+  __aligned_u64 capabilities;
+  __aligned_u64 generation;
+  __aligned_u64 operations;
+  __u32 max_stage;
+  __u32 max_operations;
+  __u32 max_bytes;
+  __u32 reserved[5];
 };
 
 #define KSM_TX_REPLACE_PATH_RULES (1U << 0)
@@ -294,16 +294,16 @@ struct kasumi_capabilities {
 #define KSM_TX_STATE_FAILED 4U
 
 struct kasumi_transaction {
-    __u32 size;
-    __u32 flags;
-    __aligned_u64 id;
-    __aligned_u64 expected_generation;
-    __aligned_u64 generation;
-    __u32 state;
-    __u32 operation_count;
-    __u32 failed_operation;
-    __s32 error;
-    __aligned_u64 reserved[2];
+  __u32 size;
+  __u32 flags;
+  __aligned_u64 id;
+  __aligned_u64 expected_generation;
+  __aligned_u64 generation;
+  __u32 state;
+  __u32 operation_count;
+  __u32 failed_operation;
+  __s32 error;
+  __aligned_u64 reserved[2];
 };
 
 #define KSM_TX_REDIRECT 1U
@@ -313,25 +313,31 @@ struct kasumi_transaction {
 #define KSM_TX_HIDE_XATTRS 5U
 
 struct kasumi_transaction_rule {
-    __u32 operation;
-    __u32 flags;
-    __aligned_u64 visible_path;
-    __aligned_u64 source_path;
+  __u32 operation;
+  __u32 flags;
+  __aligned_u64 visible_path;
+  __aligned_u64 source_path;
 };
 
 struct kasumi_transaction_stage {
-    __u32 size;
-    __u32 count;
-    __aligned_u64 id;
-    __aligned_u64 rules;
+  __u32 size;
+  __u32 count;
+  __aligned_u64 id;
+  __aligned_u64 rules;
 };
 
-#define KSM_IOC_GET_CAPABILITIES _IOWR(KSM_IOC_MAGIC, 48, struct kasumi_capabilities)
-#define KSM_IOC_BEGIN_TRANSACTION _IOWR(KSM_IOC_MAGIC, 49, struct kasumi_transaction)
-#define KSM_IOC_STAGE_TRANSACTION _IOW(KSM_IOC_MAGIC, 50, struct kasumi_transaction_stage)
-#define KSM_IOC_COMMIT_TRANSACTION _IOWR(KSM_IOC_MAGIC, 51, struct kasumi_transaction)
-#define KSM_IOC_ABORT_TRANSACTION _IOWR(KSM_IOC_MAGIC, 52, struct kasumi_transaction)
-#define KSM_IOC_QUERY_TRANSACTION _IOWR(KSM_IOC_MAGIC, 53, struct kasumi_transaction)
+#define KSM_IOC_GET_CAPABILITIES                                               \
+  _IOWR(KSM_IOC_MAGIC, 48, struct kasumi_capabilities)
+#define KSM_IOC_BEGIN_TRANSACTION                                              \
+  _IOWR(KSM_IOC_MAGIC, 49, struct kasumi_transaction)
+#define KSM_IOC_STAGE_TRANSACTION                                              \
+  _IOW(KSM_IOC_MAGIC, 50, struct kasumi_transaction_stage)
+#define KSM_IOC_COMMIT_TRANSACTION                                             \
+  _IOWR(KSM_IOC_MAGIC, 51, struct kasumi_transaction)
+#define KSM_IOC_ABORT_TRANSACTION                                              \
+  _IOWR(KSM_IOC_MAGIC, 52, struct kasumi_transaction)
+#define KSM_IOC_QUERY_TRANSACTION                                              \
+  _IOWR(KSM_IOC_MAGIC, 53, struct kasumi_transaction)
 
 #define KSM_CAP_ATOMIC_SETTINGS (1ULL << 3)
 #define KSM_CAP_ATOMIC_POLICY (1ULL << 4)
@@ -370,58 +376,59 @@ struct kasumi_transaction_stage {
 #define KSM_KSTAT_FIELDS_ALL ((1U << 9) - 1)
 
 struct kasumi_transaction_maps_rule {
-    __u32 fields;
-    __u32 match_flags;
-    __aligned_u64 target_ino;
-    __aligned_u64 target_dev;
-    __aligned_u64 spoofed_ino;
-    __aligned_u64 spoofed_dev;
-    char spoofed_pathname[KSM_MAX_LEN_PATHNAME];
+  __u32 fields;
+  __u32 match_flags;
+  __aligned_u64 target_ino;
+  __aligned_u64 target_dev;
+  __aligned_u64 spoofed_ino;
+  __aligned_u64 spoofed_dev;
+  char spoofed_pathname[KSM_MAX_LEN_PATHNAME];
 };
 
 struct kasumi_transaction_kstat_rule {
-    __u32 fields;
-    __u32 match_flags;
-    __aligned_u64 target_ino;
-    __aligned_u64 target_dev;
-    __aligned_u64 spoofed_ino;
-    __aligned_u64 spoofed_dev;
-    __aligned_u64 spoofed_nlink;
-    __aligned_u64 spoofed_size;
-    __aligned_u64 spoofed_atime_sec;
-    __aligned_u64 spoofed_atime_nsec;
-    __aligned_u64 spoofed_mtime_sec;
-    __aligned_u64 spoofed_mtime_nsec;
-    __aligned_u64 spoofed_ctime_sec;
-    __aligned_u64 spoofed_ctime_nsec;
-    __aligned_u64 spoofed_blksize;
-    __aligned_u64 spoofed_blocks;
-    char target_pathname[KSM_MAX_LEN_PATHNAME];
+  __u32 fields;
+  __u32 match_flags;
+  __aligned_u64 target_ino;
+  __aligned_u64 target_dev;
+  __aligned_u64 spoofed_ino;
+  __aligned_u64 spoofed_dev;
+  __aligned_u64 spoofed_nlink;
+  __aligned_u64 spoofed_size;
+  __aligned_u64 spoofed_atime_sec;
+  __aligned_u64 spoofed_atime_nsec;
+  __aligned_u64 spoofed_mtime_sec;
+  __aligned_u64 spoofed_mtime_nsec;
+  __aligned_u64 spoofed_ctime_sec;
+  __aligned_u64 spoofed_ctime_nsec;
+  __aligned_u64 spoofed_blksize;
+  __aligned_u64 spoofed_blocks;
+  char target_pathname[KSM_MAX_LEN_PATHNAME];
 };
 
 struct kasumi_transaction_configuration {
-    __u32 size;
-    __u32 fields;
-    __aligned_u64 id;
-    __u32 enabled;
-    __u32 features;
-    __u32 stealth;
-    __u32 debug;
-    __u32 policy_owner;
-    __u32 policy_flags;
-    __u32 allow_count;
-    __u32 deny_count;
-    __aligned_u64 allow_uids;
-    __aligned_u64 deny_uids;
-    __u32 maps_count;
-    __u32 reserved1;
-    __aligned_u64 maps_rules;
-    __u32 kstat_count;
-    __u32 reserved2;
-    __aligned_u64 kstat_rules;
-    __aligned_u64 reserved[2];
+  __u32 size;
+  __u32 fields;
+  __aligned_u64 id;
+  __u32 enabled;
+  __u32 features;
+  __u32 stealth;
+  __u32 debug;
+  __u32 policy_owner;
+  __u32 policy_flags;
+  __u32 allow_count;
+  __u32 deny_count;
+  __aligned_u64 allow_uids;
+  __aligned_u64 deny_uids;
+  __u32 maps_count;
+  __u32 reserved1;
+  __aligned_u64 maps_rules;
+  __u32 kstat_count;
+  __u32 reserved2;
+  __aligned_u64 kstat_rules;
+  __aligned_u64 reserved[2];
 };
 
-#define KSM_IOC_STAGE_CONFIGURATION _IOW(KSM_IOC_MAGIC, 54, struct kasumi_transaction_configuration)
+#define KSM_IOC_STAGE_CONFIGURATION                                            \
+  _IOW(KSM_IOC_MAGIC, 54, struct kasumi_transaction_configuration)
 
 #endif /* _KASUMI_UAPI_H */

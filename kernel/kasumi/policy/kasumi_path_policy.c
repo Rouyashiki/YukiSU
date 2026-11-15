@@ -85,8 +85,7 @@ bool kasumi_rule_scope_active(void)
 {
 	long tgid = atomic_long_read(&kasumi_ioctl_tgid);
 
-	return kasumi_config_enabled() &&
-	       !kasumi_vfs_internal_current() &&
+	return kasumi_config_enabled() && !kasumi_vfs_internal_current() &&
 	       !kasumi_hide_rules_resolving() &&
 	       (tgid <= 0 || tgid != (long)task_tgid_vnr(current));
 }
@@ -120,8 +119,7 @@ bool kasumi_hide_scope_allowed(bool storage_managed, u32 flags)
 	if (flags & KSM_RULE_BYPASS_POLICY)
 		return true;
 
-	if (!kasumi_config_enabled() ||
-	    kasumi_is_privileged_process())
+	if (!kasumi_config_enabled() || kasumi_is_privileged_process())
 		return false;
 	if (is_appuid(uid) && ksu_is_allow_uid(uid))
 		return false;
@@ -249,7 +247,8 @@ static bool kasumi_rule_refresh_exact_source(struct kasumi_rule_source *source)
 }
 
 static bool kasumi_rule_source_from_path(struct path *resolved,
-	struct kasumi_rule_source *source, struct kasumi_identity_domain *domain)
+					 struct kasumi_rule_source *source,
+					 struct kasumi_identity_domain *domain)
 {
 	struct inode *inode;
 	struct kstat stat;
@@ -271,7 +270,8 @@ static bool kasumi_rule_source_from_path(struct path *resolved,
 		return false;
 	}
 	ret = kasumi_identity_domain_source_get(domain, inode->i_sb->s_dev,
-		inode->i_ino, GFP_NOFS, &source->identity);
+						inode->i_ino, GFP_NOFS,
+						&source->identity);
 	if (ret) {
 		path_put(resolved);
 		source->error = ret;
@@ -534,7 +534,8 @@ static bool KASUMI_NOCFI kasumi_directory_rule_source(
 							lookup_flags, source,
 							symlink_depth);
 						kfree(relative);
-						kasumi_identity_domain_put(domain);
+						kasumi_identity_domain_put(
+						    domain);
 						return found;
 					}
 				}
@@ -658,9 +659,11 @@ static bool KASUMI_NOCFI kasumi_rule_get_source_flags_depth(
 						followed_exact_link = true;
 					}
 				}
-				source->identity = !(lookup_flags & LOOKUP_FOLLOW) &&
-					entry->source_nofollow_path_valid ?
-					entry->nofollow_identity : entry->source_identity;
+				source->identity =
+				    !(lookup_flags & LOOKUP_FOLLOW) &&
+					    entry->source_nofollow_path_valid
+					? entry->nofollow_identity
+					: entry->source_identity;
 				kasumi_identity_get(source->identity);
 				path_get(&source->path);
 				found = true;
@@ -785,14 +788,17 @@ unsigned long kasumi_rule_source_ino(dev_t dev, u64 ino)
 	return result;
 }
 
-static struct kasumi_rule_index *kasumi_rule_index_node(struct kasumi_rule_lifetime *life)
+static struct kasumi_rule_index *
+kasumi_rule_index_node(struct kasumi_rule_lifetime *life)
 {
 	if (life->batch_store == KASUMI_BATCH_PATH)
 		return &container_of(life, struct kasumi_entry, life)->index;
 	if (life->batch_store == KASUMI_BATCH_HIDE)
-		return &container_of(life, struct kasumi_hide_entry, life)->index;
+		return &container_of(life, struct kasumi_hide_entry, life)
+			    ->index;
 	if (life->batch_store == KASUMI_BATCH_MERGE)
-		return &container_of(life, struct kasumi_merge_entry, life)->index;
+		return &container_of(life, struct kasumi_merge_entry, life)
+			    ->index;
 	return NULL;
 }
 
@@ -802,12 +808,14 @@ static void kasumi_rule_index_link(struct kasumi_rule_index *index)
 
 	write_lock(&kasumi_rule_prefix_lock);
 	while (*link) {
-		struct kasumi_rule_index *other = rb_entry(*link, struct kasumi_rule_index, node);
+		struct kasumi_rule_index *other =
+		    rb_entry(*link, struct kasumi_rule_index, node);
 		int order = strcmp(index->path, other->path);
 
 		parent = *link;
 		if (!order)
-			order = (unsigned long)index < (unsigned long)other ? -1 : 1;
+			order = (unsigned long)index < (unsigned long)other ? -1
+									    : 1;
 		link = order < 0 ? &parent->rb_left : &parent->rb_right;
 	}
 	rb_link_node(&index->node, parent, link);
@@ -823,11 +831,14 @@ void kasumi_rule_index_add(struct kasumi_rule_lifetime *life)
 		return;
 	index->hide = life->batch_store == KASUMI_BATCH_HIDE;
 	if (life->batch_store == KASUMI_BATCH_MERGE)
-		index->path = container_of(life, struct kasumi_merge_entry, life)->src;
+		index->path =
+		    container_of(life, struct kasumi_merge_entry, life)->src;
 	else
-		index->path = index->hide ?
-			container_of(life, struct kasumi_hide_entry, life)->path :
-			container_of(life, struct kasumi_entry, life)->src;
+		index->path =
+		    index->hide
+			? container_of(life, struct kasumi_hide_entry, life)
+			      ->path
+			: container_of(life, struct kasumi_entry, life)->src;
 	index->life = life;
 	kasumi_rule_index_link(index);
 	if (life->batch_store == KASUMI_BATCH_PATH) {
@@ -844,9 +855,11 @@ void kasumi_rule_index_add(struct kasumi_rule_lifetime *life)
 					       entry->nofollow_identity);
 	}
 	if (life->batch_store == KASUMI_BATCH_MERGE) {
-		struct kasumi_merge_entry *merge = container_of(life, struct kasumi_merge_entry, life);
+		struct kasumi_merge_entry *merge =
+		    container_of(life, struct kasumi_merge_entry, life);
 
-		if (merge->resolved_src && strcmp(merge->resolved_src, merge->src)) {
+		if (merge->resolved_src &&
+		    strcmp(merge->resolved_src, merge->src)) {
 			merge->alias_index.path = merge->resolved_src;
 			merge->alias_index.life = life;
 			kasumi_rule_index_link(&merge->alias_index);
@@ -871,18 +884,22 @@ void kasumi_rule_index_remove(struct kasumi_rule_lifetime *life)
 		    container_of(life, struct kasumi_entry, life));
 	kasumi_rule_index_unlink(kasumi_rule_index_node(life));
 	if (life->batch_store == KASUMI_BATCH_MERGE)
-		kasumi_rule_index_unlink(&container_of(life, struct kasumi_merge_entry, life)->alias_index);
+		kasumi_rule_index_unlink(
+		    &container_of(life, struct kasumi_merge_entry, life)
+			 ->alias_index);
 }
 
 /* Callers retain RCU and the index read lock while traversing. Equal names
  * retain every transaction version until the previous readers have drained. */
-static struct kasumi_rule_index *kasumi_rule_prefix_first(const char *path, size_t length)
+static struct kasumi_rule_index *kasumi_rule_prefix_first(const char *path,
+							  size_t length)
 {
 	struct rb_node *node = kasumi_rule_prefixes.rb_node;
 	struct kasumi_rule_index *first = NULL;
 
 	while (node) {
-		struct kasumi_rule_index *index = rb_entry(node, struct kasumi_rule_index, node);
+		struct kasumi_rule_index *index =
+		    rb_entry(node, struct kasumi_rule_index, node);
 		int order = strncmp(index->path, path, length);
 
 		if (!order && length != 1)
@@ -897,20 +914,23 @@ static struct kasumi_rule_index *kasumi_rule_prefix_first(const char *path, size
 	return first;
 }
 
-static struct kasumi_rule_index *kasumi_rule_prefix_next(struct kasumi_rule_index *index)
+static struct kasumi_rule_index *
+kasumi_rule_prefix_next(struct kasumi_rule_index *index)
 {
 	struct rb_node *node = rb_next(&index->node);
 
 	return node ? rb_entry(node, struct kasumi_rule_index, node) : NULL;
 }
 
-static struct kasumi_rule_index *kasumi_rule_exact_first(const char *path, size_t length)
+static struct kasumi_rule_index *kasumi_rule_exact_first(const char *path,
+							 size_t length)
 {
 	struct rb_node *node = kasumi_rule_prefixes.rb_node;
 	struct kasumi_rule_index *first = NULL;
 
 	while (node) {
-		struct kasumi_rule_index *index = rb_entry(node, struct kasumi_rule_index, node);
+		struct kasumi_rule_index *index =
+		    rb_entry(node, struct kasumi_rule_index, node);
 
 		if (strncmp(index->path, path, length) < 0) {
 			node = node->rb_right;
@@ -926,11 +946,14 @@ static bool kasumi_rule_prefix_matches(struct kasumi_rule_index *index,
 				       const char *path, size_t length)
 {
 	return index && !strncmp(index->path, path, length) &&
-		(!index->path[length] || length == 1 || index->path[length] == '/');
+	       (!index->path[length] || length == 1 ||
+		index->path[length] == '/');
 }
 
 void kasumi_rule_dependencies(const char *path, u64 generation,
-	void (*visit)(struct kasumi_rule_lifetime *, void *), void *data)
+			      void (*visit)(struct kasumi_rule_lifetime *,
+					    void *),
+			      void *data)
 {
 	struct kasumi_rule_index *index;
 	size_t length, prefix;
@@ -944,7 +967,8 @@ void kasumi_rule_dependencies(const char *path, u64 generation,
 		if (prefix != 1 && prefix != length && path[prefix] != '/')
 			continue;
 		index = kasumi_rule_exact_first(path, prefix);
-		while (index && !strncmp(index->path, path, prefix) && !index->path[prefix]) {
+		while (index && !strncmp(index->path, path, prefix) &&
+		       !index->path[prefix]) {
 			if (kasumi_rule_visible(index->life, generation))
 				visit(index->life, data);
 			index = kasumi_rule_prefix_next(index);
@@ -1011,13 +1035,16 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 		name_len = slash ? slash - name : strlen(name);
 		leaf = slash == NULL;
 		if (leaf) {
-			umode_t mode = rule->source_nofollow_path_valid ?
-				rule->source_nofollow_mode : rule->source_mode;
+			umode_t mode = rule->source_nofollow_path_valid
+					   ? rule->source_nofollow_mode
+					   : rule->source_mode;
 
-			identity = rule->source_nofollow_path_valid ?
-				rule->nofollow_identity : rule->source_identity;
-			ino = rule->source_nofollow_path_valid ?
-				rule->nofollow_visible_ino : rule->visible_ino;
+			identity = rule->source_nofollow_path_valid
+				       ? rule->nofollow_identity
+				       : rule->source_identity;
+			ino = rule->source_nofollow_path_valid
+				  ? rule->nofollow_visible_ino
+				  : rule->visible_ino;
 			type = (mode & S_IFMT) >> 12;
 		} else {
 			ino = 0;
@@ -1025,7 +1052,8 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 		}
 		hash = full_name_hash(NULL, name, name_len);
 		item = NULL;
-		hash_for_each_possible(children, existing, name_node, hash) {
+		hash_for_each_possible(children, existing, name_node, hash)
+		{
 			if (existing->name_len == name_len &&
 			    !memcmp(existing->name, name, name_len)) {
 				item = existing;
@@ -1033,7 +1061,8 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 			}
 		}
 		if (!item) {
-			item = kasumi_dir_entry_alloc(name, name_len, GFP_ATOMIC);
+			item =
+			    kasumi_dir_entry_alloc(name, name_len, GFP_ATOMIC);
 			if (!item) {
 				error = -ENOMEM;
 				goto out;
@@ -1043,7 +1072,8 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 			hash_add(children, &item->name_node, hash);
 		}
 		if ((!item->direct_rule && leaf) ||
-		    (item->direct_rule == leaf && rule->sequence >= item->sequence)) {
+		    (item->direct_rule == leaf &&
+		     rule->sequence >= item->sequence)) {
 			kasumi_identity_put(item->identity);
 			item->identity = identity;
 			kasumi_identity_get(identity);
@@ -1054,7 +1084,8 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 			item->rule_flags = leaf ? rule->rule_flags : 0;
 		}
 		if ((rule->rule_flags & KSM_RULE_BYPASS_POLICY) &&
-		    (!item->bypass_redirect || (!item->bypass_direct_rule && leaf) ||
+		    (!item->bypass_redirect ||
+		     (!item->bypass_direct_rule && leaf) ||
 		     (item->bypass_direct_rule == leaf &&
 		      rule->sequence >= item->bypass_sequence))) {
 			kasumi_identity_put(item->bypass_identity);
@@ -1092,7 +1123,8 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 			continue;
 		hash = full_name_hash(NULL, name, name_len);
 		item = NULL;
-		hash_for_each_possible(children, existing, name_node, hash) {
+		hash_for_each_possible(children, existing, name_node, hash)
+		{
 			if (existing->name_len == name_len &&
 			    !memcmp(existing->name, name, name_len)) {
 				item = existing;
@@ -1100,7 +1132,8 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 			}
 		}
 		if (!item) {
-			item = kasumi_dir_entry_alloc(name, name_len, GFP_ATOMIC);
+			item =
+			    kasumi_dir_entry_alloc(name, name_len, GFP_ATOMIC);
 			if (!item) {
 				error = -ENOMEM;
 				goto out;
@@ -1115,20 +1148,20 @@ int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
 			item->hide_storage_managed = hide->storage_managed;
 		}
 	}
-	out:
+out:
 	read_unlock(&kasumi_rule_prefix_lock);
 	rcu_read_unlock();
-	list_for_each_entry(item, out, list) {
+	list_for_each_entry (item, out, list) {
 		struct kasumi_inode_identity *identity;
 		char *path;
 
 		hash_del(&item->name_node);
 		if (error || (!item->redirect && !item->bypass_redirect) ||
 		    (item->direct_rule &&
-		    (!item->bypass_redirect || item->bypass_direct_rule)))
+		     (!item->bypass_redirect || item->bypass_direct_rule)))
 			continue;
 		path = kasprintf(GFP_KERNEL, "%s%s%s", dir,
-			strcmp(dir, "/") ? "/" : "", item->name);
+				 strcmp(dir, "/") ? "/" : "", item->name);
 		if (!path) {
 			error = -ENOMEM;
 			continue;
@@ -1175,7 +1208,8 @@ bool kasumi_rule_directory_overridden(const char *path, u64 generation)
 		if (prefix != 1 && prefix != length && path[prefix] != '/')
 			continue;
 		for (index = kasumi_rule_exact_first(path, prefix);
-		     index && !strncmp(index->path, path, prefix) && !index->path[prefix];
+		     index && !strncmp(index->path, path, prefix) &&
+		     !index->path[prefix];
 		     index = kasumi_rule_prefix_next(index)) {
 			if (index->life->batch_store == KASUMI_BATCH_MERGE &&
 			    kasumi_rule_visible(index->life, generation)) {
@@ -1203,8 +1237,8 @@ bool kasumi_rule_directory_has_injects(const char *path, u64 generation)
 		const char *child = index->path + length + (length != 1);
 
 		if (index->life->batch_store == KASUMI_BATCH_PATH &&
-		    kasumi_rule_visible(index->life, generation) &&
-		    *child && !strchr(child, '/')) {
+		    kasumi_rule_visible(index->life, generation) && *child &&
+		    !strchr(child, '/')) {
 			found = true;
 			break;
 		}
@@ -1257,7 +1291,8 @@ struct kasumi_projected_parent_selection {
 	bool virtual_prefix;
 };
 
-static void kasumi_projected_parent_visit(struct kasumi_rule_lifetime *life, void *data)
+static void kasumi_projected_parent_visit(struct kasumi_rule_lifetime *life,
+					  void *data)
 {
 	struct kasumi_projected_parent_selection *selection = data;
 	struct kasumi_entry *entry;
@@ -1277,14 +1312,16 @@ static void kasumi_projected_parent_visit(struct kasumi_rule_lifetime *life, voi
 	     selection->parent[rule_length] != '/'))
 		return;
 	if (!selection->best || rule_length > selection->best_length ||
-	    (rule_length == selection->best_length && entry->sequence > selection->best->sequence)) {
+	    (rule_length == selection->best_length &&
+	     entry->sequence > selection->best->sequence)) {
 		selection->best = entry;
 		selection->best_length = rule_length;
 	}
 }
 
-int KASUMI_NOCFI kasumi_rule_projected_parent(const char *visible, u64 generation,
-					    struct path *source_parent)
+int KASUMI_NOCFI kasumi_rule_projected_parent(const char *visible,
+					      u64 generation,
+					      struct path *source_parent)
 {
 	struct kasumi_internal_vfs_guard guard;
 	struct kasumi_entry *best;
@@ -1314,7 +1351,8 @@ int KASUMI_NOCFI kasumi_rule_projected_parent(const char *visible, u64 generatio
 	rcu_read_lock();
 	selection.parent = parent;
 	selection.length = length;
-	kasumi_rule_dependencies(parent, generation, kasumi_projected_parent_visit, &selection);
+	kasumi_rule_dependencies(parent, generation,
+				 kasumi_projected_parent_visit, &selection);
 	best = selection.best;
 	best_length = selection.best_length;
 	virtual_prefix = selection.virtual_prefix;
@@ -1343,7 +1381,8 @@ int KASUMI_NOCFI kasumi_rule_projected_parent(const char *visible, u64 generatio
 		if (*relative == '/')
 			relative++;
 		ret = vfs_path_lookup(directory.dentry, directory.mnt, relative,
-			LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &resolved);
+				      LOOKUP_FOLLOW | LOOKUP_DIRECTORY,
+				      &resolved);
 		path_put(&directory);
 		if (!ret) {
 			*source_parent = resolved;
@@ -1352,7 +1391,8 @@ int KASUMI_NOCFI kasumi_rule_projected_parent(const char *visible, u64 generatio
 			ret = 1;
 		}
 	} else {
-		ret = kern_path(parent, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &resolved);
+		ret = kern_path(parent, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,
+				&resolved);
 		if (!ret)
 			path_put(&resolved);
 		else if (ret == -ENOENT)
@@ -1374,17 +1414,17 @@ bool kasumi_rule_vpath_visible(const char *path)
 	if (kasumi_policy_current_is_view_target())
 		return true;
 	rcu_read_lock();
-	visible = kasumi_rule_vpath_flags(path, kasumi_rules_generation(), &flags) &&
-		  (flags & KSM_RULE_BYPASS_POLICY);
+	visible =
+	    kasumi_rule_vpath_flags(path, kasumi_rules_generation(), &flags) &&
+	    (flags & KSM_RULE_BYPASS_POLICY);
 	rcu_read_unlock();
 	return visible;
 }
 
-static int KASUMI_NOCFI kasumi_rule_vpath_child_exact(const char *dir, const char *child,
-					 struct path *leaf_src,
-					 umode_t *leaf_mode,
-					 unsigned long *leaf_ino,
-					 struct kasumi_inode_identity **identity)
+static int KASUMI_NOCFI kasumi_rule_vpath_child_exact(
+    const char *dir, const char *child, struct path *leaf_src,
+    umode_t *leaf_mode, unsigned long *leaf_ino,
+    struct kasumi_inode_identity **identity)
 {
 	u64 generation, sequence = 0;
 	struct kasumi_hide_entry *hide;
@@ -1418,7 +1458,8 @@ static int KASUMI_NOCFI kasumi_rule_vpath_child_exact(const char *dir, const cha
 			continue;
 		sequence = entry->sequence;
 		if (!kasumi_rule_current_sees(entry->rule_flags) ||
-		    (!entry->source_path_valid && !entry->source_nofollow_path_valid))
+		    (!entry->source_path_valid &&
+		     !entry->source_nofollow_path_valid))
 			continue;
 		if (entry->source_nofollow_path_valid) {
 			if (identity) {
@@ -1450,10 +1491,12 @@ static int KASUMI_NOCFI kasumi_rule_vpath_child_exact(const char *dir, const cha
 		kind = KASUMI_VPATH_LEAF;
 		break;
 	}
-	hash_for_each_rcu(kasumi_hide_paths, bkt, hide, node) {
+	hash_for_each_rcu(kasumi_hide_paths, bkt, hide, node)
+	{
 		if (kasumi_rule_visible(&hide->life, generation) &&
 		    hide->sequence >= sequence && !strcmp(hide->path, full) &&
-		    kasumi_hide_scope_allowed(hide->storage_managed, hide->rule_flags)) {
+		    kasumi_hide_scope_allowed(hide->storage_managed,
+					      hide->rule_flags)) {
 			kind = KASUMI_VPATH_HIDDEN;
 			break;
 		}
@@ -1491,8 +1534,10 @@ static int KASUMI_NOCFI kasumi_rule_vpath_child_exact(const char *dir, const cha
 }
 
 int kasumi_rule_vpath_child(const char *dir, const char *child,
-	struct path *leaf_src, umode_t *leaf_mode, unsigned long *leaf_ino,
-	struct kasumi_inode_identity **identity, struct dentry *parent)
+			    struct path *leaf_src, umode_t *leaf_mode,
+			    unsigned long *leaf_ino,
+			    struct kasumi_inode_identity **identity,
+			    struct dentry *parent)
 {
 	LIST_HEAD(entries);
 	struct kasumi_dir_entry *entry, *best, *hidden;
@@ -1503,8 +1548,8 @@ int kasumi_rule_vpath_child(const char *dir, const char *child,
 	int kind;
 
 	if (!parent || !(READ_ONCE(parent->d_flags) & DCACHE_OP_COMPARE))
-		return kasumi_rule_vpath_child_exact(dir, child, leaf_src,
-			leaf_mode, leaf_ino, identity);
+		return kasumi_rule_vpath_child_exact(
+		    dir, child, leaf_src, leaf_mode, leaf_ino, identity);
 	if (!kasumi_rule_scope_active())
 		return KASUMI_VPATH_NONE;
 retry:
@@ -1517,38 +1562,45 @@ retry:
 	kind = kasumi_dir_name_hash(parent, child, strlen(child), &query_hash);
 	if (kind)
 		return kind;
-	kind = kasumi_rule_vpath_collect(NULL, &entries, &generation, (void *)dir);
+	kind =
+	    kasumi_rule_vpath_collect(NULL, &entries, &generation, (void *)dir);
 	if (kind)
 		goto out;
 	kind = KASUMI_VPATH_NONE;
-	list_for_each_entry(entry, &entries, list) {
+	list_for_each_entry (entry, &entries, list) {
 		struct dentry *candidate;
 		u64 sequence = view ? entry->sequence : entry->bypass_sequence;
 		u32 hash;
-		bool direct = view ? entry->direct_rule : entry->bypass_direct_rule;
+		bool direct =
+		    view ? entry->direct_rule : entry->bypass_direct_rule;
 		bool equal;
 
-		kind = kasumi_dir_name_hash(parent, entry->name, entry->name_len, &hash);
+		kind = kasumi_dir_name_hash(parent, entry->name,
+					    entry->name_len, &hash);
 		if (kind)
 			goto out;
 		if (hash != query_hash)
 			continue;
-		candidate = kasumi_dir_name_probe(parent, entry->name, entry->name_len);
+		candidate =
+		    kasumi_dir_name_probe(parent, entry->name, entry->name_len);
 		if (IS_ERR(candidate)) {
 			kind = PTR_ERR(candidate);
 			goto out;
 		}
 		equal = kasumi_dir_name_equal(parent, candidate, entry->name,
-			entry->name_len, child, strlen(child));
+					      entry->name_len, child,
+					      strlen(child));
 		dput(candidate);
 		if (!equal)
 			continue;
 		if (entry->direct_rule && entry->sequence > exact_sequence)
 			exact_sequence = entry->sequence;
-		if (entry->hide && (!hidden || entry->hide_sequence >= hidden->hide_sequence))
+		if (entry->hide &&
+		    (!hidden || entry->hide_sequence >= hidden->hide_sequence))
 			hidden = entry;
-		if (!entry->redirect || (!kasumi_rule_current_sees(entry->rule_flags) &&
-		    !entry->bypass_redirect))
+		if (!entry->redirect ||
+		    (!kasumi_rule_current_sees(entry->rule_flags) &&
+		     !entry->bypass_redirect))
 			continue;
 		if (!best || (!best_direct && direct) ||
 		    (best_direct == direct && sequence >= best_sequence)) {
@@ -1558,11 +1610,14 @@ retry:
 		}
 	}
 	if (hidden && hidden->hide_sequence >= exact_sequence &&
-	    kasumi_hide_scope_allowed(hidden->hide_storage_managed, hidden->hide_flags))
+	    kasumi_hide_scope_allowed(hidden->hide_storage_managed,
+				      hidden->hide_flags))
 		kind = KASUMI_VPATH_HIDDEN;
 	else
-		kind = best ? kasumi_rule_vpath_child_exact(dir, best->name, leaf_src,
-			leaf_mode, leaf_ino, identity) : KASUMI_VPATH_NONE;
+		kind = best ? kasumi_rule_vpath_child_exact(dir, best->name,
+							    leaf_src, leaf_mode,
+							    leaf_ino, identity)
+			    : KASUMI_VPATH_NONE;
 	if (generation != kasumi_rules_generation()) {
 		if (leaf_src && leaf_src->dentry) {
 			path_put(leaf_src);
@@ -1580,7 +1635,6 @@ out:
 	kasumi_dir_entries_free(&entries);
 	return kind;
 }
-
 
 /* ======================================================================
  * Part 14: Hide Logic
@@ -1635,7 +1689,7 @@ int kasumi_rule_child_mutation(struct inode *parent, const char *visible_path,
 			       const struct qstr *name)
 {
 	const struct kasumi_vnode_info *info =
-		kasumi_vnode_is_ours(parent) ? parent->i_private : NULL;
+	    kasumi_vnode_is_ours(parent) ? parent->i_private : NULL;
 	char *child;
 	u64 generation;
 	int kind, ret;
@@ -1651,15 +1705,17 @@ int kasumi_rule_child_mutation(struct inode *parent, const char *visible_path,
 		if (kasumi_dirhijack_hidden(parent, child, name->len)) {
 			ret = -ENOENT;
 		} else {
-			kind = kasumi_dirhijack_child_visible(parent, child, name->len);
+			kind = kasumi_dirhijack_child_visible(parent, child,
+							      name->len);
 			if (kind > 0)
 				ret = -EXDEV;
 			else if (kind < 0 && visible_path) {
-				kind = kasumi_rule_vpath_child(visible_path, child,
-					NULL, NULL, NULL, NULL,
-					info ? info->source.dentry : NULL);
-				ret = kind < 0 ? kind : kind != KASUMI_VPATH_NONE ?
-					-EXDEV : 0;
+				kind = kasumi_rule_vpath_child(
+				    visible_path, child, NULL, NULL, NULL, NULL,
+				    info ? info->source.dentry : NULL);
+				ret = kind < 0			  ? kind
+				      : kind != KASUMI_VPATH_NONE ? -EXDEV
+								  : 0;
 			}
 		}
 	} while (generation != kasumi_rules_generation());

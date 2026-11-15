@@ -290,8 +290,7 @@ ControlCapabilities control_capabilities() {
 
 namespace {
 bool commit_transaction_once(const std::vector<PathRule>& rules,
-                                    const TransactionConfiguration& configuration,
-                                    std::uint32_t flags) {
+                             const TransactionConfiguration& configuration, std::uint32_t flags) {
     const int fd = open_transaction_fd();
     if (fd < 0)
         return false;

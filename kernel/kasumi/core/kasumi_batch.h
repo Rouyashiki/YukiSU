@@ -46,7 +46,8 @@ struct kasumi_batch_configuration {
 	u32 kstat_count;
 };
 
-int kasumi_batch_configure(const struct kasumi_batch_configuration *configuration);
+int kasumi_batch_configure(
+    const struct kasumi_batch_configuration *configuration);
 
 struct kasumi_batch *kasumi_batch_begin(void);
 u64 kasumi_batch_generation(void);

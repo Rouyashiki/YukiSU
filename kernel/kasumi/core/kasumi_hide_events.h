@@ -36,8 +36,9 @@ void kasumi_hide_events_unwatch(struct kasumi_hide_watch *watches);
 int kasumi_hide_events_open(struct kasumi_hide_events *events,
 			    void (*notify)(void *), void *data);
 int kasumi_hide_events_open_scope(struct kasumi_hide_events *events,
-	const struct path *root, const struct cred *cred,
-	void (*notify)(void *), void *data);
+				  const struct path *root,
+				  const struct cred *cred,
+				  void (*notify)(void *), void *data);
 int kasumi_hide_events_ack(struct kasumi_hide_events *events);
 int kasumi_hide_events_resolve(struct kasumi_hide_events *events,
 			       const char *name, struct path *path);

@@ -37,7 +37,7 @@ static inline int kasumi_maps_digit(unsigned char c)
 }
 
 static inline bool kasumi_maps_number(const char **cursor, const char *end,
-				     unsigned int base, unsigned long *value)
+				      unsigned int base, unsigned long *value)
 {
 	const char *start = *cursor;
 	unsigned long number = 0;
@@ -59,7 +59,7 @@ static inline bool kasumi_maps_number(const char **cursor, const char *end,
 }
 
 static inline bool kasumi_maps_separator(const char **cursor, const char *end,
-					char separator)
+					 char separator)
 {
 	if (*cursor == end || **cursor != separator)
 		return false;
@@ -68,7 +68,7 @@ static inline bool kasumi_maps_separator(const char **cursor, const char *end,
 }
 
 static inline bool kasumi_maps_parse_header(const char *line, size_t length,
-					   struct kasumi_maps_header *header)
+					    struct kasumi_maps_header *header)
 {
 	const char *cursor = line;
 	const char *end = line + length;
@@ -113,10 +113,11 @@ static inline bool kasumi_maps_header_prefix(const char *line, size_t length)
 	return i && i < length && line[i] == '-';
 }
 
-static inline int kasumi_maps_format_record(char *dst, size_t capacity,
-					   const struct kasumi_maps_header *header,
-					   unsigned long major, unsigned long minor,
-					   unsigned long inode, const char *path)
+static inline int
+kasumi_maps_format_record(char *dst, size_t capacity,
+			  const struct kasumi_maps_header *header,
+			  unsigned long major, unsigned long minor,
+			  unsigned long inode, const char *path)
 {
 	const size_t path_column = 25 + sizeof(void *) * 6 - 1;
 	size_t prefix, padding = 0, escaped = 0, i, out;
@@ -127,9 +128,10 @@ static inline int kasumi_maps_format_record(char *dst, size_t capacity,
 	if (!replacement)
 		path = header->path;
 
-	length = snprintf(dst, capacity, "%08lx-%08lx %s %08lx %02lx:%02lx %lu ",
-			  header->start, header->end, header->flags,
-			  header->offset, major, minor, inode);
+	length =
+	    snprintf(dst, capacity, "%08lx-%08lx %s %08lx %02lx:%02lx %lu ",
+		     header->start, header->end, header->flags, header->offset,
+		     major, minor, inode);
 	if (length < 0)
 		return length;
 	prefix = length;

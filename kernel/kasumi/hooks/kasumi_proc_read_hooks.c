@@ -25,13 +25,15 @@ static void (*kasumi_caps_tasks_barrier)(void);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
 static KASUMI_NOCFI int kasumi_caps_read(struct mnt_idmap *idmap,
-	const struct dentry *dentry, struct cpu_vfs_cap_data *caps)
+					 const struct dentry *dentry,
+					 struct cpu_vfs_cap_data *caps)
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
 static KASUMI_NOCFI int kasumi_caps_read(struct user_namespace *idmap,
-	const struct dentry *dentry, struct cpu_vfs_cap_data *caps)
+					 const struct dentry *dentry,
+					 struct cpu_vfs_cap_data *caps)
 #else
 static KASUMI_NOCFI int kasumi_caps_read(const struct dentry *dentry,
-	struct cpu_vfs_cap_data *caps)
+					 struct cpu_vfs_cap_data *caps)
 #endif
 {
 	struct kasumi_internal_vfs_guard guard;
@@ -84,17 +86,18 @@ static void kasumi_caps_init(void)
 	if (!kasumi_get_vfs_caps_from_disk)
 		return;
 	kasumi_caps_tasks_barrier =
-		(void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
 	if (!kasumi_caps_tasks_barrier)
 		return;
-	kasumi_caps_probe.addr = (void *)kasumi_lookup_name_quiet(
-		"get_vfs_caps_from_disk");
+	kasumi_caps_probe.addr =
+	    (void *)kasumi_lookup_name_quiet("get_vfs_caps_from_disk");
 	kasumi_caps_probe.pre_handler = kasumi_caps_pre;
 	ret = register_kprobe(&kasumi_caps_probe);
 	if (!ret)
 		WRITE_ONCE(kasumi_fscap_kretprobe_registered, 1);
 	else
-		pr_warn("kasumi: source file-capability hook failed (%d)\n", ret);
+		pr_warn("kasumi: source file-capability hook failed (%d)\n",
+			ret);
 #endif
 }
 
@@ -107,7 +110,6 @@ static KASUMI_NOCFI void kasumi_caps_stop(void)
 	wait_event(kasumi_caps_wait, !atomic_read(&kasumi_caps_active));
 	kasumi_caps_tasks_barrier();
 }
-
 
 static int kasumi_proc_acquire(bool require_mount)
 {
@@ -125,8 +127,9 @@ static int kasumi_proc_acquire(bool require_mount)
 		}
 		WRITE_ONCE(kasumi_proc_proxy_registered, 1);
 	}
-	if (require_mount && (!kasumi_mount_view_available() ||
-	    !(kasumi_mount_view_capabilities() & KASUMI_MOUNT_CAP_INFO))) {
+	if (require_mount &&
+	    (!kasumi_mount_view_available() ||
+	     !(kasumi_mount_view_capabilities() & KASUMI_MOUNT_CAP_INFO))) {
 		ret = -EOPNOTSUPP;
 		if (!kasumi_proc_users) {
 			WRITE_ONCE(kasumi_proc_proxy_registered, 0);

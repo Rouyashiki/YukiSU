@@ -147,15 +147,17 @@ static bool kasumi_dh_splice_registered;
 static seqlock_t *kasumi_dh_rename_lock;
 static void (*kasumi_dh_native_move)(struct dentry *, struct dentry *, bool);
 static void (*kasumi_dh_native_instantiate)(struct dentry *, struct inode *);
-static struct dentry *(*kasumi_dh_native_ancestor)(struct dentry *, struct dentry *);
+static struct dentry *(*kasumi_dh_native_ancestor)(struct dentry *,
+						   struct dentry *);
 static void (*kasumi_dh_native_rehash)(struct dentry *);
 static wait_queue_head_t *(*kasumi_dh_native_lookup_unhash)(struct dentry *);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) && IS_ENABLED(CONFIG_FS_ENCRYPTION)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) &&                          \
+    IS_ENABLED(CONFIG_FS_ENCRYPTION)
 static unsigned long kasumi_dh_fscrypt_revalidate;
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 static void (*kasumi_dh_native_add)(struct dentry *, struct inode *,
-				  const struct dentry_operations *);
+				    const struct dentry_operations *);
 #else
 static void (*kasumi_dh_native_add)(struct dentry *, struct inode *);
 #endif
@@ -177,12 +179,13 @@ static int kasumi_dh_atomic_open(struct inode *dir, struct dentry *dentry,
 static int kasumi_dh_iterate(struct file *file, struct dir_context *ctx,
 			     const struct file_operations *orig, void *data);
 static int kasumi_dh_prepare_dentry_ops(struct kasumi_dh_dir *dir,
-	struct dentry *dentry, u64 generation);
+					struct dentry *dentry, u64 generation);
 static void kasumi_dh_retire_unhashed(struct dentry *dentry);
 static int kasumi_dh_set_dentry_ops(struct kasumi_dh_dir *dir,
 				    struct dentry *dentry,
 				    bool synthetic_negative,
-				    bool synthetic_inode, u64 generation, u64 revision);
+				    bool synthetic_inode, u64 generation,
+				    u64 revision);
 static void kasumi_dh_child_free(struct kasumi_dh_child *c);
 
 bool kasumi_dirhijack_enabled(void)
@@ -235,7 +238,8 @@ static bool kasumi_dh_child_visible_at(const struct kasumi_dh_child *child,
 {
 	u64 last = READ_ONCE(child->last_generation);
 
-	return child->first_generation <= generation && (!last || generation <= last);
+	return child->first_generation <= generation &&
+	       (!last || generation <= last);
 }
 
 static struct kasumi_dh_child *kasumi_dh_find_binding(const char *path,
@@ -254,18 +258,21 @@ static struct kasumi_dh_child *kasumi_dh_find_binding(const char *path,
 	return NULL;
 }
 
-static struct kasumi_dh_child *kasumi_dh_find_child_at(
-	struct kasumi_dh_dir *dir, const char *name, u16 len, u64 generation)
+static struct kasumi_dh_child *
+kasumi_dh_find_child_at(struct kasumi_dh_dir *dir, const char *name, u16 len,
+			u64 generation)
 {
 	struct kasumi_dh_child *child;
 	u32 hash;
 
 	if (kasumi_dir_name_hash(dir->name_parent, name, len, &hash))
 		return NULL;
-	hash_for_each_possible_rcu(dir->child_index, child, index_node, hash) {
-		if (child->name_hash == hash && kasumi_dir_name_equal(
-			dir->name_parent, child->name_dentry, child->name,
-			child->name_len, name, len) &&
+	hash_for_each_possible_rcu(dir->child_index, child, index_node, hash)
+	{
+		if (child->name_hash == hash &&
+		    kasumi_dir_name_equal(dir->name_parent, child->name_dentry,
+					  child->name, child->name_len, name,
+					  len) &&
 		    (generation == U64_MAX ||
 		     kasumi_dh_child_visible_at(child, generation)))
 			return child;
@@ -274,10 +281,10 @@ static struct kasumi_dh_child *kasumi_dh_find_child_at(
 }
 
 static struct kasumi_dh_child *kasumi_dh_find_child(struct kasumi_dh_dir *dir,
-						 const char *name, u16 len)
+						    const char *name, u16 len)
 {
 	return kasumi_dh_find_child_at(dir, name, len,
-				      kasumi_rules_generation());
+				       kasumi_rules_generation());
 }
 
 const struct inode_operations *
@@ -298,8 +305,8 @@ kasumi_dirhijack_original_iops(const struct inode *inode)
  * immutable getattr trampoline while the lower vector is replaced.
  */
 int kasumi_dirhijack_replace_iops(struct inode *inode,
-				const struct inode_operations *expected,
-				const struct inode_operations *replacement)
+				  const struct inode_operations *expected,
+				  const struct inode_operations *replacement)
 {
 	struct kasumi_dh_iop *meta;
 	int error = 0;
@@ -327,15 +334,18 @@ void kasumi_dirhijack_synchronize_iops(void)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
 static int KASUMI_NOCFI kasumi_dh_getattr(struct mnt_idmap *idmap,
-	const struct path *path, struct kstat *stat, u32 request_mask,
-	unsigned int query_flags)
+					  const struct path *path,
+					  struct kstat *stat, u32 request_mask,
+					  unsigned int query_flags)
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
 static int KASUMI_NOCFI kasumi_dh_getattr(struct user_namespace *userns,
-	const struct path *path, struct kstat *stat, u32 request_mask,
-	unsigned int query_flags)
+					  const struct path *path,
+					  struct kstat *stat, u32 request_mask,
+					  unsigned int query_flags)
 #else
 static int KASUMI_NOCFI kasumi_dh_getattr(const struct path *path,
-	struct kstat *stat, u32 request_mask, unsigned int query_flags)
+					  struct kstat *stat, u32 request_mask,
+					  unsigned int query_flags)
 #endif
 {
 	struct inode *inode = d_inode(path->dentry);
@@ -348,11 +358,14 @@ static int KASUMI_NOCFI kasumi_dh_getattr(const struct path *path,
 	original = meta ? READ_ONCE(meta->orig_iop) : READ_ONCE(inode->i_op);
 	if (original && original->getattr) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-		result = original->getattr(idmap, path, stat, request_mask, query_flags);
+		result = original->getattr(idmap, path, stat, request_mask,
+					   query_flags);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
-		result = original->getattr(userns, path, stat, request_mask, query_flags);
+		result = original->getattr(userns, path, stat, request_mask,
+					   query_flags);
 #else
-		result = original->getattr(path, stat, request_mask, query_flags);
+		result =
+		    original->getattr(path, stat, request_mask, query_flags);
 #endif
 	} else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
@@ -420,8 +433,9 @@ static bool kasumi_dh_hidden_name(struct inode *parent, const struct qstr *name)
 	return hidden;
 }
 
-static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(
-	struct inode *dir, struct dentry *dentry, unsigned int flags);
+static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
+							  struct dentry *dentry,
+							  unsigned int flags);
 
 static int KASUMI_NOCFI kasumi_dh_atomic_open_inner(struct inode *dir,
 						    struct dentry *dentry,
@@ -431,7 +445,7 @@ static int KASUMI_NOCFI kasumi_dh_atomic_open_inner(struct inode *dir,
 {
 	struct kasumi_dh_iop *m = kasumi_dh_iop_of(dir);
 	const struct inode_operations *orig =
-		m ? READ_ONCE(m->orig_iop) : READ_ONCE(dir->i_op);
+	    m ? READ_ONCE(m->orig_iop) : READ_ONCE(dir->i_op);
 
 	struct kasumi_dh_child *child;
 	struct dentry *result;
@@ -442,13 +456,13 @@ static int KASUMI_NOCFI kasumi_dh_atomic_open_inner(struct inode *dir,
 
 	if (m && m->dir) {
 		rcu_read_lock();
-		child = kasumi_dh_find_child(
-		    m->dir, dentry->d_name.name, (u16)dentry->d_name.len);
+		child = kasumi_dh_find_child(m->dir, dentry->d_name.name,
+					     (u16)dentry->d_name.len);
 		if (child)
 			targeted = kasumi_dh_current_targets(child, dir);
-		governed = kasumi_dh_find_child_at(
-		    m->dir, dentry->d_name.name, (u16)dentry->d_name.len,
-		    U64_MAX) != NULL;
+		governed = kasumi_dh_find_child_at(m->dir, dentry->d_name.name,
+						   (u16)dentry->d_name.len,
+						   U64_MAX) != NULL;
 		rcu_read_unlock();
 	}
 	if (targeted) {
@@ -461,8 +475,7 @@ static int KASUMI_NOCFI kasumi_dh_atomic_open_inner(struct inode *dir,
 	    orig->atomic_open == kasumi_dh_atomic_open)
 		return -EOPNOTSUPP;
 	if (governed) {
-		ret = kasumi_dh_prepare_dentry_ops(m->dir, dentry,
-					     generation);
+		ret = kasumi_dh_prepare_dentry_ops(m->dir, dentry, generation);
 		if (ret && ret != -ENOENT && ret != -ESHUTDOWN)
 			return ret;
 	}
@@ -520,7 +533,8 @@ static int kasumi_dh_fuse_revalidate_pre(struct kprobe *probe,
 	name = &dentry->d_name;
 #endif
 	hidden = kasumi_dh_hidden_name(parent, name);
-	redirected = kasumi_dirhijack_child_visible(parent, name->name, name->len) > 0;
+	redirected =
+	    kasumi_dirhijack_child_visible(parent, name->name, name->len) > 0;
 	spin_unlock(&dentry->d_lock);
 	srcu_read_unlock(&kasumi_dh_srcu, idx);
 	if (!hidden && !redirected)
@@ -558,9 +572,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 		goto orig;
 
 	rcu_read_lock();
-	c = kasumi_dh_find_child_at(
-	    dn, dentry->d_name.name, (u16)dentry->d_name.len,
-	    generation);
+	c = kasumi_dh_find_child_at(dn, dentry->d_name.name,
+				    (u16)dentry->d_name.len, generation);
 	if (c && kasumi_dh_current_targets(c, dir)) {
 		revision = c->revision;
 		identity = c->identity;
@@ -606,8 +619,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 			if (source.dentry)
 				path_put(&source);
 			kfree(vpath);
-			dop_ret =
-			    kasumi_dh_set_dentry_ops(dn, dentry, true, false, generation, revision);
+			dop_ret = kasumi_dh_set_dentry_ops(
+			    dn, dentry, true, false, generation, revision);
 			if (dop_ret) {
 				/* DEL/CLEAR won the race: resolve through the
 				 * original filesystem instead of publishing an
@@ -627,7 +640,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 			vi = kasumi_vnode_new(dir->i_sb,
 					      source.dentry ? &source : NULL,
 					      mode, cflags);
-		if (!IS_ERR(vi) && vpath && !(cflags & KASUMI_VNODE_F_VIRTUAL_DIR)) {
+		if (!IS_ERR(vi) && vpath &&
+		    !(cflags & KASUMI_VNODE_F_VIRTUAL_DIR)) {
 			dop_ret = kasumi_vnode_set_visible_path(vi, vpath);
 			if (dop_ret) {
 				iput(vi);
@@ -639,8 +653,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 		kfree(vpath);
 		kasumi_identity_put(identity);
 		if (!IS_ERR(vi)) {
-			dop_ret =
-			    kasumi_dh_set_dentry_ops(dn, dentry, false, true, generation, revision);
+			dop_ret = kasumi_dh_set_dentry_ops(
+			    dn, dentry, false, true, generation, revision);
 			if (dop_ret) {
 				iput(vi);
 				if (dop_ret == -ENOENT || dop_ret == -ESHUTDOWN)
@@ -649,8 +663,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_lookup_inner(struct inode *dir,
 			}
 			res = d_splice_alias(vi, dentry);
 			if (res && !IS_ERR(res)) {
-				dop_ret = kasumi_dh_set_dentry_ops(dn, res,
-								   false, true, generation, revision);
+				dop_ret = kasumi_dh_set_dentry_ops(
+				    dn, res, false, true, generation, revision);
 				if (dop_ret) {
 					/* The alias became visible after
 					 * DEL/CLEAR began. Unhash it so the
@@ -680,39 +694,46 @@ orig:
 	 * re-resolve through the shadow lookup per current observer. */
 	{
 		const struct inode_operations *original =
-			m ? READ_ONCE(m->orig_iop) : NULL;
+		    m ? READ_ONCE(m->orig_iop) : NULL;
 		struct dentry *res = NULL;
 		bool is_child = false;
-		bool simple = original &&
-			(original->lookup == simple_lookup ||
-			 (unsigned long)original->lookup == kasumi_dh_simple_lookup_raw ||
-			 (unsigned long)original->lookup == kasumi_dh_simple_lookup_callable);
+		bool simple =
+		    original && (original->lookup == simple_lookup ||
+				 (unsigned long)original->lookup ==
+				     kasumi_dh_simple_lookup_raw ||
+				 (unsigned long)original->lookup ==
+				     kasumi_dh_simple_lookup_callable);
 
 		if (m && dn) {
 			rcu_read_lock();
 			is_child =
-			    kasumi_dh_find_child_at(
-				dn, dentry->d_name.name,
-				(u16)dentry->d_name.len, U64_MAX) != NULL;
+			    kasumi_dh_find_child_at(dn, dentry->d_name.name,
+						    (u16)dentry->d_name.len,
+						    U64_MAX) != NULL;
 			rcu_read_unlock();
 		}
 		/* Native lookup may hash a negative result before returning. */
 		if (is_child) {
 			int error;
 
-			/* Some fixed KMIs inline d_set_d_op into simple_lookup. */
+			/* Some fixed KMIs inline d_set_d_op into simple_lookup.
+			 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 			if (simple && !dentry->d_op)
-				WRITE_ONCE(dentry->d_flags, READ_ONCE(dentry->d_flags) |
-							 DCACHE_DONTCACHE);
+				WRITE_ONCE(dentry->d_flags,
+					   READ_ONCE(dentry->d_flags) |
+					       DCACHE_DONTCACHE);
 #else
 			if (simple && !dentry->d_sb->s_d_op && !dentry->d_op) {
-				WRITE_ONCE(dentry->d_op, &simple_dentry_operations);
-				WRITE_ONCE(dentry->d_flags, READ_ONCE(dentry->d_flags) |
-							 DCACHE_OP_DELETE);
+				WRITE_ONCE(dentry->d_op,
+					   &simple_dentry_operations);
+				WRITE_ONCE(dentry->d_flags,
+					   READ_ONCE(dentry->d_flags) |
+					       DCACHE_OP_DELETE);
 			}
 #endif
-			error = kasumi_dh_prepare_dentry_ops(dn, dentry, generation);
+			error = kasumi_dh_prepare_dentry_ops(dn, dentry,
+							     generation);
 
 			if (error && error != -ENOENT && error != -ESHUTDOWN)
 				return ERR_PTR(error);
@@ -760,7 +781,7 @@ static int kasumi_dh_iterate(struct file *file, struct dir_context *ctx,
 			     const struct file_operations *original, void *data)
 {
 	return kasumi_dir_view_iterate(file, file, original, ctx,
-				      kasumi_dirhijack_collect, NULL, NULL);
+				       kasumi_dirhijack_collect, NULL, NULL);
 }
 
 /* ---- per-observer d_revalidate (SRCU-wrapped) -------------------------- */
@@ -835,11 +856,13 @@ static int KASUMI_NOCFI kasumi_dh_revalidate_inner(
 
 	/* SRCU pins both the saved owner and any owner selected after a rename.
 	 * A live directory retains its i_op until retiring is set. Rebinding an
-	 * alias can update dm->dir before native parent publication, so mismatched
-	 * parents must resolve their currently installed owner instead.
+	 * alias can update dm->dir before native parent publication, so
+	 * mismatched parents must resolve their currently installed owner
+	 * instead.
 	 */
 	if (!dn || dir != dn->dir_inode || READ_ONCE(dn->retiring)) {
-		struct kasumi_dh_iop *parent_meta = dir ? kasumi_dh_iop_of(dir) : NULL;
+		struct kasumi_dh_iop *parent_meta =
+		    dir ? kasumi_dh_iop_of(dir) : NULL;
 
 		dn = parent_meta ? READ_ONCE(parent_meta->dir) : NULL;
 		if (dn && READ_ONCE(dn->retiring))
@@ -864,7 +887,7 @@ static int KASUMI_NOCFI kasumi_dh_revalidate_inner(
 
 		rcu_read_lock();
 		c = kasumi_dh_find_child_at(dn, name->name, (u16)name->len,
-					     generation);
+					    generation);
 		if (c) {
 			bool hides;
 
@@ -876,7 +899,8 @@ static int KASUMI_NOCFI kasumi_dh_revalidate_inner(
 			governed = true;
 			hides = kasumi_dh_current_hides(c, dir);
 			child_hide = c->hide || hides;
-			sees = hides || (c->legacy && !c->hide && kasumi_dh_current_sees(c));
+			sees = hides || (c->legacy && !c->hide &&
+					 kasumi_dh_current_sees(c));
 			if (c->flags & KASUMI_VNODE_F_SU) {
 				bool enabled =
 				    ksu_sucompat_vfs_current_ino(c->v_ino);
@@ -980,8 +1004,8 @@ static int KASUMI_NOCFI kasumi_dh_revalidate(struct inode *dir,
 	ret = kasumi_dh_revalidate_inner(dm, dir, name, dentry, flags,
 					 &chain_orig);
 	if (ret > 0 && chain_orig &&
-	    (READ_ONCE(dm->orig_op_flags) & DCACHE_OP_REVALIDATE) && dm->orig_dop &&
-	    dm->orig_dop->d_revalidate)
+	    (READ_ONCE(dm->orig_op_flags) & DCACHE_OP_REVALIDATE) &&
+	    dm->orig_dop && dm->orig_dop->d_revalidate)
 		ret = dm->orig_dop->d_revalidate(dir, name, dentry, flags);
 	if (ret == 0)
 		kasumi_dh_queue_dop_retire(dm);
@@ -1010,8 +1034,8 @@ static int KASUMI_NOCFI kasumi_dh_revalidate(struct dentry *dentry,
 	ret = kasumi_dh_revalidate_inner(dm, dir, name, dentry, flags,
 					 &chain_orig);
 	if (ret > 0 && chain_orig &&
-	    (READ_ONCE(dm->orig_op_flags) & DCACHE_OP_REVALIDATE) && dm->orig_dop &&
-	    dm->orig_dop->d_revalidate)
+	    (READ_ONCE(dm->orig_op_flags) & DCACHE_OP_REVALIDATE) &&
+	    dm->orig_dop && dm->orig_dop->d_revalidate)
 		/* Preserve the original callback's LOOKUP_RCU result verbatim,
 		 * including -ECHILD when it needs a ref-walk retry. */
 		ret = dm->orig_dop->d_revalidate(dentry, flags);
@@ -1030,8 +1054,8 @@ static bool kasumi_dh_owns_dops(const struct kasumi_dh_dop_meta *meta,
 	       operations == &meta->native_shadow_dop;
 }
 
-static unsigned int kasumi_dh_native_dop_flags(
-	const struct dentry_operations *operations)
+static unsigned int
+kasumi_dh_native_dop_flags(const struct dentry_operations *operations)
 {
 	unsigned int flags = 0;
 
@@ -1055,9 +1079,11 @@ static unsigned int kasumi_dh_native_dop_flags(
 }
 
 /* Native lookup reserved the metadata before entering the filesystem.  Finish
- * its operation vector after native initialization and before cache publication. */
-static bool kasumi_dh_publish_native_dops(struct kasumi_dh_dop_meta *meta,
-	const struct dentry_operations *operations)
+ * its operation vector after native initialization and before cache
+ * publication. */
+static bool
+kasumi_dh_publish_native_dops(struct kasumi_dh_dop_meta *meta,
+			      const struct dentry_operations *operations)
 {
 	struct dentry *dentry = meta->dentry;
 	const struct dentry_operations *current_ops = READ_ONCE(dentry->d_op);
@@ -1066,7 +1092,8 @@ static bool kasumi_dh_publish_native_dops(struct kasumi_dh_dop_meta *meta,
 	if (kasumi_dh_owns_dops(meta, current_ops)) {
 		if (!operations || operations == READ_ONCE(meta->orig_dop))
 			return true;
-		/* d_set_d_op itself forbids replacing initialized native ops. */
+		/* d_set_d_op itself forbids replacing initialized native ops.
+		 */
 		if (WARN_ON_ONCE(meta->native_dop_set || meta->orig_dop))
 			return true;
 		flags = 0;
@@ -1085,8 +1112,8 @@ static bool kasumi_dh_publish_native_dops(struct kasumi_dh_dop_meta *meta,
 	WRITE_ONCE(meta->native_dop_set, true);
 	smp_store_release(&dentry->d_op, &meta->native_shadow_dop);
 	WRITE_ONCE(dentry->d_flags,
-		   (READ_ONCE(dentry->d_flags) & ~KASUMI_DH_DOP_FLAGS) |
-			   flags | DCACHE_OP_REVALIDATE);
+		   (READ_ONCE(dentry->d_flags) & ~KASUMI_DH_DOP_FLAGS) | flags |
+		       DCACHE_OP_REVALIDATE);
 	return true;
 }
 
@@ -1113,9 +1140,12 @@ static int kasumi_dh_add_pre(struct kprobe *probe, struct pt_regs *regs)
 }
 
 static int kasumi_dh_set_dentry_ops_named(struct kasumi_dh_dir *dir,
-	struct dentry *dentry, const struct qstr *lookup_name,
-	bool synthetic_negative, bool synthetic_inode, u64 generation,
-	u64 revision, bool rebind, bool deferred, bool *created)
+					  struct dentry *dentry,
+					  const struct qstr *lookup_name,
+					  bool synthetic_negative,
+					  bool synthetic_inode, u64 generation,
+					  u64 revision, bool rebind,
+					  bool deferred, bool *created)
 {
 	struct kasumi_dh_dop_meta *m, *existing;
 	const struct dentry_operations *orig;
@@ -1170,9 +1200,10 @@ static int kasumi_dh_set_dentry_ops_named(struct kasumi_dh_dir *dir,
 		spin_lock(&dentry->d_lock);
 		if ((!kasumi_dh_owns_dops(existing, dentry->d_op) &&
 		     (existing->native_dop_set || !d_unhashed(dentry))) ||
-		    (!rebind && (existing->dir != dir ||
-		     existing->name_hash != hash || existing->name_len != len ||
-		     memcmp(existing->name, name, len))))
+		    (!rebind &&
+		     (existing->dir != dir || existing->name_hash != hash ||
+		      existing->name_len != len ||
+		      memcmp(existing->name, name, len))))
 			ret = -EBUSY;
 		else {
 			existing->name_hash = hash;
@@ -1182,7 +1213,8 @@ static int kasumi_dh_set_dentry_ops_named(struct kasumi_dh_dir *dir,
 			if (existing->dir != dir)
 				list_move_tail(&existing->dir_node, &dir->dops);
 			WRITE_ONCE(existing->dir, dir);
-			if (!deferred && !kasumi_dh_owns_dops(existing, dentry->d_op))
+			if (!deferred &&
+			    !kasumi_dh_owns_dops(existing, dentry->d_op))
 				kasumi_dh_publish_native_dops(existing, NULL);
 			WRITE_ONCE(existing->synthetic_negative,
 				   synthetic_negative);
@@ -1216,8 +1248,9 @@ static int kasumi_dh_set_dentry_ops_named(struct kasumi_dh_dir *dir,
 	list_add_tail(&m->dir_node, &dir->dops);
 	hash_add_rcu(kasumi_dh_dops, &m->node, (unsigned long)dentry);
 	if (!deferred) {
-		/* Publish the initialized/hash-visible meta before pathwalk can observe
-		 * DCACHE_OP_REVALIDATE and enter the shadow callback. */
+		/* Publish the initialized/hash-visible meta before pathwalk can
+		 * observe DCACHE_OP_REVALIDATE and enter the shadow callback.
+		 */
 		smp_wmb();
 		WRITE_ONCE(dentry->d_op, &m->shadow_dop);
 		WRITE_ONCE(dentry->d_flags,
@@ -1238,24 +1271,29 @@ out_unlock:
 }
 
 static int kasumi_dh_set_dentry_ops(struct kasumi_dh_dir *dir,
-	struct dentry *dentry, bool synthetic_negative,
-	bool synthetic_inode, u64 generation, u64 revision)
+				    struct dentry *dentry,
+				    bool synthetic_negative,
+				    bool synthetic_inode, u64 generation,
+				    u64 revision)
 {
-	return kasumi_dh_set_dentry_ops_named(dir, dentry, &dentry->d_name,
-		synthetic_negative, synthetic_inode, generation, revision, false, false, NULL);
+	return kasumi_dh_set_dentry_ops_named(
+	    dir, dentry, &dentry->d_name, synthetic_negative, synthetic_inode,
+	    generation, revision, false, false, NULL);
 }
 
 static int kasumi_dh_prepare_dentry_ops(struct kasumi_dh_dir *dir,
-	struct dentry *dentry, u64 generation)
+					struct dentry *dentry, u64 generation)
 {
 	return kasumi_dh_set_dentry_ops_named(dir, dentry, &dentry->d_name,
-		false, false, generation, 0, false, true, NULL);
+					      false, false, generation, 0,
+					      false, true, NULL);
 }
 
 /* The directory inode lock selects its unique alias.  Retain that alias while
  * preparing its future location, before native rename_lock publication. */
 static int kasumi_dh_prepare_alias(struct kasumi_dh_dop_meta *target,
-	struct dentry *alias, struct dentry *destination, bool *created)
+				   struct dentry *alias,
+				   struct dentry *destination, bool *created)
 {
 	struct kasumi_dh_dop_meta *existing;
 
@@ -1270,14 +1308,15 @@ static int kasumi_dh_prepare_alias(struct kasumi_dh_dop_meta *target,
 		return 0;
 	}
 	mutex_unlock(&kasumi_dh_lock);
-	return kasumi_dh_set_dentry_ops_named(READ_ONCE(target->dir), alias,
-		&destination->d_name, false, kasumi_vnode_is_ours(d_inode(alias)),
-		READ_ONCE(target->generation), READ_ONCE(target->revision), true, false, created);
+	return kasumi_dh_set_dentry_ops_named(
+	    READ_ONCE(target->dir), alias, &destination->d_name, false,
+	    kasumi_vnode_is_ours(d_inode(alias)), READ_ONCE(target->generation),
+	    READ_ONCE(target->revision), true, false, created);
 }
 
 /* Equivalent to the fixed-KMI __d_unalias locking sequence. */
 static int KASUMI_NOCFI kasumi_dh_unalias(struct dentry *destination,
-					 struct dentry *alias)
+					  struct dentry *alias)
 {
 	struct mutex *rename_mutex = NULL;
 	struct rw_semaphore *parent_lock = NULL;
@@ -1302,9 +1341,10 @@ out:
 }
 
 static void kasumi_dh_update_moved_dops(struct dentry *dentry,
-				       unsigned int previous_flags)
+					unsigned int previous_flags)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) && IS_ENABLED(CONFIG_FS_ENCRYPTION)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) &&                          \
+    IS_ENABLED(CONFIG_FS_ENCRYPTION)
 	struct kasumi_dh_dop_meta *meta;
 
 	if (!(previous_flags & DCACHE_NOKEY_NAME) ||
@@ -1314,10 +1354,10 @@ static void kasumi_dh_update_moved_dops(struct dentry *dentry,
 	meta = kasumi_dh_dop_lookup_locked(dentry);
 	if (meta && meta->orig_dop &&
 	    (unsigned long)meta->orig_dop->d_revalidate ==
-		    kasumi_dh_fscrypt_revalidate &&
+		kasumi_dh_fscrypt_revalidate &&
 	    !(READ_ONCE(dentry->d_flags) & DCACHE_NOKEY_NAME))
-		WRITE_ONCE(meta->orig_op_flags,
-			   READ_ONCE(meta->orig_op_flags) & ~DCACHE_OP_REVALIDATE);
+		WRITE_ONCE(meta->orig_op_flags, READ_ONCE(meta->orig_op_flags) &
+						    ~DCACHE_OP_REVALIDATE);
 	mutex_unlock(&kasumi_dh_lock);
 #else
 	(void)dentry;
@@ -1381,10 +1421,10 @@ static void KASUMI_NOCFI kasumi_dh_add_directory(
 	spin_unlock(&inode->i_lock);
 }
 
-static struct dentry *KASUMI_NOCFI kasumi_dh_splice_alias(
-	struct inode *inode, struct dentry *dentry,
-	const struct dentry_operations *operations,
-	struct kasumi_dh_dop_meta *target, int srcu_index)
+static struct dentry *KASUMI_NOCFI
+kasumi_dh_splice_alias(struct inode *inode, struct dentry *dentry,
+		       const struct dentry_operations *operations,
+		       struct kasumi_dh_dop_meta *target, int srcu_index)
 {
 	struct dentry *alias = NULL;
 	unsigned int previous_flags;
@@ -1397,7 +1437,8 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_splice_alias(
 	kasumi_dh_native_instantiate(dentry, inode);
 	spin_lock(&inode->i_lock);
 	if (!hlist_empty(&inode->i_dentry)) {
-		alias = hlist_entry(inode->i_dentry.first, struct dentry, d_u.d_alias);
+		alias = hlist_entry(inode->i_dentry.first, struct dentry,
+				    d_u.d_alias);
 		dget(alias);
 	}
 	if (!alias) {
@@ -1427,9 +1468,10 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_splice_alias(
 	if (kasumi_dh_native_ancestor(alias, dentry)) {
 		write_sequnlock(kasumi_dh_rename_lock);
 		error = -ELOOP;
-		pr_warn_ratelimited("VFS: Lookup of '%s' in %s %s would have caused loop\n",
-			dentry->d_name.name, inode->i_sb->s_type->name,
-			inode->i_sb->s_id);
+		pr_warn_ratelimited(
+		    "VFS: Lookup of '%s' in %s %s would have caused loop\n",
+		    dentry->d_name.name, inode->i_sb->s_type->name,
+		    inode->i_sb->s_id);
 	} else if (!IS_ROOT(alias)) {
 		struct dentry *old_parent = dget(alias->d_parent);
 
@@ -1445,10 +1487,12 @@ static struct dentry *KASUMI_NOCFI kasumi_dh_splice_alias(
 		goto fail;
 	kasumi_dh_update_moved_dops(alias, previous_flags);
 	/* Revalidation uses the actual location throughout the move.  Change
-	 * ownership only after success, preserving an old binding on failure. */
-	error = kasumi_dh_set_dentry_ops_named(READ_ONCE(target->dir), alias,
-		&alias->d_name, false, kasumi_vnode_is_ours(inode),
-		READ_ONCE(target->generation), READ_ONCE(target->revision), true, false, NULL);
+	 * ownership only after success, preserving an old binding on failure.
+	 */
+	error = kasumi_dh_set_dentry_ops_named(
+	    READ_ONCE(target->dir), alias, &alias->d_name, false,
+	    kasumi_vnode_is_ours(inode), READ_ONCE(target->generation),
+	    READ_ONCE(target->revision), true, false, NULL);
 	if (error) {
 		d_drop(alias);
 		goto fail;
@@ -1513,7 +1557,6 @@ static int kasumi_dh_splice_pre(struct kprobe *probe, struct pt_regs *regs)
 #endif
 }
 
-
 /* Keep revalidation installed until readers that found the hashed dentry have
  * drained.  A concurrent valid lookup can cancel retirement under this lock. */
 static void kasumi_dh_retire_dop_locked(struct kasumi_dh_dop_meta *m,
@@ -1536,12 +1579,13 @@ static void kasumi_dh_free_retired_dops(struct list_head *retired)
 	do {
 		retry = false;
 		mutex_lock(&kasumi_dh_lock);
-		list_for_each_entry_safe(m, tmp, retired, retire_node) {
+		list_for_each_entry_safe (m, tmp, retired, retire_node) {
 			struct dentry *dentry = m->dentry;
 
 			spin_lock(&dentry->d_lock);
 			/* A lookup can splice its alias after the first d_drop.
-			 * Unhash it again before starting another reader drain. */
+			 * Unhash it again before starting another reader drain.
+			 */
 			if (!d_unhashed(dentry)) {
 				spin_unlock(&dentry->d_lock);
 				d_drop(dentry);
@@ -1553,7 +1597,7 @@ static void kasumi_dh_free_retired_dops(struct list_head *retired)
 
 				WRITE_ONCE(dentry->d_flags,
 					   (flags & ~KASUMI_DH_DOP_FLAGS) |
-					   m->orig_op_flags);
+					       m->orig_op_flags);
 				smp_wmb();
 				WRITE_ONCE(dentry->d_op, m->orig_dop);
 			}
@@ -1577,7 +1621,7 @@ static void kasumi_dh_free_retired_dops(struct list_head *retired)
 	synchronize_srcu(&kasumi_dh_srcu);
 	synchronize_rcu_tasks();
 	synchronize_rcu();
-	list_for_each_entry_safe(m, tmp, &detached, retire_node) {
+	list_for_each_entry_safe (m, tmp, &detached, retire_node) {
 		list_del(&m->retire_node);
 		dput(m->dentry);
 		kfree(m);
@@ -1801,7 +1845,8 @@ static void kasumi_dh_release_detached_dir(struct kasumi_dh_dir *dir)
 	kasumi_fop_synchronize_iterate_clients();
 	synchronize_rcu_tasks();
 
-	/* An auto-retirement worker may own a still-hashed dentry for this dir. */
+	/* An auto-retirement worker may own a still-hashed dentry for this dir.
+	 */
 	flush_work(&kasumi_dh_reap_dops_work);
 	hlist_for_each_entry_safe(c, tmp, &dir->children, node)
 	{
@@ -1881,9 +1926,9 @@ static void kasumi_dh_batch_touch(struct kasumi_dirhijack_batch *batch,
 		list_add_tail(&dir->batch_node, &batch->directories);
 }
 
-static struct kasumi_dh_change *kasumi_dh_batch_change(
-	struct kasumi_dirhijack_batch *batch, struct kasumi_dh_dir *dir,
-	const char *name, u16 len)
+static struct kasumi_dh_change *
+kasumi_dh_batch_change(struct kasumi_dirhijack_batch *batch,
+		       struct kasumi_dh_dir *dir, const char *name, u16 len)
 {
 	struct kasumi_dh_change *change;
 	unsigned long key;
@@ -1894,13 +1939,15 @@ static struct kasumi_dh_change *kasumi_dh_batch_change(
 		return NULL;
 	key = (unsigned long)dir ^ hash;
 
-	hash_for_each_possible(batch->index, change, node, key) {
-		struct kasumi_dh_child *child = change->new_child ?
-			change->new_child : change->old_child;
+	hash_for_each_possible(batch->index, change, node, key)
+	{
+		struct kasumi_dh_child *child =
+		    change->new_child ? change->new_child : change->old_child;
 
 		if (change->dir == dir && child && child->name_hash == hash &&
 		    kasumi_dir_name_equal(dir->name_parent, child->name_dentry,
-			child->name, child->name_len, name, len))
+					  child->name, child->name_len, name,
+					  len))
 			return change;
 	}
 	change = kzalloc(sizeof(*change), GFP_KERNEL);
@@ -1964,7 +2011,7 @@ static int kasumi_dh_dir_add_child(struct kasumi_dirhijack_batch *batch,
 		struct inode *inode = d_inode(source->dentry);
 
 		ret = kasumi_identity_source_get(inode->i_sb->s_dev,
-			inode->i_ino, &c->identity);
+						 inode->i_ino, &c->identity);
 	} else if (vpath && (flags & KASUMI_VNODE_F_VIRTUAL_DIR)) {
 		ret = kasumi_identity_path_get(vpath, &c->identity);
 	}
@@ -2069,8 +2116,9 @@ static int kasumi_dh_split_parent(const char *visible_path, char **parent_out,
  * rule table (kasumi_rule_vpath_*), so only the top segment needs registering.
  * The child is shared across all rules under R/s1.
  */
-static KASUMI_NOCFI int kasumi_dh_register_vtopo(struct kasumi_dirhijack_batch *batch,
-						 const char *visible_path)
+static KASUMI_NOCFI int
+kasumi_dh_register_vtopo(struct kasumi_dirhijack_batch *batch,
+			 const char *visible_path)
 {
 	char *pparent = NULL;
 	char *probe;
@@ -2167,12 +2215,14 @@ static KASUMI_NOCFI int kasumi_dh_register_vtopo(struct kasumi_dirhijack_batch *
 	}
 	{
 		struct kasumi_dh_child *existing = kasumi_dh_find_child_at(
-			dir, seg, seg_len,
-			batch ? batch->generation : kasumi_rules_generation());
+		    dir, seg, seg_len,
+		    batch ? batch->generation : kasumi_rules_generation());
 
-		/* An explicit backed directory also resolves its configured descendants. */
+		/* An explicit backed directory also resolves its configured
+		 * descendants. */
 		if (existing && existing->source.dentry) {
-			ret = (existing->flags & KASUMI_VNODE_F_DIR) ? 0 : -ENOTDIR;
+			ret = (existing->flags & KASUMI_VNODE_F_DIR) ? 0
+								     : -ENOTDIR;
 			goto out;
 		}
 	}
@@ -2207,15 +2257,15 @@ out:
 	else if (ret && sop_registered && !dir)
 		kasumi_sop_shadow_reap();
 	path_put(&rpath);
-	kasumi_log("dirhijack_vtopo visible=%s vdir=%s ret=%d\n",
-		visible_path, vpath, ret);
+	kasumi_log("dirhijack_vtopo visible=%s vdir=%s ret=%d\n", visible_path,
+		   vpath, ret);
 	kfree(seg);
 	kfree(vpath);
 	return ret;
 }
 
 static KASUMI_NOCFI int kasumi_dh_register(struct kasumi_dirhijack_batch *batch,
-		   const char *visible_path,
+					   const char *visible_path,
 					   const struct path *source,
 					   unsigned long v_ino, u8 flags,
 					   bool hide, bool lookup_only,
@@ -2296,7 +2346,8 @@ static KASUMI_NOCFI int kasumi_dh_register(struct kasumi_dirhijack_batch *batch,
 			goto out;
 		sop_registered = true;
 	}
-	dir = kasumi_dh_install_dir(ppath.dentry, !lookup_only, sop_registered, &ret);
+	dir = kasumi_dh_install_dir(ppath.dentry, !lookup_only, sop_registered,
+				    &ret);
 	if (!dir) {
 		if (!ret)
 			ret = -ENOMEM;
@@ -2336,10 +2387,10 @@ out:
 	}
 	path_put(&ppath);
 	kasumi_log("dirhijack_%s visible=%s child=%s ret=%d\n",
-		hide	      ? "hide"
-		: lookup_only ? "shadow"
-			      : "add",
-		visible_path, child ? child : "(null)", ret);
+		   hide		 ? "hide"
+		   : lookup_only ? "shadow"
+				 : "add",
+		   visible_path, child ? child : "(null)", ret);
 	kfree(parent);
 	return ret;
 }
@@ -2347,15 +2398,15 @@ out:
 int kasumi_dirhijack_add(const char *visible_path, const struct path *source,
 			 unsigned long v_ino, u8 flags)
 {
-	return kasumi_dh_register(NULL, visible_path, source, v_ino, flags, false,
-				  false, NULL);
+	return kasumi_dh_register(NULL, visible_path, source, v_ino, flags,
+				  false, false, NULL);
 }
 
 int kasumi_dirhijack_add_su(const char *visible_path, unsigned long v_ino,
 			    struct path *parent)
 {
-	return kasumi_dh_register(NULL, visible_path, NULL, v_ino, KASUMI_VNODE_F_SU,
-				  false, false, parent);
+	return kasumi_dh_register(NULL, visible_path, NULL, v_ino,
+				  KASUMI_VNODE_F_SU, false, false, parent);
 }
 
 int kasumi_dirhijack_match_su(const char *visible_path,
@@ -2385,8 +2436,7 @@ int kasumi_dirhijack_match_su(const char *visible_path,
 	rcu_read_lock();
 	m = kasumi_dh_iop_of(d_inode(resolved.dentry));
 	if (m && m->dir && !READ_ONCE(m->dir->retiring)) {
-		c = kasumi_dh_find_child(
-		    m->dir, child, (u16)len);
+		c = kasumi_dh_find_child(m->dir, child, (u16)len);
 		ret = c && (c->flags & KASUMI_VNODE_F_SU) && c->v_ino == v_ino;
 	}
 	rcu_read_unlock();
@@ -2425,8 +2475,8 @@ int kasumi_dirhijack_add_shadow(const char *visible_path,
 				const struct path *source, unsigned long v_ino,
 				u8 flags)
 {
-	return kasumi_dh_register(NULL, visible_path, source, v_ino, flags, false,
-				  true, NULL);
+	return kasumi_dh_register(NULL, visible_path, source, v_ino, flags,
+				  false, true, NULL);
 }
 
 /*
@@ -2439,8 +2489,8 @@ int kasumi_dirhijack_hide(const char *visible_path, u32 rule_flags)
 {
 	if (!kasumi_dirhijack_enabled())
 		return -EOPNOTSUPP;
-	return kasumi_dh_register(NULL,
-	    visible_path, NULL, 0,
+	return kasumi_dh_register(
+	    NULL, visible_path, NULL, 0,
 	    (rule_flags & KSM_RULE_BYPASS_POLICY) ? KASUMI_VNODE_F_BYPASS : 0,
 	    true, false, NULL);
 }
@@ -2462,8 +2512,9 @@ struct kasumi_dirhijack_batch *kasumi_dirhijack_batch_begin(u64 generation)
 }
 
 int kasumi_dirhijack_batch_add(struct kasumi_dirhijack_batch *batch,
-	const char *visible_path, const struct path *source,
-	unsigned long ino, u8 flags, bool lookup_only)
+			       const char *visible_path,
+			       const struct path *source, unsigned long ino,
+			       u8 flags, bool lookup_only)
 {
 	if (!batch)
 		return -EINVAL;
@@ -2472,13 +2523,14 @@ int kasumi_dirhijack_batch_add(struct kasumi_dirhijack_batch *batch,
 }
 
 int kasumi_dirhijack_batch_hide(struct kasumi_dirhijack_batch *batch,
-	const char *visible_path, u32 rule_flags)
+				const char *visible_path, u32 rule_flags)
 {
 	if (!batch || !kasumi_dirhijack_enabled())
 		return -EOPNOTSUPP;
-	return kasumi_dh_register(batch, visible_path, NULL, 0,
-		(rule_flags & KSM_RULE_BYPASS_POLICY) ? KASUMI_VNODE_F_BYPASS : 0,
-		true, false, NULL);
+	return kasumi_dh_register(
+	    batch, visible_path, NULL, 0,
+	    (rule_flags & KSM_RULE_BYPASS_POLICY) ? KASUMI_VNODE_F_BYPASS : 0,
+	    true, false, NULL);
 }
 
 static int kasumi_dh_batch_remove(struct kasumi_dirhijack_batch *batch,
@@ -2503,7 +2555,8 @@ static int kasumi_dh_batch_remove(struct kasumi_dirhijack_batch *batch,
 	}
 	spin_lock(&dir->lock);
 	if (change->old_child)
-		WRITE_ONCE(change->old_child->last_generation, batch->generation - 1);
+		WRITE_ONCE(change->old_child->last_generation,
+			   batch->generation - 1);
 	old = change->new_child;
 	if (old) {
 		kasumi_dh_child_unlink(old);
@@ -2542,7 +2595,7 @@ int kasumi_dirhijack_batch_del(struct kasumi_dirhijack_batch *batch,
 }
 
 void kasumi_dirhijack_batch_finish(struct kasumi_dirhijack_batch *batch,
-				  bool published)
+				   bool published)
 {
 	struct kasumi_dh_change *change, *next;
 	struct kasumi_dh_dir *dir, *next_dir;
@@ -2552,13 +2605,14 @@ void kasumi_dirhijack_batch_finish(struct kasumi_dirhijack_batch *batch,
 
 	if (!batch)
 		return;
-	/* Published readers may have selected the old generation before sleeping. */
+	/* Published readers may have selected the old generation before
+	 * sleeping. */
 	if (published)
 		synchronize_srcu(&kasumi_dh_srcu);
 	mutex_lock(&kasumi_dh_lock);
-	list_for_each_entry_safe(change, next, &batch->changes, list) {
-		struct kasumi_dh_child *retired = published ?
-			change->old_child : change->new_child;
+	list_for_each_entry_safe (change, next, &batch->changes, list) {
+		struct kasumi_dh_child *retired =
+		    published ? change->old_child : change->new_child;
 
 		spin_lock(&change->dir->lock);
 		if (!published && change->old_child)
@@ -2573,13 +2627,14 @@ void kasumi_dirhijack_batch_finish(struct kasumi_dirhijack_batch *batch,
 		hash_del(&change->node);
 		kfree(change);
 	}
-	list_for_each_entry_safe(dir, next_dir, &batch->directories, batch_node) {
+	list_for_each_entry_safe (dir, next_dir, &batch->directories,
+				  batch_node) {
 		list_del_init(&dir->batch_node);
 		if (!hlist_empty(&dir->children))
 			continue;
 		kasumi_dh_detach_dir_locked(dir);
 		list_add_tail(&dir->list, &dead_dirs);
-		list_for_each_entry(dop, &dir->dops, dir_node)
+		list_for_each_entry (dop, &dir->dops, dir_node)
 			kasumi_dh_retire_dop_locked(dop, &retired_dops);
 	}
 	mutex_unlock(&kasumi_dh_lock);
@@ -2590,7 +2645,7 @@ void kasumi_dirhijack_batch_finish(struct kasumi_dirhijack_batch *batch,
 		synchronize_rcu();
 		kasumi_dh_free_retired_dops(&retired_dops);
 	}
-	list_for_each_entry_safe(dir, next_dir, &dead_dirs, list) {
+	list_for_each_entry_safe (dir, next_dir, &dead_dirs, list) {
 		list_del_init(&dir->list);
 		kasumi_dh_release_detached_dir(dir);
 	}
@@ -2673,7 +2728,8 @@ static KASUMI_NOCFI int kasumi_dh_unregister(struct path ppath,
 		 * only the object currently returned by d_lookup(). */
 		hash_for_each_safe(kasumi_dh_dops, bkt, htmp, dm, node)
 		{
-			if (dm->dir == m->dir && kasumi_dir_name_equal(
+			if (dm->dir == m->dir &&
+			    kasumi_dir_name_equal(
 				m->dir->name_parent, dm->dentry, dm->name,
 				dm->name_len, child, child_len))
 				kasumi_dh_retire_dop_locked(dm, &retired_dops);
@@ -2693,7 +2749,8 @@ static KASUMI_NOCFI int kasumi_dh_unregister(struct path ppath,
 
 		qname.name = child;
 		qname.len = (u32)child_len;
-		kasumi_dir_name_hash(ppath.dentry, child, child_len, &qname.hash);
+		kasumi_dir_name_hash(ppath.dentry, child, child_len,
+				     &qname.hash);
 		cached = d_lookup(ppath.dentry, &qname);
 		if (cached) {
 			d_drop(cached);
@@ -2842,17 +2899,20 @@ int kasumi_dirhijack_collect(struct file *file, struct list_head *entries,
 	meta = kasumi_dh_iop_of(file_inode(file));
 	if (!meta || !meta->dir || READ_ONCE(meta->dir->retiring))
 		goto out;
-	hlist_for_each_entry_rcu(child, &meta->dir->children, node) {
+	hlist_for_each_entry_rcu(child, &meta->dir->children, node)
+	{
 		struct kasumi_dir_entry *entry;
-		u32 flags = (child->flags & KASUMI_VNODE_F_BYPASS) ?
-			KSM_RULE_BYPASS_POLICY : 0;
+		u32 flags = (child->flags & KASUMI_VNODE_F_BYPASS)
+				? KSM_RULE_BYPASS_POLICY
+				: 0;
 
 		if (!kasumi_dh_child_visible_at(child, *generation))
 			continue;
 		if ((child->flags & KASUMI_VNODE_F_VIRTUAL_DIR) &&
 		    !kasumi_rule_vpath_flags(child->vpath, *generation, &flags))
 			continue;
-		entry = kasumi_dir_entry_alloc(child->name, child->name_len, GFP_ATOMIC);
+		entry = kasumi_dir_entry_alloc(child->name, child->name_len,
+					       GFP_ATOMIC);
 		if (!entry) {
 			error = -ENOMEM;
 			goto out;
@@ -2864,16 +2924,21 @@ int kasumi_dirhijack_collect(struct file *file, struct list_head *entries,
 		entry->rule_flags = flags;
 		entry->hide_flags = ((child->legacy && child->hide &&
 				      (child->flags & KASUMI_VNODE_F_BYPASS)) ||
-				     READ_ONCE(child->bypass_hide_users)) ?
-			KSM_RULE_BYPASS_POLICY : 0;
+				     READ_ONCE(child->bypass_hide_users))
+					? KSM_RULE_BYPASS_POLICY
+					: 0;
 		entry->redirect = child->legacy && !child->hide;
 		entry->hide = child->hide || READ_ONCE(child->hide_users);
 		entry->hide_storage_managed =
-			kasumi_hide_storage_parent(file_inode(file));
+		    kasumi_hide_storage_parent(file_inode(file));
 		if (child->source.dentry && d_inode(child->source.dentry))
-			entry->type = (d_inode(child->source.dentry)->i_mode & S_IFMT) >> 12;
+			entry->type =
+			    (d_inode(child->source.dentry)->i_mode & S_IFMT) >>
+			    12;
 		else
-			entry->type = (child->flags & KASUMI_VNODE_F_DIR) ? DT_DIR : DT_UNKNOWN;
+			entry->type = (child->flags & KASUMI_VNODE_F_DIR)
+					  ? DT_DIR
+					  : DT_UNKNOWN;
 		list_add_tail(&entry->list, entries);
 	}
 out:
@@ -3044,9 +3109,9 @@ void kasumi_dirhijack_clear(void)
 	hash_for_each_safe(kasumi_dh_dops, bkt, htmp, dm, node)
 	{
 		struct kasumi_dh_child *child =
-		    dm->dir ? kasumi_dh_find_child(dm->dir, dm->name,
-						   dm->name_len)
-			    : NULL;
+		    dm->dir
+			? kasumi_dh_find_child(dm->dir, dm->name, dm->name_len)
+			: NULL;
 		if (READ_ONCE(kasumi_dh_ready) && child &&
 		    (child->flags & KASUMI_VNODE_F_SU))
 			continue;
@@ -3128,7 +3193,7 @@ int kasumi_dirhijack_init(void)
 	hash_init(kasumi_dh_dops);
 	kasumi_dh_simple_lookup_raw = kasumi_lookup_name("simple_lookup");
 	kasumi_dh_simple_lookup_callable =
-		kasumi_lookup_callable_quiet("simple_lookup");
+	    kasumi_lookup_callable_quiet("simple_lookup");
 #ifdef CONFIG_ARM64
 	kasumi_dh_add_probe.addr =
 	    (kprobe_opcode_t *)kasumi_lookup_name("d_add");
@@ -3137,7 +3202,9 @@ int kasumi_dirhijack_init(void)
 		ret = register_kprobe(&kasumi_dh_add_probe);
 #endif
 	if (ret) {
-		pr_warn("kasumi: native dentry publication guard unavailable: %d\n", ret);
+		pr_warn(
+		    "kasumi: native dentry publication guard unavailable: %d\n",
+		    ret);
 		return ret;
 	}
 	WRITE_ONCE(kasumi_dh_add_registered, true);
@@ -3156,21 +3223,28 @@ int kasumi_dirhijack_init(void)
 		kasumi_dh_native_add = kasumi_dh_add_directory;
 	}
 	kasumi_dh_native_move = (void *)kasumi_lookup_name("__d_move");
-	kasumi_dh_native_instantiate = (void *)kasumi_lookup_name("security_d_instantiate");
-	kasumi_dh_native_ancestor = (void *)kasumi_lookup_callable_quiet("d_ancestor");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) && IS_ENABLED(CONFIG_FS_ENCRYPTION)
-	kasumi_dh_fscrypt_revalidate = kasumi_lookup_callable_quiet("fscrypt_d_revalidate");
+	kasumi_dh_native_instantiate =
+	    (void *)kasumi_lookup_name("security_d_instantiate");
+	kasumi_dh_native_ancestor =
+	    (void *)kasumi_lookup_callable_quiet("d_ancestor");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) &&                          \
+    IS_ENABLED(CONFIG_FS_ENCRYPTION)
+	kasumi_dh_fscrypt_revalidate =
+	    kasumi_lookup_callable_quiet("fscrypt_d_revalidate");
 #endif
 	kasumi_dh_rename_lock = (void *)kasumi_lookup_name("rename_lock");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
-	kasumi_dh_splice_probe.addr = (kprobe_opcode_t *)kasumi_lookup_name("d_splice_alias_ops");
+	kasumi_dh_splice_probe.addr =
+	    (kprobe_opcode_t *)kasumi_lookup_name("d_splice_alias_ops");
 #else
-	kasumi_dh_splice_probe.addr = (kprobe_opcode_t *)kasumi_lookup_name("d_splice_alias");
+	kasumi_dh_splice_probe.addr =
+	    (kprobe_opcode_t *)kasumi_lookup_name("d_splice_alias");
 #endif
 	kasumi_dh_splice_probe.pre_handler = kasumi_dh_splice_pre;
 	ret = -EOPNOTSUPP;
-	if (!kasumi_dh_native_move || !kasumi_dh_native_instantiate || !kasumi_dh_native_ancestor ||
-	    !kasumi_dh_rename_lock || !kasumi_dh_splice_probe.addr ||
+	if (!kasumi_dh_native_move || !kasumi_dh_native_instantiate ||
+	    !kasumi_dh_native_ancestor || !kasumi_dh_rename_lock ||
+	    !kasumi_dh_splice_probe.addr ||
 	    (!kasumi_dh_simple_lookup_raw && !kasumi_dh_simple_lookup_callable))
 		goto fail_add;
 	ret = register_kprobe(&kasumi_dh_splice_probe);
@@ -3181,7 +3255,8 @@ int kasumi_dirhijack_init(void)
 #ifdef CONFIG_ARM64
 	if (addr) {
 		kasumi_dh_fuse_probe.addr = (kprobe_opcode_t *)addr;
-		kasumi_dh_fuse_probe.pre_handler = kasumi_dh_fuse_revalidate_pre;
+		kasumi_dh_fuse_probe.pre_handler =
+		    kasumi_dh_fuse_revalidate_pre;
 		ret = register_kprobe(&kasumi_dh_fuse_probe);
 	}
 #endif
@@ -3196,7 +3271,8 @@ int kasumi_dirhijack_init(void)
 fail_add:
 	unregister_kprobe(&kasumi_dh_add_probe);
 	WRITE_ONCE(kasumi_dh_add_registered, false);
-	pr_warn("kasumi: native alias publication guard unavailable: %d\n", ret);
+	pr_warn("kasumi: native alias publication guard unavailable: %d\n",
+		ret);
 	return ret;
 }
 

@@ -50,7 +50,8 @@ static DECLARE_WAIT_QUEUE_HEAD(kasumi_file_lock_wait);
 static atomic_t kasumi_file_lock_active = ATOMIC_INIT(0);
 static atomic_t kasumi_file_lock_files = ATOMIC_INIT(0);
 static bool kasumi_file_lock_stopping = true;
-static long (*kasumi_file_fcntl)(int, unsigned int, unsigned long, struct file *);
+static long (*kasumi_file_fcntl)(int, unsigned int, unsigned long,
+				 struct file *);
 static typeof(security_file_fcntl) *kasumi_file_security_fcntl;
 static typeof(security_file_lock) *kasumi_file_security_lock;
 static typeof(vfs_lock_file) *kasumi_file_vfs_lock;
@@ -68,10 +69,13 @@ static long kasumi_file_compat_fcntl64_entry(const struct pt_regs *regs);
 #endif
 
 static struct kasumi_file_lock_hook kasumi_file_lock_hooks[] = {
-	{ .name = "__arm64_sys_fcntl", .entry = (unsigned long)kasumi_file_fcntl_entry },
+    {.name = "__arm64_sys_fcntl",
+     .entry = (unsigned long)kasumi_file_fcntl_entry},
 #ifdef CONFIG_COMPAT
-	{ .name = "__arm64_compat_sys_fcntl", .entry = (unsigned long)kasumi_file_compat_fcntl_entry },
-	{ .name = "__arm64_compat_sys_fcntl64", .entry = (unsigned long)kasumi_file_compat_fcntl64_entry },
+    {.name = "__arm64_compat_sys_fcntl",
+     .entry = (unsigned long)kasumi_file_compat_fcntl_entry},
+    {.name = "__arm64_compat_sys_fcntl64",
+     .entry = (unsigned long)kasumi_file_compat_fcntl64_entry},
 #endif
 };
 
@@ -85,9 +89,8 @@ kasumi_file_lock_find(struct kasumi_file_lock_bucket *bucket)
 {
 	struct kasumi_file_lock_guard *guard;
 
-	hlist_for_each_entry(guard, &bucket->guards, node)
-		if (guard->task == current)
-			return guard;
+	hlist_for_each_entry(guard, &bucket->guards,
+			     node) if (guard->task == current) return guard;
 	return NULL;
 }
 
@@ -145,7 +148,8 @@ static void kasumi_file_lock_leave(struct kasumi_file_lock_guard *guard)
 static void kasumi_file_sync_async(struct file *file, struct file *real)
 {
 	spin_lock(&file->f_lock);
-	file->f_flags = (file->f_flags & ~FASYNC) | (READ_ONCE(real->f_flags) & FASYNC);
+	file->f_flags =
+	    (file->f_flags & ~FASYNC) | (READ_ONCE(real->f_flags) & FASYNC);
 	spin_unlock(&file->f_lock);
 }
 
@@ -172,11 +176,11 @@ static bool kasumi_file_owner_command(unsigned int command)
 static bool kasumi_file_posix_command(unsigned int command)
 {
 	return command == F_SETLK || command == F_SETLKW ||
-		command == F_SETLK64 || command == F_SETLKW64;
+	       command == F_SETLK64 || command == F_SETLKW64;
 }
 
 static KASUMI_NOCFI long kasumi_file_fcntl_dispatch(const struct pt_regs *regs,
-						  unsigned int hook)
+						    unsigned int hook)
 {
 	struct kasumi_file_lock_guard guard;
 	unsigned int fd = regs->regs[0], command = regs->regs[1];
@@ -195,7 +199,8 @@ static KASUMI_NOCFI long kasumi_file_fcntl_dispatch(const struct pt_regs *regs,
 		goto native;
 	real = file;
 	ret = kasumi_file_security_fcntl(file, command, argument);
-	while (!ret && kasumi_vnode_is_ours(file_inode(real)) && real->private_data) {
+	while (!ret && kasumi_vnode_is_ours(file_inode(real)) &&
+	       real->private_data) {
 		real = real->private_data;
 		ret = kasumi_file_security_fcntl(real, command, argument);
 	}
@@ -206,7 +211,8 @@ static KASUMI_NOCFI long kasumi_file_fcntl_dispatch(const struct pt_regs *regs,
 	goto out;
 native:
 	ret = kasumi_file_lock_hooks[hook].original(regs);
-	/* Native close-race recovery may skip the empty outer inode lock context. */
+	/* Native close-race recovery may skip the empty outer inode lock
+	 * context. */
 	if (ret == -EBADF && guard.granted)
 		kasumi_file_remove_posix(guard.granted, current->files);
 out:
@@ -236,12 +242,15 @@ static long kasumi_file_compat_fcntl64_entry(const struct pt_regs *regs)
 static int kasumi_file_fcntl_pre(struct kprobe *probe, struct pt_regs *regs)
 {
 #ifdef CONFIG_ARM64
-	struct kasumi_file_lock_hook *hook = container_of(probe, struct kasumi_file_lock_hook, probe);
+	struct kasumi_file_lock_hook *hook =
+	    container_of(probe, struct kasumi_file_lock_hook, probe);
 	const struct pt_regs *arguments = (const void *)regs->regs[0];
 	unsigned int command = arguments->regs[1];
 
-	if (READ_ONCE(kasumi_file_lock_stopping) || !atomic_read(&kasumi_file_lock_files) ||
-	    (!kasumi_file_owner_command(command) && !kasumi_file_posix_command(command)) ||
+	if (READ_ONCE(kasumi_file_lock_stopping) ||
+	    !atomic_read(&kasumi_file_lock_files) ||
+	    (!kasumi_file_owner_command(command) &&
+	     !kasumi_file_posix_command(command)) ||
 	    kasumi_file_lock_guarded())
 		return 0;
 	atomic_inc(&kasumi_file_lock_active);
@@ -253,7 +262,7 @@ static int kasumi_file_fcntl_pre(struct kprobe *probe, struct pt_regs *regs)
 }
 
 KASUMI_NOCFI int kasumi_file_lock_posix(struct file *file, int command,
-				      struct file_lock *lock)
+					struct file_lock *lock)
 {
 	struct file *real = file->private_data;
 	bool posix = !(KFL_FLAGS(lock) & FL_OFDLCK);
@@ -275,7 +284,8 @@ KASUMI_NOCFI int kasumi_file_lock_posix(struct file *file, int command,
 		ret = kasumi_file_vfs_lock(real, command, lock, NULL);
 		if (ret != FILE_LOCK_DEFERRED)
 			break;
-		ret = wait_event_interruptible(KFL_WAIT(lock), list_empty(&KFL_BLOCKED(lock)));
+		ret = wait_event_interruptible(KFL_WAIT(lock),
+					       list_empty(&KFL_BLOCKED(lock)));
 		if (ret)
 			break;
 	}
@@ -286,7 +296,7 @@ KASUMI_NOCFI int kasumi_file_lock_posix(struct file *file, int command,
 }
 
 KASUMI_NOCFI int kasumi_file_lock_flock(struct file *file, int command,
-				      struct file_lock *lock)
+					struct file_lock *lock)
 {
 	struct file *real = file->private_data;
 	int ret;
@@ -300,22 +310,23 @@ KASUMI_NOCFI int kasumi_file_lock_flock(struct file *file, int command,
 	ret = kasumi_file_security_lock(real, KFL_TYPE(lock));
 	if (ret)
 		return ret;
-	return real->f_op->flock ? real->f_op->flock(real, command, lock) :
-		kasumi_file_inode_wait(file_inode(real), lock);
+	return real->f_op->flock
+		   ? real->f_op->flock(real, command, lock)
+		   : kasumi_file_inode_wait(file_inode(real), lock);
 }
 
 KASUMI_NOCFI int kasumi_file_lock_setlease(struct file *file,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-	int argument,
+					   int argument,
 #else
-	long argument,
+					   long argument,
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
-	struct file_lease **lease,
+					   struct file_lease **lease,
 #else
-	struct file_lock **lease,
+					   struct file_lock **lease,
 #endif
-	void **private)
+					   void **private)
 {
 	struct file *real = file->private_data;
 	int ret;
@@ -330,7 +341,8 @@ KASUMI_NOCFI int kasumi_file_lock_setlease(struct file *file,
 			KFL_OWNER(*lease) = real;
 	}
 	if (argument == F_UNLCK && private && *private == file)
-		ret = kasumi_file_setlease(real, argument, lease, (void **)&real);
+		ret =
+		    kasumi_file_setlease(real, argument, lease, (void **)&real);
 	else
 		ret = kasumi_file_setlease(real, argument, lease, private);
 	kasumi_file_sync_async(file, real);
@@ -381,7 +393,8 @@ bool kasumi_file_lock_ready(void)
 
 bool kasumi_file_lock_busy(void)
 {
-	return atomic_read(&kasumi_file_lock_files) || atomic_read(&kasumi_file_lock_active);
+	return atomic_read(&kasumi_file_lock_files) ||
+	       atomic_read(&kasumi_file_lock_active);
 }
 
 KASUMI_NOCFI void kasumi_file_lock_stop(void)
@@ -397,7 +410,8 @@ KASUMI_NOCFI void kasumi_file_lock_stop(void)
 			hook->registered = false;
 		}
 	}
-	wait_event(kasumi_file_lock_wait, !atomic_read(&kasumi_file_lock_active));
+	wait_event(kasumi_file_lock_wait,
+		   !atomic_read(&kasumi_file_lock_active));
 	if (kasumi_file_tasks_barrier)
 		kasumi_file_tasks_barrier();
 }
@@ -416,24 +430,35 @@ int kasumi_file_lock_init(void)
 		INIT_HLIST_HEAD(&kasumi_file_lock_buckets[i].guards);
 	}
 	kasumi_file_fcntl = (void *)kasumi_lookup_callable_quiet("do_fcntl");
-	kasumi_file_security_fcntl = (void *)kasumi_lookup_callable_quiet("security_file_fcntl");
-	kasumi_file_security_lock = (void *)kasumi_lookup_callable_quiet("security_file_lock");
-	kasumi_file_vfs_lock = (void *)kasumi_lookup_callable_quiet("vfs_lock_file");
-	kasumi_file_test_lock = (void *)kasumi_lookup_callable_quiet("vfs_test_lock");
-	kasumi_file_delete_block = (void *)kasumi_lookup_callable_quiet("locks_delete_block");
-	kasumi_file_inode_wait = (void *)kasumi_lookup_callable_quiet("locks_lock_inode_wait");
-	kasumi_file_remove_posix = (void *)kasumi_lookup_callable_quiet("locks_remove_posix");
-	kasumi_file_setlease = (void *)kasumi_lookup_callable_quiet("vfs_setlease");
-	kasumi_file_tasks_barrier = (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
-	if (!kasumi_file_fcntl || !kasumi_file_security_fcntl || !kasumi_file_security_lock ||
-	    !kasumi_file_vfs_lock || !kasumi_file_test_lock || !kasumi_file_delete_block ||
-	    !kasumi_file_inode_wait || !kasumi_file_remove_posix || !kasumi_file_setlease ||
-	    !kasumi_file_tasks_barrier)
+	kasumi_file_security_fcntl =
+	    (void *)kasumi_lookup_callable_quiet("security_file_fcntl");
+	kasumi_file_security_lock =
+	    (void *)kasumi_lookup_callable_quiet("security_file_lock");
+	kasumi_file_vfs_lock =
+	    (void *)kasumi_lookup_callable_quiet("vfs_lock_file");
+	kasumi_file_test_lock =
+	    (void *)kasumi_lookup_callable_quiet("vfs_test_lock");
+	kasumi_file_delete_block =
+	    (void *)kasumi_lookup_callable_quiet("locks_delete_block");
+	kasumi_file_inode_wait =
+	    (void *)kasumi_lookup_callable_quiet("locks_lock_inode_wait");
+	kasumi_file_remove_posix =
+	    (void *)kasumi_lookup_callable_quiet("locks_remove_posix");
+	kasumi_file_setlease =
+	    (void *)kasumi_lookup_callable_quiet("vfs_setlease");
+	kasumi_file_tasks_barrier =
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	if (!kasumi_file_fcntl || !kasumi_file_security_fcntl ||
+	    !kasumi_file_security_lock || !kasumi_file_vfs_lock ||
+	    !kasumi_file_test_lock || !kasumi_file_delete_block ||
+	    !kasumi_file_inode_wait || !kasumi_file_remove_posix ||
+	    !kasumi_file_setlease || !kasumi_file_tasks_barrier)
 		return -EOPNOTSUPP;
 	for (i = 0; i < ARRAY_SIZE(kasumi_file_lock_hooks); i++) {
 		struct kasumi_file_lock_hook *hook = &kasumi_file_lock_hooks[i];
 
-		hook->original = (void *)kasumi_lookup_callable_quiet(hook->name);
+		hook->original =
+		    (void *)kasumi_lookup_callable_quiet(hook->name);
 		hook->probe.addr = (void *)kasumi_lookup_name_quiet(hook->name);
 		if (!hook->original || !hook->probe.addr) {
 			ret = -EOPNOTSUPP;

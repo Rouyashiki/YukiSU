@@ -54,8 +54,10 @@ static bool hide_watch_matches(struct kasumi_hide_watch *watch,
 		return true;
 	if (watch->name_dentry)
 		return kasumi_dir_name_equal(watch->name_dentry->d_parent,
-			watch->name_dentry, watch->name, watch->len, name->name, name->len);
-	return name->len == watch->len && !memcmp(name->name, watch->name, watch->len);
+					     watch->name_dentry, watch->name,
+					     watch->len, name->name, name->len);
+	return name->len == watch->len &&
+	       !memcmp(name->name, watch->name, watch->len);
 }
 
 static void hide_watch_link(struct kasumi_hide_mark *owner,
@@ -67,7 +69,8 @@ static void hide_watch_link(struct kasumi_hide_mark *owner,
 	} else {
 		u32 hash = full_name_hash(NULL, watch->name, watch->len);
 
-		hlist_add_head(&watch->name_node, &owner->names[hash_min(hash, 4)]);
+		hlist_add_head(&watch->name_node,
+			       &owner->names[hash_min(hash, 4)]);
 	}
 }
 
@@ -75,22 +78,27 @@ static int hide_directory_event(struct fsnotify_mark *mark, u32 mask,
 				struct inode *inode, struct inode *dir,
 				const struct qstr *name, u32 cookie)
 {
-	struct kasumi_hide_mark *owner = container_of(mark, struct kasumi_hide_mark, mark);
+	struct kasumi_hide_mark *owner =
+	    container_of(mark, struct kasumi_hide_mark, mark);
 	struct kasumi_hide_watch *watch;
 
 	spin_lock(&mark->lock);
 	if (!READ_ONCE(owner->events->stopping)) {
-		if ((mask & (FS_DELETE_SELF | FS_MOVE_SELF | FS_UNMOUNT)) || !name) {
-			list_for_each_entry(watch, &owner->subscribers, subscriber)
+		if ((mask & (FS_DELETE_SELF | FS_MOVE_SELF | FS_UNMOUNT)) ||
+		    !name) {
+			list_for_each_entry (watch, &owner->subscribers,
+					     subscriber)
 				watch->notify(watch->data);
 		} else {
 			u32 hash = full_name_hash(NULL, name->name, name->len);
 
-			list_for_each_entry(watch, &owner->general, general) {
+			list_for_each_entry (watch, &owner->general, general) {
 				if (hide_watch_matches(watch, name))
 					watch->notify(watch->data);
 			}
-			hlist_for_each_entry(watch, &owner->names[hash_min(hash, 4)], name_node) {
+			hlist_for_each_entry(
+			    watch, &owner->names[hash_min(hash, 4)], name_node)
+			{
 				if (hide_watch_matches(watch, name))
 					watch->notify(watch->data);
 			}
@@ -111,8 +119,10 @@ static const struct fsnotify_ops hide_directory_ops = {
 };
 
 static int KASUMI_NOCFI hide_watch_add(struct kasumi_hide_events *events,
-	struct dentry *parent, const char *name, size_t len,
-	struct kasumi_hide_watch **head, void (*notify)(void *), void *data)
+				       struct dentry *parent, const char *name,
+				       size_t len,
+				       struct kasumi_hide_watch **head,
+				       void (*notify)(void *), void *data)
 {
 	struct kasumi_hide_watch *watch;
 	struct kasumi_hide_mark *owner;
@@ -135,7 +145,8 @@ static int KASUMI_NOCFI hide_watch_add(struct kasumi_hide_events *events,
 		}
 	}
 	mutex_lock(&events->watch_mutex);
-	hash_for_each_possible(events->marks, owner, node, (unsigned long)inode) {
+	hash_for_each_possible(events->marks, owner, node, (unsigned long)inode)
+	{
 		if (owner->inode != inode)
 			continue;
 		spin_lock(&owner->mark.lock);
@@ -351,8 +362,8 @@ int kasumi_hide_events_watch_path(struct kasumi_hide_events *events,
 		if (!*cursor)
 			break;
 		end = strchrnul(cursor, '/');
-		ret = hide_watch_add(events, path.dentry, cursor,
-				     end - cursor, watches, notify, data);
+		ret = hide_watch_add(events, path.dentry, cursor, end - cursor,
+				     watches, notify, data);
 		if (ret)
 			goto out;
 		/* Subscribe before resolving the next component, including
@@ -371,8 +382,8 @@ int kasumi_hide_events_watch_path(struct kasumi_hide_events *events,
 		path = next;
 		cursor = end;
 	}
-	ret = hide_watch_add(events, path.dentry, leaf, strlen(leaf),
-			     watches, notify, data);
+	ret = hide_watch_add(events, path.dentry, leaf, strlen(leaf), watches,
+			     notify, data);
 	if (!ret) {
 		*resolved = path;
 		memset(&path, 0, sizeof(path));
@@ -404,17 +415,20 @@ bool kasumi_hide_events_supported(void)
 	hide_destroy_mark =
 	    (void *)kasumi_lookup_callable("fsnotify_destroy_mark");
 	hide_put_mark = (void *)kasumi_lookup_callable("fsnotify_put_mark");
-	supported = hide_file_open_root && hide_mountinfo_ops && hide_fput_sync &&
-		hide_alloc_group && hide_destroy_group && hide_init_mark &&
-		hide_add_mark && hide_destroy_mark && hide_put_mark;
+	supported = hide_file_open_root && hide_mountinfo_ops &&
+		    hide_fput_sync && hide_alloc_group && hide_destroy_group &&
+		    hide_init_mark && hide_add_mark && hide_destroy_mark &&
+		    hide_put_mark;
 	smp_store_release(&hide_symbols_ready, supported);
 	mutex_unlock(&hide_symbols_lock);
 	return supported;
 }
 
-static KASUMI_NOCFI int hide_events_open_scope(struct kasumi_hide_events *events,
-	const struct path *root, const struct cred *cred, const char *mountinfo,
-	void (*notify)(void *), void *data)
+static KASUMI_NOCFI int
+hide_events_open_scope(struct kasumi_hide_events *events,
+		       const struct path *root, const struct cred *cred,
+		       const char *mountinfo, void (*notify)(void *),
+		       void *data)
 {
 	int ret;
 
@@ -469,13 +483,14 @@ fail:
 }
 
 int kasumi_hide_events_open_scope(struct kasumi_hide_events *events,
-	const struct path *root, const struct cred *cred,
-	void (*notify)(void *), void *data)
+				  const struct path *root,
+				  const struct cred *cred,
+				  void (*notify)(void *), void *data)
 {
 	if (!root || !root->mnt || !root->dentry || !cred)
 		return -EINVAL;
-	return hide_events_open_scope(events, root, cred,
-				      "/proc/thread-self/mountinfo", notify, data);
+	return hide_events_open_scope(
+	    events, root, cred, "/proc/thread-self/mountinfo", notify, data);
 }
 
 int kasumi_hide_events_open(struct kasumi_hide_events *events,
@@ -504,7 +519,7 @@ int kasumi_hide_events_open(struct kasumi_hide_events *events,
 	put_task_struct(task);
 	if (!ret) {
 		ret = hide_events_open_scope(events, &root, cred,
-					    "/proc/1/mountinfo", notify, data);
+					     "/proc/1/mountinfo", notify, data);
 		path_put(&root);
 	}
 	put_cred(cred);

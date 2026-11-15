@@ -139,7 +139,6 @@ kasumi_filldir_filter(struct dir_context *ctx, const char *name, int namlen,
 		}
 	}
 
-
 passthrough:
 	if (unlikely(!w->orig_ctx || !w->orig_ctx->actor))
 		return KASUMI_FILLDIR_CONTINUE;

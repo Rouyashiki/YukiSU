@@ -74,8 +74,8 @@ static DEFINE_HASHTABLE(kasumi_seq_states, 8);
 static DEFINE_MUTEX(kasumi_seq_states_lock);
 static DEFINE_HASHTABLE(kasumi_seq_guards, 6);
 static spinlock_t kasumi_seq_guard_locks[HASH_SIZE(kasumi_seq_guards)] = {
-	[0 ... HASH_SIZE(kasumi_seq_guards) - 1] =
-		__SPIN_LOCK_UNLOCKED(kasumi_seq_guard_locks),
+    [0 ... HASH_SIZE(kasumi_seq_guards) - 1] =
+	__SPIN_LOCK_UNLOCKED(kasumi_seq_guard_locks),
 };
 static DECLARE_WAIT_QUEUE_HEAD(kasumi_seq_wait);
 static atomic_t kasumi_seq_active = ATOMIC_INIT(0);
@@ -108,11 +108,14 @@ static int (*kasumi_smaps_show_original)(struct seq_file *, void *);
 static void (*kasumi_seq_tasks_barrier)(void);
 static const struct seq_operations *kasumi_mounts_operations;
 static const struct file_operations *kasumi_fdinfo_operations;
-static int (*kasumi_mountinfo_show_original)(struct seq_file *, struct vfsmount *);
+static int (*kasumi_mountinfo_show_original)(struct seq_file *,
+					     struct vfsmount *);
 static int (*kasumi_mounts_show_original)(struct seq_file *, struct vfsmount *);
-static int (*kasumi_mountstats_show_original)(struct seq_file *, struct vfsmount *);
+static int (*kasumi_mountstats_show_original)(struct seq_file *,
+					      struct vfsmount *);
 #ifdef CONFIG_FILE_LOCKING
-static void (*kasumi_fd_locks_show)(struct seq_file *, struct file *, struct files_struct *);
+static void (*kasumi_fd_locks_show)(struct seq_file *, struct file *,
+				    struct files_struct *);
 #endif
 
 static KASUMI_NOCFI int kasumi_seq_show(struct seq_file *seq, void *item);
@@ -123,15 +126,16 @@ static KASUMI_NOCFI int kasumi_seq_show(struct seq_file *seq, void *item);
 
 static bool kasumi_seq_guarded(const struct kprobe *probe)
 {
-	spinlock_t *lock = &kasumi_seq_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_seq_guards))];
+	spinlock_t *lock = &kasumi_seq_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_seq_guards))];
 	struct kasumi_seq_guard *guard;
 	unsigned long flags;
 	bool guarded = false;
 
 	spin_lock_irqsave(lock, flags);
 	hash_for_each_possible(kasumi_seq_guards, guard, node,
-			       (unsigned long)current) {
+			       (unsigned long)current)
+	{
 		if (guard->task == current && guard->probe == probe) {
 			guarded = true;
 			break;
@@ -142,10 +146,10 @@ static bool kasumi_seq_guarded(const struct kprobe *probe)
 }
 
 static void kasumi_seq_guard_enter(struct kasumi_seq_guard *guard,
-				  const struct kprobe *probe)
+				   const struct kprobe *probe)
 {
-	spinlock_t *lock = &kasumi_seq_guard_locks[
-		hash_min((unsigned long)current, HASH_BITS(kasumi_seq_guards))];
+	spinlock_t *lock = &kasumi_seq_guard_locks[hash_min(
+	    (unsigned long)current, HASH_BITS(kasumi_seq_guards))];
 	unsigned long flags;
 
 	guard->task = current;
@@ -157,8 +161,8 @@ static void kasumi_seq_guard_enter(struct kasumi_seq_guard *guard,
 
 static void kasumi_seq_guard_leave(struct kasumi_seq_guard *guard)
 {
-	spinlock_t *lock = &kasumi_seq_guard_locks[
-		hash_min((unsigned long)guard->task, HASH_BITS(kasumi_seq_guards))];
+	spinlock_t *lock = &kasumi_seq_guard_locks[hash_min(
+	    (unsigned long)guard->task, HASH_BITS(kasumi_seq_guards))];
 	unsigned long flags;
 
 	spin_lock_irqsave(lock, flags);
@@ -184,7 +188,8 @@ static struct kasumi_seq_state *kasumi_seq_state_get(struct seq_file *seq)
 
 	rcu_read_lock();
 	hash_for_each_possible_rcu(kasumi_seq_states, state, node,
-				   (unsigned long)seq) {
+				   (unsigned long)seq)
+	{
 		if (state->seq == seq && refcount_inc_not_zero(&state->refs)) {
 			found = state;
 			break;
@@ -194,7 +199,8 @@ static struct kasumi_seq_state *kasumi_seq_state_get(struct seq_file *seq)
 	return found;
 }
 
-static enum kasumi_seq_kind kasumi_seq_selected(struct file *file, bool *attached)
+static enum kasumi_seq_kind kasumi_seq_selected(struct file *file,
+						bool *attached)
 {
 	struct seq_file *seq;
 	const struct seq_operations *operations;
@@ -210,8 +216,8 @@ static enum kasumi_seq_kind kasumi_seq_selected(struct file *file, bool *attache
 	operations = READ_ONCE(seq->op);
 	*attached = operations && operations->show == kasumi_seq_show;
 	if (*attached) {
-		struct kasumi_seq_state *state =
-			container_of(operations, struct kasumi_seq_state, operations);
+		struct kasumi_seq_state *state = container_of(
+		    operations, struct kasumi_seq_state, operations);
 
 		kind = state->kind;
 	} else if (operations &&
@@ -295,7 +301,7 @@ static int kasumi_seq_scratch_grow(struct kasumi_seq_state *state, size_t size)
 }
 
 static KASUMI_NOCFI int kasumi_seq_fdinfo(struct kasumi_seq_state *state,
-					struct seq_file *seq)
+					  struct seq_file *seq)
 {
 	struct task_struct *task;
 	struct files_struct *files = NULL;
@@ -338,7 +344,8 @@ static KASUMI_NOCFI int kasumi_seq_fdinfo(struct kasumi_seq_state *state,
 	if (alias)
 		mount_id = alias->id;
 	seq_printf(seq, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
-		   (long long)position, flags, mount_id, file_inode(file)->i_ino);
+		   (long long)position, flags, mount_id,
+		   file_inode(file)->i_ino);
 #ifdef CONFIG_FILE_LOCKING
 	kasumi_fd_locks_show(seq, file, files);
 #endif
@@ -349,15 +356,16 @@ static KASUMI_NOCFI int kasumi_seq_fdinfo(struct kasumi_seq_state *state,
 }
 
 static int kasumi_seq_mount_parent(struct kasumi_seq_state *state,
-				    struct seq_file *seq, size_t start,
-				    const struct kasumi_mount_record *record)
+				   struct seq_file *seq, size_t start,
+				   const struct kasumi_mount_record *record)
 {
 	const struct kasumi_mount_record *parent, *alias;
 	char number[24], *first, *last;
 	size_t prefix, suffix;
 	int length;
 
-	parent = kasumi_mount_view_find(state->mount_view, record->parent_id, false);
+	parent =
+	    kasumi_mount_view_find(state->mount_view, record->parent_id, false);
 	alias = kasumi_mount_view_representative(state->mount_view, parent);
 	if (!alias || alias->id == record->parent_id)
 		return 0;
@@ -371,7 +379,8 @@ static int kasumi_seq_mount_parent(struct kasumi_seq_state *state,
 	length = scnprintf(number, sizeof(number), "%llu", alias->id);
 	prefix = first - seq->buf;
 	suffix = seq->count - (last - seq->buf);
-	if (length >= seq->size - prefix || suffix >= seq->size - prefix - length) {
+	if (length >= seq->size - prefix ||
+	    suffix >= seq->size - prefix - length) {
 		seq->count = seq->size;
 		return 0;
 	}
@@ -384,7 +393,7 @@ static int kasumi_seq_mount_parent(struct kasumi_seq_state *state,
 static KASUMI_NOCFI int kasumi_seq_show(struct seq_file *seq, void *item)
 {
 	struct kasumi_seq_state *state =
-		container_of(seq->op, struct kasumi_seq_state, operations);
+	    container_of(seq->op, struct kasumi_seq_state, operations);
 	const struct kasumi_mount_record *record = NULL;
 	size_t start = seq->count, in, out = 0;
 	int ret;
@@ -397,8 +406,10 @@ static KASUMI_NOCFI int kasumi_seq_show(struct seq_file *seq, void *item)
 		if (state->kind != KASUMI_SEQ_FDINFO) {
 			struct mount *mount = item;
 
-			record = kasumi_mount_view_find(state->mount_view, mount->mnt_id, false);
-			if (!kasumi_mount_view_record_current(state->mount_view, record)) {
+			record = kasumi_mount_view_find(state->mount_view,
+							mount->mnt_id, false);
+			if (!kasumi_mount_view_record_current(state->mount_view,
+							      record)) {
 				state->refresh_needed = true;
 				return KASUMI_SEQ_RETRY;
 			}
@@ -415,15 +426,16 @@ static KASUMI_NOCFI int kasumi_seq_show(struct seq_file *seq, void *item)
 		size_t length;
 
 		if (state->mount_hide) {
-			ret = kasumi_seq_mount_parent(state, seq, start, record);
+			ret =
+			    kasumi_seq_mount_parent(state, seq, start, record);
 			if (ret || seq_has_overflowed(seq))
 				return ret;
 		}
 		if (!state->normalize_groups)
 			return 0;
 		length = seq->count - start;
-		ret = kasumi_mount_view_normalize_groups(state->mount_view,
-						       seq->buf + start, &length);
+		ret = kasumi_mount_view_normalize_groups(
+		    state->mount_view, seq->buf + start, &length);
 		if (ret == -EAGAIN) {
 			state->refresh_needed = true;
 			seq->count = start;
@@ -452,19 +464,28 @@ static KASUMI_NOCFI int kasumi_seq_show(struct seq_file *seq, void *item)
 			return -EIO;
 		length = newline - line + 1;
 		if (kasumi_maps_parse_header(line, length, &header)) {
-			rule = kasumi_maps_rules_lookup(state->snapshot,
-				MKDEV(header.major, header.minor), header.inode);
+			rule = kasumi_maps_rules_lookup(
+			    state->snapshot, MKDEV(header.major, header.minor),
+			    header.inode);
 		} else if (kasumi_maps_header_prefix(line, length)) {
 			return -EIO;
 		}
 		if (rule) {
 			ret = kasumi_maps_format_record(
-				state->scratch + out, seq->size - start - out,
-				&header,
-				rule->fields & KSM_MAPS_FIELD_DEV ? MAJOR(rule->spoofed_dev) : header.major,
-				rule->fields & KSM_MAPS_FIELD_DEV ? MINOR(rule->spoofed_dev) : header.minor,
-				rule->fields & KSM_MAPS_FIELD_INO ? rule->spoofed_ino : header.inode,
-				rule->fields & KSM_MAPS_FIELD_PATH ? rule->spoofed_pathname : NULL);
+			    state->scratch + out, seq->size - start - out,
+			    &header,
+			    rule->fields & KSM_MAPS_FIELD_DEV
+				? MAJOR(rule->spoofed_dev)
+				: header.major,
+			    rule->fields & KSM_MAPS_FIELD_DEV
+				? MINOR(rule->spoofed_dev)
+				: header.minor,
+			    rule->fields & KSM_MAPS_FIELD_INO
+				? rule->spoofed_ino
+				: header.inode,
+			    rule->fields & KSM_MAPS_FIELD_PATH
+				? rule->spoofed_pathname
+				: NULL);
 			if (ret == -ENOSPC)
 				goto overflow;
 			if (ret < 0)
@@ -486,7 +507,8 @@ overflow:
 	return 0;
 }
 
-static int kasumi_seq_begin(struct kasumi_seq_state *state, unsigned int *attempt)
+static int kasumi_seq_begin(struct kasumi_seq_state *state,
+			    unsigned int *attempt)
 {
 	struct kasumi_maps_snapshot *snapshot = NULL;
 	struct kasumi_mount_view *mount_view = NULL;
@@ -505,15 +527,20 @@ static int kasumi_seq_begin(struct kasumi_seq_state *state, unsigned int *attemp
 		(*attempt)++;
 		ret = 0;
 		config_generation = kasumi_rules_generation();
-		enabled = !READ_ONCE(kasumi_seq_stopping) && kasumi_config_enabled();
+		enabled =
+		    !READ_ONCE(kasumi_seq_stopping) && kasumi_config_enabled();
 		features = kasumi_config_features();
-		scope = enabled ? kasumi_policy_current_scope() : KASUMI_POLICY_SCOPE_NONE;
+		scope = enabled ? kasumi_policy_current_scope()
+				: KASUMI_POLICY_SCOPE_NONE;
 		mount_hide = enabled && scope == KASUMI_POLICY_SCOPE_SPOOF &&
-			(features & KSM_FEATURE_MOUNT_HIDE) && kasumi_mount_projection_available();
+			     (features & KSM_FEATURE_MOUNT_HIDE) &&
+			     kasumi_mount_projection_available();
 		normalize_groups = state->kind == KASUMI_SEQ_MOUNTINFO &&
-			!READ_ONCE(kasumi_seq_stopping) && kasumi_mount_groups_active();
-		fdinfo_projection = state->kind == KASUMI_SEQ_FDINFO && enabled &&
-			scope != KASUMI_POLICY_SCOPE_NONE;
+				   !READ_ONCE(kasumi_seq_stopping) &&
+				   kasumi_mount_groups_active();
+		fdinfo_projection = state->kind == KASUMI_SEQ_FDINFO &&
+				    enabled &&
+				    scope != KASUMI_POLICY_SCOPE_NONE;
 		if (state->kind == KASUMI_SEQ_MAPS) {
 			if (enabled && scope == KASUMI_POLICY_SCOPE_SPOOF &&
 			    (features & KSM_FEATURE_MAPS_SPOOF))
@@ -521,16 +548,20 @@ static int kasumi_seq_begin(struct kasumi_seq_state *state, unsigned int *attemp
 			generation = kasumi_maps_snapshot_generation(snapshot);
 		} else if (mount_hide || normalize_groups) {
 			if (state->kind == KASUMI_SEQ_FDINFO) {
-				struct task_struct *task = get_proc_task(state->seq->private);
+				struct task_struct *task =
+				    get_proc_task(state->seq->private);
 
 				if (!task)
 					return -ENOENT;
-				ret = kasumi_mount_view_get_task(task, &mount_view);
+				ret = kasumi_mount_view_get_task(task,
+								 &mount_view);
 				put_task_struct(task);
 			} else {
-				struct proc_mounts *mounts = state->seq->private;
+				struct proc_mounts *mounts =
+				    state->seq->private;
 
-				ret = kasumi_mount_view_get(mounts->ns, &mounts->root, &mount_view);
+				ret = kasumi_mount_view_get(
+				    mounts->ns, &mounts->root, &mount_view);
 			}
 			if (ret && ret != -EAGAIN)
 				return ret;
@@ -550,12 +581,14 @@ ready:
 	state->mount_hide = mount_hide;
 	state->normalize_groups = normalize_groups;
 	state->fdinfo_projection = fdinfo_projection;
-	if (state->kind >= KASUMI_SEQ_MOUNTINFO && state->kind <= KASUMI_SEQ_MOUNTSTATS)
+	if (state->kind >= KASUMI_SEQ_MOUNTINFO &&
+	    state->kind <= KASUMI_SEQ_MOUNTSTATS)
 		generation = (generation << 2) | ((u64)state->mount_hide << 1) |
-			state->normalize_groups;
+			     state->normalize_groups;
 	if (state->kind == KASUMI_SEQ_FDINFO)
 		generation = (generation << 1) | state->fdinfo_projection;
-	if (state->generation != generation || state->config_generation != config_generation) {
+	if (state->generation != generation ||
+	    state->config_generation != config_generation) {
 		mutex_lock(&state->seq->lock);
 		state->seq->read_pos = -1;
 		state->seq->index = 0;
@@ -570,7 +603,7 @@ ready:
 	if (!snapshot)
 		return 0;
 	return kasumi_seq_scratch_grow(
-		state, max_t(size_t, PAGE_SIZE, state->scratch_needed));
+	    state, max_t(size_t, PAGE_SIZE, state->scratch_needed));
 }
 
 static void kasumi_seq_end(struct kasumi_seq_state *state)
@@ -581,7 +614,8 @@ static void kasumi_seq_end(struct kasumi_seq_state *state)
 	state->mount_view = NULL;
 }
 
-static int kasumi_seq_retry(struct kasumi_seq_state *state, unsigned int *attempt)
+static int kasumi_seq_retry(struct kasumi_seq_state *state,
+			    unsigned int *attempt)
 {
 	if (fatal_signal_pending(current))
 		return -EINTR;
@@ -594,7 +628,7 @@ static int kasumi_seq_retry(struct kasumi_seq_state *state, unsigned int *attemp
 }
 
 static KASUMI_NOCFI ssize_t kasumi_seq_read(struct kiocb *iocb,
-					  struct iov_iter *iter)
+					    struct iov_iter *iter)
 {
 	struct kasumi_seq_guard guard;
 	struct kasumi_seq_state *state;
@@ -628,7 +662,7 @@ done:
 }
 
 static KASUMI_NOCFI loff_t kasumi_seq_seek(struct file *file, loff_t offset,
-					int whence)
+					   int whence)
 {
 	struct kasumi_seq_guard guard;
 	struct kasumi_seq_state *state;
@@ -682,7 +716,8 @@ static void kasumi_seq_detach(struct file *file)
 	kasumi_seq_state_put(state);
 }
 
-static KASUMI_NOCFI int kasumi_seq_release(struct inode *inode, struct file *file)
+static KASUMI_NOCFI int kasumi_seq_release(struct inode *inode,
+					   struct file *file)
 {
 	struct kasumi_seq_guard guard;
 	int ret;
@@ -694,7 +729,8 @@ static KASUMI_NOCFI int kasumi_seq_release(struct inode *inode, struct file *fil
 	return ret;
 }
 
-static KASUMI_NOCFI int kasumi_single_release(struct inode *inode, struct file *file)
+static KASUMI_NOCFI int kasumi_single_release(struct inode *inode,
+					      struct file *file)
 {
 	struct kasumi_seq_guard guard;
 	int ret;
@@ -706,7 +742,8 @@ static KASUMI_NOCFI int kasumi_single_release(struct inode *inode, struct file *
 	return ret;
 }
 
-static KASUMI_NOCFI int kasumi_map_release(struct inode *inode, struct file *file)
+static KASUMI_NOCFI int kasumi_map_release(struct inode *inode,
+					   struct file *file)
 {
 	struct kasumi_seq_guard guard;
 	int ret;
@@ -718,7 +755,8 @@ static KASUMI_NOCFI int kasumi_map_release(struct inode *inode, struct file *fil
 	return ret;
 }
 
-static KASUMI_NOCFI int kasumi_mount_release(struct inode *inode, struct file *file)
+static KASUMI_NOCFI int kasumi_mount_release(struct inode *inode,
+					     struct file *file)
 {
 	struct kasumi_seq_guard guard;
 	int ret;
@@ -730,7 +768,8 @@ static KASUMI_NOCFI int kasumi_mount_release(struct inode *inode, struct file *f
 	return ret;
 }
 
-static KASUMI_NOCFI __poll_t kasumi_mounts_poll(struct file *file, poll_table *wait)
+static KASUMI_NOCFI __poll_t kasumi_mounts_poll(struct file *file,
+						poll_table *wait)
 {
 	struct kasumi_seq_guard guard;
 	struct kasumi_seq_state *state;
@@ -777,7 +816,8 @@ static int kasumi_seq_pre(struct kprobe *probe, struct pt_regs *regs)
 		    READ_ONCE(kasumi_seq_stopping) ||
 		    !kasumi_config_enabled() ||
 		    !(kasumi_config_features() & KSM_FEATURE_MAPS_SPOOF) ||
-		    kasumi_policy_current_scope() != KASUMI_POLICY_SCOPE_SPOOF ||
+		    kasumi_policy_current_scope() !=
+			KASUMI_POLICY_SCOPE_SPOOF ||
 		    kasumi_seq_guarded(probe))
 			return 0;
 		atomic_inc(&kasumi_seq_active);
@@ -808,8 +848,9 @@ static int kasumi_seq_pre(struct kprobe *probe, struct pt_regs *regs)
 		else if (probe == &kasumi_mount_release_probe)
 			target = (unsigned long)kasumi_mount_release;
 		else
-			target = probe == &kasumi_single_release_probe ?
-				(unsigned long)kasumi_single_release : (unsigned long)kasumi_seq_release;
+			target = probe == &kasumi_single_release_probe
+				     ? (unsigned long)kasumi_single_release
+				     : (unsigned long)kasumi_seq_release;
 	}
 	kind = kasumi_seq_selected(file, &attached);
 	if (kind == KASUMI_SEQ_NONE)
@@ -823,15 +864,19 @@ static int kasumi_seq_pre(struct kprobe *probe, struct pt_regs *regs)
 			return 0;
 		if (kind == KASUMI_SEQ_MAPS) {
 			if (!kasumi_config_enabled() ||
-			    !(kasumi_config_features() & KSM_FEATURE_MAPS_SPOOF) ||
-			    kasumi_policy_current_scope() != KASUMI_POLICY_SCOPE_SPOOF)
+			    !(kasumi_config_features() &
+			      KSM_FEATURE_MAPS_SPOOF) ||
+			    kasumi_policy_current_scope() !=
+				KASUMI_POLICY_SCOPE_SPOOF)
 				return 0;
 		} else if (kind == KASUMI_SEQ_FDINFO) {
 			if (!kasumi_config_enabled() ||
-			    kasumi_policy_current_scope() == KASUMI_POLICY_SCOPE_NONE)
+			    kasumi_policy_current_scope() ==
+				KASUMI_POLICY_SCOPE_NONE)
 				return 0;
 		} else if (!kasumi_mount_projection_active() &&
-			   !(kind == KASUMI_SEQ_MOUNTINFO && kasumi_mount_groups_active())) {
+			   !(kind == KASUMI_SEQ_MOUNTINFO &&
+			     kasumi_mount_groups_active())) {
 			return 0;
 		}
 	}
@@ -873,8 +918,9 @@ u64 kasumi_proc_seq_capabilities(void)
 	if (!kasumi_proc_seq_available())
 		return 0;
 	capabilities = KASUMI_PROC_SEQ_CAP_READ | KASUMI_PROC_SEQ_CAP_SEEK |
-		KASUMI_PROC_SEQ_CAP_PREAD | KASUMI_PROC_SEQ_CAP_HISTORICAL_FD |
-		KASUMI_PROC_SEQ_CAP_SHARED_FD;
+		       KASUMI_PROC_SEQ_CAP_PREAD |
+		       KASUMI_PROC_SEQ_CAP_HISTORICAL_FD |
+		       KASUMI_PROC_SEQ_CAP_SHARED_FD;
 #ifdef PROCMAP_QUERY
 	if (kasumi_seq_query_registered)
 		capabilities |= KASUMI_PROC_SEQ_CAP_QUERY;
@@ -890,8 +936,9 @@ KASUMI_NOCFI void kasumi_proc_seq_stop(void)
 	WRITE_ONCE(kasumi_seq_ready, false);
 	WRITE_ONCE(kasumi_seq_mount_ready, false);
 	WRITE_ONCE(kasumi_seq_stopping, true);
-	kasumi_mount_view_publish_capabilities(0, KASUMI_MOUNT_CAP_INFO |
-		KASUMI_MOUNT_CAP_MOUNTS | KASUMI_MOUNT_CAP_STATS | KASUMI_MOUNT_CAP_FDINFO);
+	kasumi_mount_view_publish_capabilities(
+	    0, KASUMI_MOUNT_CAP_INFO | KASUMI_MOUNT_CAP_MOUNTS |
+		   KASUMI_MOUNT_CAP_STATS | KASUMI_MOUNT_CAP_FDINFO);
 	kasumi_mount_query_stop();
 	kasumi_mount_stat_stop();
 #ifdef PROCMAP_QUERY
@@ -903,7 +950,8 @@ KASUMI_NOCFI void kasumi_proc_seq_stop(void)
 	for (;;) {
 		state = NULL;
 		mutex_lock(&kasumi_seq_states_lock);
-		hash_for_each(kasumi_seq_states, bucket, candidate, node) {
+		hash_for_each(kasumi_seq_states, bucket, candidate, node)
+		{
 			if (refcount_inc_not_zero(&candidate->refs)) {
 				state = candidate;
 				break;
@@ -973,47 +1021,49 @@ int kasumi_proc_seq_init(void)
 	return -EOPNOTSUPP;
 #endif
 	kasumi_seq_read_original =
-		(void *)kasumi_lookup_callable_quiet("seq_read_iter");
+	    (void *)kasumi_lookup_callable_quiet("seq_read_iter");
 	kasumi_seq_seek_original =
-		(void *)kasumi_lookup_callable_quiet("seq_lseek");
+	    (void *)kasumi_lookup_callable_quiet("seq_lseek");
 	kasumi_seq_release_original =
-		(void *)kasumi_lookup_callable_quiet("seq_release");
+	    (void *)kasumi_lookup_callable_quiet("seq_release");
 	kasumi_map_release_original =
-		(void *)kasumi_lookup_callable_quiet("proc_map_release");
+	    (void *)kasumi_lookup_callable_quiet("proc_map_release");
 	kasumi_mount_release_original =
-		(void *)kasumi_lookup_callable_quiet("mounts_release");
+	    (void *)kasumi_lookup_callable_quiet("mounts_release");
 	kasumi_single_release_original =
-		(void *)kasumi_lookup_callable_quiet("single_release");
+	    (void *)kasumi_lookup_callable_quiet("single_release");
 	kasumi_mounts_poll_original =
-		(void *)kasumi_lookup_callable_quiet("mounts_poll");
+	    (void *)kasumi_lookup_callable_quiet("mounts_poll");
 	kasumi_maps_show_original =
-		(void *)kasumi_lookup_callable_quiet("show_map");
+	    (void *)kasumi_lookup_callable_quiet("show_map");
 	kasumi_smaps_show_original =
-		(void *)kasumi_lookup_callable_quiet("show_smap");
+	    (void *)kasumi_lookup_callable_quiet("show_smap");
 	kasumi_seq_tasks_barrier =
-		(void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
+	    (void *)kasumi_lookup_callable_quiet("synchronize_rcu_tasks");
 	kasumi_mounts_operations =
-		(void *)kasumi_lookup_name_quiet("mounts_op");
+	    (void *)kasumi_lookup_name_quiet("mounts_op");
 	kasumi_fdinfo_operations =
-		(void *)kasumi_lookup_name_quiet("proc_fdinfo_file_operations");
+	    (void *)kasumi_lookup_name_quiet("proc_fdinfo_file_operations");
 	kasumi_mountinfo_show_original =
-		(void *)kasumi_lookup_callable_quiet("show_mountinfo");
+	    (void *)kasumi_lookup_callable_quiet("show_mountinfo");
 	kasumi_mounts_show_original =
-		(void *)kasumi_lookup_callable_quiet("show_vfsmnt");
+	    (void *)kasumi_lookup_callable_quiet("show_vfsmnt");
 	kasumi_mountstats_show_original =
-		(void *)kasumi_lookup_callable_quiet("show_vfsstat");
+	    (void *)kasumi_lookup_callable_quiet("show_vfsstat");
 #ifdef CONFIG_FILE_LOCKING
-	kasumi_fd_locks_show = (void *)kasumi_lookup_callable_quiet("show_fd_locks");
+	kasumi_fd_locks_show =
+	    (void *)kasumi_lookup_callable_quiet("show_fd_locks");
 #endif
 	if (!kasumi_seq_read_original || !kasumi_seq_seek_original ||
 	    !kasumi_seq_release_original || !kasumi_map_release_original ||
-	    !kasumi_maps_show_original ||
-	    !kasumi_smaps_show_original || !kasumi_seq_tasks_barrier)
+	    !kasumi_maps_show_original || !kasumi_smaps_show_original ||
+	    !kasumi_seq_tasks_barrier)
 		return -ENOENT;
-	mount_supported = kasumi_single_release_original && kasumi_mounts_poll_original &&
-		kasumi_mounts_operations && kasumi_fdinfo_operations &&
-		kasumi_mountinfo_show_original && kasumi_mounts_show_original &&
-		kasumi_mountstats_show_original && kasumi_mount_release_original;
+	mount_supported =
+	    kasumi_single_release_original && kasumi_mounts_poll_original &&
+	    kasumi_mounts_operations && kasumi_fdinfo_operations &&
+	    kasumi_mountinfo_show_original && kasumi_mounts_show_original &&
+	    kasumi_mountstats_show_original && kasumi_mount_release_original;
 #ifdef CONFIG_FILE_LOCKING
 	mount_supported = mount_supported && kasumi_fd_locks_show;
 #endif
@@ -1031,40 +1081,43 @@ int kasumi_proc_seq_init(void)
 			ret);
 #endif
 	ret = kasumi_seq_register(&kasumi_seq_release_probe,
-				 kasumi_lookup_name_quiet("seq_release"));
+				  kasumi_lookup_name_quiet("seq_release"));
 	if (ret)
 		goto fail;
 	kasumi_seq_release_registered = true;
 	/* These fops targets remain real calls even when the compiler inlines
 	 * seq_release into seq_release_private in the native helper. */
 	ret = kasumi_seq_register(&kasumi_map_release_probe,
-				 kasumi_lookup_name_quiet("proc_map_release"));
+				  kasumi_lookup_name_quiet("proc_map_release"));
 	if (ret)
 		goto fail;
 	kasumi_map_release_registered = true;
 	ret = kasumi_seq_register(&kasumi_seq_seek_probe,
-				 kasumi_lookup_name_quiet("seq_lseek"));
+				  kasumi_lookup_name_quiet("seq_lseek"));
 	if (ret)
 		goto fail;
 	kasumi_seq_seek_registered = true;
 	ret = kasumi_seq_register(&kasumi_seq_read_probe,
-				 kasumi_lookup_name_quiet("seq_read_iter"));
+				  kasumi_lookup_name_quiet("seq_read_iter"));
 	if (ret)
 		goto fail;
 	kasumi_seq_read_registered = true;
 	if (mount_supported) {
-		ret = kasumi_seq_register(&kasumi_single_release_probe,
-					 kasumi_lookup_name_quiet("single_release"));
+		ret = kasumi_seq_register(
+		    &kasumi_single_release_probe,
+		    kasumi_lookup_name_quiet("single_release"));
 		if (!ret) {
 			kasumi_single_release_registered = true;
-			ret = kasumi_seq_register(&kasumi_mount_release_probe,
-						 kasumi_lookup_name_quiet("mounts_release"));
+			ret = kasumi_seq_register(
+			    &kasumi_mount_release_probe,
+			    kasumi_lookup_name_quiet("mounts_release"));
 			if (!ret)
 				kasumi_mount_release_registered = true;
 		}
 		if (!ret) {
-			ret = kasumi_seq_register(&kasumi_mounts_poll_probe,
-						 kasumi_lookup_name_quiet("mounts_poll"));
+			ret = kasumi_seq_register(
+			    &kasumi_mounts_poll_probe,
+			    kasumi_lookup_name_quiet("mounts_poll"));
 			if (!ret)
 				kasumi_mounts_poll_registered = true;
 		}
@@ -1083,8 +1136,10 @@ int kasumi_proc_seq_init(void)
 	WRITE_ONCE(kasumi_seq_ready, true);
 	if (kasumi_mounts_poll_registered) {
 		WRITE_ONCE(kasumi_seq_mount_ready, true);
-		kasumi_mount_view_publish_capabilities(KASUMI_MOUNT_CAP_INFO |
-			KASUMI_MOUNT_CAP_MOUNTS | KASUMI_MOUNT_CAP_STATS | KASUMI_MOUNT_CAP_FDINFO, 0);
+		kasumi_mount_view_publish_capabilities(
+		    KASUMI_MOUNT_CAP_INFO | KASUMI_MOUNT_CAP_MOUNTS |
+			KASUMI_MOUNT_CAP_STATS | KASUMI_MOUNT_CAP_FDINFO,
+		    0);
 	}
 	(void)kasumi_mount_query_init();
 	(void)kasumi_mount_stat_init();

@@ -20,7 +20,9 @@ unsigned long kasumi_rule_source_ino(dev_t dev, u64 ino);
 /* The callback runs under RCU and the index read lock. It cannot sleep or
  * mutate rule stores. Retain RCU in the caller when keeping entry pointers. */
 void kasumi_rule_dependencies(const char *path, u64 generation,
-	void (*visit)(struct kasumi_rule_lifetime *, void *), void *data);
+			      void (*visit)(struct kasumi_rule_lifetime *,
+					    void *),
+			      void *data);
 struct kasumi_inode_identity;
 struct qstr;
 struct inode;
@@ -108,6 +110,6 @@ bool kasumi_rule_directory_has_injects(const char *path, u64 generation);
 bool kasumi_rule_directory_overridden(const char *path, u64 generation);
 bool kasumi_rule_vpath_flags(const char *path, u64 generation, u32 *flags);
 int kasumi_rule_vpath_collect(struct file *file, struct list_head *out,
-			     u64 *generation, void *data);
+			      u64 *generation, void *data);
 
 #endif /* _KASUMI_PATH_POLICY_H */

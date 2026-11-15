@@ -169,7 +169,7 @@ static int kasumi_control_bind(const char *visible, const struct path *source,
 
 	if (batch)
 		return kasumi_dirhijack_batch_add(batch, visible, source, ino,
-						 flags, false);
+						  flags, false);
 	return kasumi_dirhijack_add(visible, source, ino, flags);
 }
 
@@ -246,8 +246,9 @@ int KASUMI_NOCFI kasumi_forget_hide_rule(const char *path, bool unbind)
 	hlist_for_each_entry(
 	    entry, &kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)], node)
 	{
-		if (!kasumi_rule_visible(&entry->life,
-				generation ? generation : kasumi_rules_generation()) ||
+		if (!kasumi_rule_visible(
+			&entry->life,
+			generation ? generation : kasumi_rules_generation()) ||
 		    entry->path_hash != hash || strcmp(entry->path, src))
 			continue;
 		if (unbind && kasumi_dirhijack_enabled()) {
@@ -294,9 +295,9 @@ int KASUMI_NOCFI kasumi_add_hide_rule(const char *path, u32 rule_flags)
 	src = kstrdup(path, GFP_KERNEL);
 	if (!src)
 		return -ENOMEM;
-	ret = kasumi_rule_projected_parent(src,
-		generation ? generation : kasumi_rules_generation(),
-		&projected_parent);
+	ret = kasumi_rule_projected_parent(
+	    src, generation ? generation : kasumi_rules_generation(),
+	    &projected_parent);
 	if (ret < 0)
 		goto hide_done;
 	projected = ret > 0;
@@ -306,8 +307,8 @@ int KASUMI_NOCFI kasumi_add_hide_rule(const char *path, u32 rule_flags)
 		path_put(&projected_parent);
 	}
 	if (!projected) {
-		ret = kasumi_resolve_rule_path(&src, &target_inode, &parent_inode,
-					       false);
+		ret = kasumi_resolve_rule_path(&src, &target_inode,
+					       &parent_inode, false);
 		if (ret)
 			goto hide_done;
 	}
@@ -341,15 +342,19 @@ int KASUMI_NOCFI kasumi_add_hide_rule(const char *path, u32 rule_flags)
 
 	hash = full_name_hash(NULL, src, strlen(src));
 	mutex_lock(&kasumi_config_mutex);
-	hlist_for_each_entry(hide_entry,
-		&kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)], node) {
-		if (!kasumi_rule_visible(&hide_entry->life,
-				generation ? generation : kasumi_rules_generation()) ||
+	hlist_for_each_entry(
+	    hide_entry, &kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)],
+	    node)
+	{
+		if (!kasumi_rule_visible(
+			&hide_entry->life,
+			generation ? generation : kasumi_rules_generation()) ||
 		    hide_entry->path_hash != hash ||
 		    strcmp(hide_entry->path, src))
 			continue;
 		if (generation) {
-			kasumi_batch_expire(&hide_entry->life, KASUMI_BATCH_HIDE);
+			kasumi_batch_expire(&hide_entry->life,
+					    KASUMI_BATCH_HIDE);
 		} else {
 			hlist_del_rcu(&hide_entry->node);
 			atomic_dec(&kasumi_hide_count);
@@ -366,8 +371,9 @@ int KASUMI_NOCFI kasumi_add_hide_rule(const char *path, u32 rule_flags)
 		kasumi_hide_bloom);
 	kasumi_batch_track(&new_hide->life, KASUMI_BATCH_HIDE);
 	atomic_inc(&kasumi_hide_count);
-	hlist_add_head_rcu(&new_hide->node,
-		&kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)]);
+	hlist_add_head_rcu(
+	    &new_hide->node,
+	    &kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)]);
 	new_hide = NULL;
 	mutex_unlock(&kasumi_config_mutex);
 hide_done:
@@ -384,7 +390,7 @@ hide_done:
 }
 
 static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
-				       char *target, u32 flags);
+					char *target, u32 flags);
 
 static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 {
@@ -697,7 +703,8 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		if (kasumi_overlay_xattr_available())
 			features |= KSM_FEATURE_OVERLAY_XATTR_HIDE;
 		if (kasumi_mount_projection_available())
-			features |= KSM_FEATURE_MOUNT_HIDE | KSM_FEATURE_FAKE_MOUNTINFO;
+			features |=
+			    KSM_FEATURE_MOUNT_HIDE | KSM_FEATURE_FAKE_MOUNTINFO;
 		if (kasumi_proc_maps_available())
 			features |= KSM_FEATURE_MAPS_SPOOF;
 		if (kasumi_statfs_view_available())
@@ -764,12 +771,13 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 							       : "none");
 		written += n;
 
-		written += scnprintf(kbuf + written, buf_size - written,
-			"source xattrs: get/list/set/remove=%u\n"
-			"live source rules: available=%u desired=%u error=%d\n",
-			kasumi_source_xattr_available(),
-			kasumi_live_rules_available(), kasumi_live_rules_count(),
-			kasumi_live_rules_error());
+		written += scnprintf(
+		    kbuf + written, buf_size - written,
+		    "source xattrs: get/list/set/remove=%u\n"
+		    "live source rules: available=%u desired=%u error=%d\n",
+		    kasumi_source_xattr_available(),
+		    kasumi_live_rules_available(), kasumi_live_rules_count(),
+		    kasumi_live_rules_error());
 		written += scnprintf(
 		    kbuf + written, buf_size - written,
 		    "selinuxfs (passthrough): access/context=%s\n"
@@ -782,18 +790,24 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 			: "none",
 		    kasumi_fake_selinuxfs_delay_ns(),
 		    (unsigned long long)kasumi_fake_selinuxfs_spin_count());
-		written += scnprintf(kbuf + written, buf_size - written,
-			"mount projection: installed=%#llx required=%#llx complete=%u\n"
-			"maps/smaps: native seq adapter=%u capabilities=%#llx\n"
-			"statfs/fstatfs: path-aware VFS wrapper=%u entries=%llu projections=%llu\n",
-			(unsigned long long)kasumi_mount_view_capabilities(),
-			(unsigned long long)kasumi_mount_view_required_capabilities(),
-			kasumi_mount_projection_available(),
-			kasumi_proc_seq_available(),
-			(unsigned long long)kasumi_proc_seq_capabilities(),
-			kasumi_statfs_view_available(),
-			(unsigned long long)atomic64_read(&kasumi_hook_stats.statfs_entries),
-			(unsigned long long)atomic64_read(&kasumi_hook_stats.statfs_spoofs));
+		written += scnprintf(
+		    kbuf + written, buf_size - written,
+		    "mount projection: installed=%#llx required=%#llx "
+		    "complete=%u\n"
+		    "maps/smaps: native seq adapter=%u capabilities=%#llx\n"
+		    "statfs/fstatfs: path-aware VFS wrapper=%u entries=%llu "
+		    "projections=%llu\n",
+		    (unsigned long long)kasumi_mount_view_capabilities(),
+		    (unsigned long long)
+			kasumi_mount_view_required_capabilities(),
+		    kasumi_mount_projection_available(),
+		    kasumi_proc_seq_available(),
+		    (unsigned long long)kasumi_proc_seq_capabilities(),
+		    kasumi_statfs_view_available(),
+		    (unsigned long long)atomic64_read(
+			&kasumi_hook_stats.statfs_entries),
+		    (unsigned long long)atomic64_read(
+			&kasumi_hook_stats.statfs_spoofs));
 
 		list_arg.size = written;
 		if (copy_to_user(arg, &list_arg, sizeof(list_arg))) {
@@ -870,8 +884,9 @@ static int kasumi_canonical_rule_path(const char *name, char **resolved,
 		suffix = strrchr(name, '/');
 		if (!suffix)
 			return -EINVAL;
-		lookup = suffix == name ? kstrdup("/", GFP_KERNEL) :
-			 kstrndup(name, suffix - name, GFP_KERNEL);
+		lookup = suffix == name
+			     ? kstrdup("/", GFP_KERNEL)
+			     : kstrndup(name, suffix - name, GFP_KERNEL);
 		if (!lookup)
 			return -ENOMEM;
 #ifdef KASUMI_EMBEDDED
@@ -904,8 +919,8 @@ static int kasumi_canonical_rule_path(const char *name, char **resolved,
 		goto free_buffer;
 	}
 	*resolved = suffix ? kasprintf(GFP_KERNEL, "%s%s",
-				     !strcmp(text, "/") ? "" : text, suffix) :
-			    kstrdup(text, GFP_KERNEL);
+				       !strcmp(text, "/") ? "" : text, suffix)
+			   : kstrdup(text, GFP_KERNEL);
 	if (!*resolved) {
 		error = -ENOMEM;
 		goto free_buffer;
@@ -917,8 +932,10 @@ static int kasumi_canonical_rule_path(const char *name, char **resolved,
 	if (parent) {
 		const char *slash = strrchr(*resolved, '/');
 
-		*parent = slash == *resolved ? kstrdup("/", GFP_KERNEL) :
-			  kstrndup(*resolved, slash - *resolved, GFP_KERNEL);
+		*parent =
+		    slash == *resolved
+			? kstrdup("/", GFP_KERNEL)
+			: kstrndup(*resolved, slash - *resolved, GFP_KERNEL);
 		if (!*parent) {
 			error = -ENOMEM;
 			goto free_resolved;
@@ -940,7 +957,7 @@ put_path:
 }
 
 static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
-				       char *target, u32 flags)
+					char *target, u32 flags)
 {
 	struct kasumi_entry *entry;
 	struct kasumi_hide_entry *hide_entry;
@@ -960,7 +977,8 @@ static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
 		}
 	}
 	generation = kasumi_batch_generation();
-	ret = kasumi_live_rules_record(kasumi_batch_live(), cmd, src, target, flags);
+	ret = kasumi_live_rules_record(kasumi_batch_live(), cmd, src, target,
+				       flags);
 	if (ret)
 		goto apply_done;
 
@@ -987,7 +1005,8 @@ static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
 			struct dentry *tgt_dentry = NULL;
 			struct path mpath;
 
-			ret = kasumi_canonical_rule_path(src, &resolved_src, NULL);
+			ret = kasumi_canonical_rule_path(src, &resolved_src,
+							 NULL);
 			if (ret)
 				goto merge_done;
 			if (resolved_src && !strcmp(resolved_src, src)) {
@@ -1007,7 +1026,8 @@ static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
 						 hash, KASUMI_HASH_BITS)],
 					     node)
 			{
-				if (kasumi_rule_visible(&me->life, generation) &&
+				if (kasumi_rule_visible(&me->life,
+							generation) &&
 				    strcmp(me->src, src) == 0 &&
 				    strcmp(me->target, target) == 0) {
 					found = true;
@@ -1027,7 +1047,8 @@ static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
 					me->rule_flags = flags;
 					resolved_src = NULL;
 					tgt_dentry = NULL;
-					kasumi_batch_track(&me->life, KASUMI_BATCH_MERGE);
+					kasumi_batch_track(&me->life,
+							   KASUMI_BATCH_MERGE);
 					hlist_add_head_rcu(
 					    &me->node,
 					    &kasumi_merge_dirs[hash_min(
@@ -1046,15 +1067,15 @@ static int kasumi_apply_path_rule_owned(unsigned int cmd, char *src,
 					ret = -ENOMEM;
 				if (!ret)
 					ret = kasumi_add_inject_rule(
-						kstrdup(me->src, GFP_KERNEL));
+					    kstrdup(me->src, GFP_KERNEL));
 				if (!ret && me->resolved_src)
-					ret = kasumi_add_inject_rule(
-						kstrdup(me->resolved_src, GFP_KERNEL));
+					ret = kasumi_add_inject_rule(kstrdup(
+					    me->resolved_src, GFP_KERNEL));
 				if (!ret)
 					ret = kasumi_materialize_merge(
-						mat_src, mat_tgt, 0, flags);
+					    mat_src, mat_tgt, 0, flags);
 			}
-merge_done:
+		merge_done:
 			kfree(resolved_src);
 			if (tgt_dentry)
 				dput(tgt_dentry);
@@ -1085,7 +1106,8 @@ merge_done:
 			break;
 		}
 
-		ret = kasumi_canonical_rule_path(src, &resolved_src, &parent_dir);
+		ret =
+		    kasumi_canonical_rule_path(src, &resolved_src, &parent_dir);
 		if (ret)
 			goto add_rule_done;
 		visible_src = kstrdup(src, GFP_KERNEL);
@@ -1159,19 +1181,24 @@ merge_done:
 		if (dh_want && kasumi_dirhijack_enabled()) {
 			ret = -ENOENT;
 			if (dh_nofollow_valid) {
-				ret = kasumi_control_bind(src, &captured_nofollow,
-					dh_nofollow_ino, KASUMI_VNODE_F_LNK | bypass_flag);
+				ret = kasumi_control_bind(
+				    src, &captured_nofollow, dh_nofollow_ino,
+				    KASUMI_VNODE_F_LNK | bypass_flag);
 			} else if (S_ISREG(dh_src_mode)) {
-				ret = kasumi_control_bind(src, &captured_source,
-					dh_v_ino, bypass_flag);
+				ret =
+				    kasumi_control_bind(src, &captured_source,
+							dh_v_ino, bypass_flag);
 			} else if (S_ISDIR(dh_src_mode)) {
-				ret = kasumi_control_bind(src, &captured_source,
-					dh_v_ino, KASUMI_VNODE_F_DIR | bypass_flag);
-			} else if ((S_ISCHR(dh_src_mode) || S_ISBLK(dh_src_mode) ||
+				ret = kasumi_control_bind(
+				    src, &captured_source, dh_v_ino,
+				    KASUMI_VNODE_F_DIR | bypass_flag);
+			} else if ((S_ISCHR(dh_src_mode) ||
+				    S_ISBLK(dh_src_mode) ||
 				    S_ISFIFO(dh_src_mode)) &&
 				   kasumi_device_sources_enabled) {
-				ret = kasumi_control_bind(src, &captured_source,
-					dh_v_ino, KASUMI_VNODE_F_SPECIAL | bypass_flag);
+				ret = kasumi_control_bind(
+				    src, &captured_source, dh_v_ino,
+				    KASUMI_VNODE_F_SPECIAL | bypass_flag);
 			}
 		}
 
@@ -1205,7 +1232,8 @@ merge_done:
 		break;
 
 	case KSM_IOC_HIDE_OVERLAY_XATTRS:
-		ret = src ? kasumi_overlay_xattr_mark_at(src, generation) : -EINVAL;
+		ret = src ? kasumi_overlay_xattr_mark_at(src, generation)
+			  : -EINVAL;
 		break;
 
 	case KSM_IOC_DEL_RULE: {
@@ -1224,29 +1252,44 @@ merge_done:
 			break;
 		hash = full_name_hash(NULL, src, strlen(src));
 		mutex_lock(&kasumi_config_mutex);
-		hlist_for_each_entry(entry,
-			&kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)], node) {
+		hlist_for_each_entry(
+		    entry, &kasumi_paths[hash_min(hash, KASUMI_HASH_BITS)],
+		    node)
+		{
 			if (kasumi_rule_visible(&entry->life, generation) &&
 			    entry->src_hash == hash && !strcmp(entry->src, src))
-				kasumi_batch_expire(&entry->life, KASUMI_BATCH_PATH);
+				kasumi_batch_expire(&entry->life,
+						    KASUMI_BATCH_PATH);
 		}
-		hlist_for_each_entry(hide_entry,
-			&kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)], node) {
-			if (kasumi_rule_visible(&hide_entry->life, generation) &&
-			    hide_entry->path_hash == hash && !strcmp(hide_entry->path, src))
-				kasumi_batch_expire(&hide_entry->life, KASUMI_BATCH_HIDE);
+		hlist_for_each_entry(
+		    hide_entry,
+		    &kasumi_hide_paths[hash_min(hash, KASUMI_HASH_BITS)], node)
+		{
+			if (kasumi_rule_visible(&hide_entry->life,
+						generation) &&
+			    hide_entry->path_hash == hash &&
+			    !strcmp(hide_entry->path, src))
+				kasumi_batch_expire(&hide_entry->life,
+						    KASUMI_BATCH_HIDE);
 		}
-		hlist_for_each_entry(inject_entry,
-			&kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node) {
-			if (kasumi_rule_visible(&inject_entry->life, generation) &&
+		hlist_for_each_entry(
+		    inject_entry,
+		    &kasumi_inject_dirs[hash_min(hash, KASUMI_HASH_BITS)], node)
+		{
+			if (kasumi_rule_visible(&inject_entry->life,
+						generation) &&
 			    !strcmp(inject_entry->dir, src))
-				kasumi_batch_expire(&inject_entry->life, KASUMI_BATCH_INJECT);
+				kasumi_batch_expire(&inject_entry->life,
+						    KASUMI_BATCH_INJECT);
 		}
-		hlist_for_each_entry(merge,
-			&kasumi_merge_dirs[hash_min(hash, KASUMI_HASH_BITS)], node) {
+		hlist_for_each_entry(
+		    merge, &kasumi_merge_dirs[hash_min(hash, KASUMI_HASH_BITS)],
+		    node)
+		{
 			if (kasumi_rule_visible(&merge->life, generation) &&
 			    !strcmp(merge->src, src))
-				kasumi_batch_expire(&merge->life, KASUMI_BATCH_MERGE);
+				kasumi_batch_expire(&merge->life,
+						    KASUMI_BATCH_MERGE);
 		}
 		mutex_unlock(&kasumi_config_mutex);
 		break;
@@ -1267,7 +1310,7 @@ apply_done:
 }
 
 int kasumi_apply_path_rule(unsigned int command, const char *visible,
-			  const char *source, u32 flags)
+			   const char *source, u32 flags)
 {
 	char *visible_copy, *source_copy = NULL;
 
@@ -1283,7 +1326,8 @@ int kasumi_apply_path_rule(unsigned int command, const char *visible,
 			return -ENOMEM;
 		}
 	}
-	return kasumi_apply_path_rule_owned(command, visible_copy, source_copy, flags);
+	return kasumi_apply_path_rule_owned(command, visible_copy, source_copy,
+					    flags);
 }
 
 /* ======================================================================

@@ -142,18 +142,22 @@ bool kasumi_mount_view_current(const struct kasumi_mount_view *view)
 	if (!view || !READ_ONCE(view->ns->nr_mounts))
 		return false;
 #endif
-	return view && !read_seqretry(kasumi_mount_rename_lock, view->rename_sequence) &&
-		view->event == READ_ONCE(view->ns->event) &&
-		view->rules_generation == kasumi_rules_generation() &&
-		view->policy_generation == kasumi_fake_mi_policy_generation();
+	return view &&
+	       !read_seqretry(kasumi_mount_rename_lock,
+			      view->rename_sequence) &&
+	       view->event == READ_ONCE(view->ns->event) &&
+	       view->rules_generation == kasumi_rules_generation() &&
+	       view->policy_generation == kasumi_fake_mi_policy_generation();
 }
 
 static struct mount *kasumi_mount_next(struct mount *mount, struct mount *root)
 {
 	if (!list_empty(&mount->mnt_mounts))
-		return list_first_entry(&mount->mnt_mounts, struct mount, mnt_child);
+		return list_first_entry(&mount->mnt_mounts, struct mount,
+					mnt_child);
 	while (mount != root) {
-		if (!list_is_last(&mount->mnt_child, &mount->mnt_parent->mnt_mounts))
+		if (!list_is_last(&mount->mnt_child,
+				  &mount->mnt_parent->mnt_mounts))
 			return list_next_entry(mount, mnt_child);
 		mount = mount->mnt_parent;
 	}
@@ -201,11 +205,11 @@ static int kasumi_mount_group_fields(const char *line, size_t length,
 
 		if (end - cursor == 1 && line[cursor] == '-')
 			return count;
-		if (end - cursor > 7 &&
-		    (!memcmp(line + cursor, "shared:", 7) ||
-		     !memcmp(line + cursor, "master:", 7)))
+		if (end - cursor > 7 && (!memcmp(line + cursor, "shared:", 7) ||
+					 !memcmp(line + cursor, "master:", 7)))
 			prefix = 7;
-		else if (end - cursor > 15 && !memcmp(line + cursor, "propagate_from:", 15))
+		else if (end - cursor > 15 &&
+			 !memcmp(line + cursor, "propagate_from:", 15))
 			prefix = 15;
 		if (prefix) {
 			if (count == 3)
@@ -219,8 +223,10 @@ static int kasumi_mount_group_fields(const char *line, size_t length,
 			}
 			if (!id)
 				return -EINVAL;
-			fields[count++] = (struct kasumi_mount_group_field) {
-				.start = cursor + prefix, .end = end, .id = id,
+			fields[count++] = (struct kasumi_mount_group_field){
+			    .start = cursor + prefix,
+			    .end = end,
+			    .id = id,
 			};
 		}
 		cursor = end + 1;
@@ -249,7 +255,9 @@ u32 kasumi_mount_view_group_id(const struct kasumi_mount_view *view, u32 id)
 		else
 			high = middle;
 	}
-	return view && low < view->group_count && view->groups[low] == id ? low + 1 : 0;
+	return view && low < view->group_count && view->groups[low] == id
+		   ? low + 1
+		   : 0;
 }
 
 bool kasumi_mount_groups_active(void)
@@ -257,7 +265,8 @@ bool kasumi_mount_groups_active(void)
 #ifdef KASUMI_EMBEDDED
 	uid_t uid = __kuid_val(current_uid());
 
-	return ksu_is_unshare_mnt_enabled() && is_appuid(uid) && ksu_uid_should_umount(uid);
+	return ksu_is_unshare_mnt_enabled() && is_appuid(uid) &&
+	       ksu_uid_should_umount(uid);
 #else
 	return false;
 #endif
@@ -296,7 +305,8 @@ int kasumi_mount_view_normalize_groups(const struct kasumi_mount_view *view,
 }
 
 const struct kasumi_mount_record *
-kasumi_mount_view_find(const struct kasumi_mount_view *view, u64 id, bool unique)
+kasumi_mount_view_find(const struct kasumi_mount_view *view, u64 id,
+		       bool unique)
 {
 	u32 low = 0, high;
 
@@ -305,10 +315,13 @@ kasumi_mount_view_find(const struct kasumi_mount_view *view, u64 id, bool unique
 	high = view->count;
 	while (low < high) {
 		u32 middle = low + (high - low) / 2;
-		u64 key = unique ? view->unique[middle].id : view->records[middle].id;
+		u64 key =
+		    unique ? view->unique[middle].id : view->records[middle].id;
 
 		if (id == key)
-			return &view->records[unique ? view->unique[middle].record : middle];
+			return &view->records[unique
+						  ? view->unique[middle].record
+						  : middle];
 		if (id < key)
 			high = middle;
 		else
@@ -319,7 +332,7 @@ kasumi_mount_view_find(const struct kasumi_mount_view *view, u64 id, bool unique
 
 const struct kasumi_mount_record *
 kasumi_mount_view_representative(const struct kasumi_mount_view *view,
-				const struct kasumi_mount_record *record)
+				 const struct kasumi_mount_record *record)
 {
 	if (!view || !record || record->alias_index >= view->count)
 		return NULL;
@@ -332,9 +345,11 @@ static void kasumi_mount_aliases(struct kasumi_mount_view *view)
 	u32 i;
 
 	for (i = 0; i < view->count; i++)
-		view->records[i].alias_index = view->records[i].retained ? i : pending;
+		view->records[i].alias_index =
+		    view->records[i].retained ? i : pending;
 	for (i = 0; i < view->count; i++) {
-		struct kasumi_mount_record *entry = &view->records[i], *cursor = entry;
+		struct kasumi_mount_record *entry = &view->records[i],
+					   *cursor = entry;
 		u32 alias;
 
 		if (!entry->in_view || entry->alias_index != pending)
@@ -343,7 +358,8 @@ static void kasumi_mount_aliases(struct kasumi_mount_view *view)
 			const struct kasumi_mount_record *parent;
 
 			cursor->alias_index = visiting;
-			parent = kasumi_mount_view_find(view, cursor->parent_id, false);
+			parent = kasumi_mount_view_find(view, cursor->parent_id,
+							false);
 			if (!parent || !parent->in_view || parent == cursor ||
 			    parent->alias_index == visiting) {
 				cursor->retained = true;
@@ -356,7 +372,8 @@ static void kasumi_mount_aliases(struct kasumi_mount_view *view)
 		cursor = entry;
 		while (cursor->alias_index == visiting) {
 			const struct kasumi_mount_record *parent =
-				kasumi_mount_view_find(view, cursor->parent_id, false);
+			    kasumi_mount_view_find(view, cursor->parent_id,
+						   false);
 
 			cursor->alias_index = alias;
 			if (!parent)
@@ -367,12 +384,12 @@ static void kasumi_mount_aliases(struct kasumi_mount_view *view)
 }
 
 static KASUMI_NOCFI int kasumi_mount_capture(struct kasumi_mount_view *view,
-					    u32 capacity, struct seq_file *seq)
+					     u32 capacity, struct seq_file *seq)
 {
 	struct mount *mount;
 	struct proc_mounts source = {
-		.ns = view->ns,
-		.root = view->root,
+	    .ns = view->ns,
+	    .root = view->root,
 	};
 	int ret = 0;
 
@@ -404,8 +421,10 @@ static KASUMI_NOCFI int kasumi_mount_capture(struct kasumi_mount_view *view,
 		}
 		if (mount->mnt_ns != view->ns)
 			continue;
-		root_sequence = read_seqcount_begin(&mount->mnt.mnt_root->d_seq);
-		mountpoint_sequence = read_seqcount_begin(&mount->mnt_mountpoint->d_seq);
+		root_sequence =
+		    read_seqcount_begin(&mount->mnt.mnt_root->d_seq);
+		mountpoint_sequence =
+		    read_seqcount_begin(&mount->mnt_mountpoint->d_seq);
 		seq->count = 0;
 		ret = kasumi_mount_show_info(seq, &mount->mnt);
 		if (ret < 0)
@@ -429,21 +448,26 @@ static KASUMI_NOCFI int kasumi_mount_capture(struct kasumi_mount_view *view,
 			struct kasumi_mount_group_field fields[3];
 			int count, i;
 
-			ret = kasumi_fake_mi_classify_mount(seq->buf, seq->count, &hidden);
+			ret = kasumi_fake_mi_classify_mount(
+			    seq->buf, seq->count, &hidden);
 			if (ret)
 				break;
-			count = kasumi_mount_group_fields(seq->buf, seq->count, fields);
+			count = kasumi_mount_group_fields(seq->buf, seq->count,
+							  fields);
 			if (count < 0) {
 				ret = count;
 				break;
 			}
 			for (i = 0; i < count; i++)
-				view->groups[view->group_count++] = fields[i].id;
+				view->groups[view->group_count++] =
+				    fields[i].id;
 		}
 		entry->retained = entry->in_view &&
-			(!hidden || entry->mount == view->root.mnt);
-		if (read_seqcount_retry(&mount->mnt.mnt_root->d_seq, root_sequence) ||
-		    read_seqcount_retry(&mount->mnt_mountpoint->d_seq, mountpoint_sequence)) {
+				  (!hidden || entry->mount == view->root.mnt);
+		if (read_seqcount_retry(&mount->mnt.mnt_root->d_seq,
+					root_sequence) ||
+		    read_seqcount_retry(&mount->mnt_mountpoint->d_seq,
+					mountpoint_sequence)) {
 			ret = -EAGAIN;
 			break;
 		}
@@ -455,13 +479,13 @@ static KASUMI_NOCFI int kasumi_mount_capture(struct kasumi_mount_view *view,
 	return ret;
 }
 
-static KASUMI_NOCFI int
-kasumi_mount_build(struct mnt_namespace *ns, const struct path *root,
-		   struct kasumi_mount_view **result)
+static KASUMI_NOCFI int kasumi_mount_build(struct mnt_namespace *ns,
+					   const struct path *root,
+					   struct kasumi_mount_view **result)
 {
 	struct kasumi_mount_view *view;
-	struct file file = { .f_cred = current_cred() };
-	struct seq_file seq = { .file = &file, .size = PAGE_SIZE };
+	struct file file = {.f_cred = current_cred()};
+	struct seq_file seq = {.file = &file, .size = PAGE_SIZE};
 	u32 capacity, unique_groups, i;
 	int ret;
 
@@ -493,8 +517,9 @@ kasumi_mount_build(struct mnt_namespace *ns, const struct path *root,
 		}
 		capacity++;
 		view->records = kvmalloc_array(capacity, sizeof(*view->records),
-					      GFP_KERNEL | __GFP_ZERO);
-		view->groups = kvmalloc_array(capacity, 3 * sizeof(*view->groups), GFP_KERNEL);
+					       GFP_KERNEL | __GFP_ZERO);
+		view->groups = kvmalloc_array(
+		    capacity, 3 * sizeof(*view->groups), GFP_KERNEL);
 		seq.buf = kvmalloc(seq.size, GFP_KERNEL);
 		if (!view->records || !view->groups || !seq.buf) {
 			ret = -ENOMEM;
@@ -526,12 +551,14 @@ kasumi_mount_build(struct mnt_namespace *ns, const struct path *root,
 	sort(view->groups, view->group_count, sizeof(*view->groups),
 	     kasumi_mount_group_compare, NULL);
 	for (i = 0, unique_groups = 0; i < view->group_count; i++)
-		if (!unique_groups || view->groups[i] != view->groups[unique_groups - 1])
+		if (!unique_groups ||
+		    view->groups[i] != view->groups[unique_groups - 1])
 			view->groups[unique_groups++] = view->groups[i];
 	view->group_count = unique_groups;
 	sort(view->records, view->count, sizeof(*view->records),
 	     kasumi_mount_compare, NULL);
-	view->unique = kvmalloc_array(view->count, sizeof(*view->unique), GFP_KERNEL);
+	view->unique =
+	    kvmalloc_array(view->count, sizeof(*view->unique), GFP_KERNEL);
 	if (!view->unique && view->count) {
 		ret = -ENOMEM;
 		goto fail;
@@ -544,9 +571,10 @@ kasumi_mount_build(struct mnt_namespace *ns, const struct path *root,
 	     kasumi_mount_unique_compare, NULL);
 	kasumi_mount_aliases(view);
 	view->generation = atomic64_inc_return(&kasumi_mount_generation);
-	view->bytes = sizeof(*view) + (size_t)capacity *
-		(sizeof(*view->records) + 3 * sizeof(*view->groups)) +
-		(size_t)view->count * sizeof(*view->unique);
+	view->bytes = sizeof(*view) +
+		      (size_t)capacity *
+			  (sizeof(*view->records) + 3 * sizeof(*view->groups)) +
+		      (size_t)view->count * sizeof(*view->unique);
 	*result = view;
 	return 0;
 fail:
@@ -564,8 +592,8 @@ static u64 kasumi_mount_namespace_id(const struct mnt_namespace *ns)
 }
 
 static KASUMI_NOCFI int kasumi_mount_key(struct mnt_namespace *ns,
-					const struct path *root,
-					struct kasumi_mount_view *key)
+					 const struct path *root,
+					 struct kasumi_mount_view *key)
 {
 	struct inode *inode = d_inode(root->dentry);
 	char *buffer, *name;
@@ -603,8 +631,9 @@ static KASUMI_NOCFI int kasumi_mount_key(struct mnt_namespace *ns,
 		size *= 2;
 		cond_resched();
 	}
-	if (!ret && (read_seqretry(kasumi_mount_rename_lock, key->rename_sequence) ||
-		     read_seqcount_retry(&root->dentry->d_seq, key->root_sequence)))
+	if (!ret &&
+	    (read_seqretry(kasumi_mount_rename_lock, key->rename_sequence) ||
+	     read_seqcount_retry(&root->dentry->d_seq, key->root_sequence)))
 		ret = -EAGAIN;
 	return ret;
 }
@@ -613,13 +642,14 @@ static bool kasumi_mount_same_key(const struct kasumi_mount_view *a,
 				  const struct kasumi_mount_view *b)
 {
 	return a->namespace_id == b->namespace_id &&
-		a->root_mount_id == b->root_mount_id && a->root_ino == b->root_ino &&
-		a->root_dev == b->root_dev && a->root_inode_generation == b->root_inode_generation &&
-		a->root_sequence == b->root_sequence && a->event == b->event &&
-		a->rename_sequence == b->rename_sequence &&
-		a->rules_generation == b->rules_generation &&
-		a->policy_generation == b->policy_generation &&
-		!strcmp(a->root_name, b->root_name);
+	       a->root_mount_id == b->root_mount_id &&
+	       a->root_ino == b->root_ino && a->root_dev == b->root_dev &&
+	       a->root_inode_generation == b->root_inode_generation &&
+	       a->root_sequence == b->root_sequence && a->event == b->event &&
+	       a->rename_sequence == b->rename_sequence &&
+	       a->rules_generation == b->rules_generation &&
+	       a->policy_generation == b->policy_generation &&
+	       !strcmp(a->root_name, b->root_name);
 }
 
 static struct kasumi_mount_view *
@@ -628,7 +658,9 @@ kasumi_mount_cached(const struct kasumi_mount_view *key)
 	struct kasumi_mount_view *data, *found = NULL;
 
 	mutex_lock(&kasumi_mount_cache_lock);
-	hash_for_each_possible(kasumi_mount_cache, data, cache_node, key->namespace_id) {
+	hash_for_each_possible(kasumi_mount_cache, data, cache_node,
+			       key->namespace_id)
+	{
 		if (kasumi_mount_same_key(data, key)) {
 			kasumi_mount_view_get_ref(data);
 			found = data;
@@ -647,8 +679,10 @@ bool kasumi_mount_view_record_current(const struct kasumi_mount_view *view,
 	if (!record || !kasumi_mount_view_current(view))
 		return false;
 	mount = real_mount(record->mount);
-	return !read_seqcount_retry(&mount->mnt.mnt_root->d_seq, record->root_sequence) &&
-		!read_seqcount_retry(&mount->mnt_mountpoint->d_seq, record->mountpoint_sequence);
+	return !read_seqcount_retry(&mount->mnt.mnt_root->d_seq,
+				    record->root_sequence) &&
+	       !read_seqcount_retry(&mount->mnt_mountpoint->d_seq,
+				    record->mountpoint_sequence);
 }
 
 static bool kasumi_mount_records_current(const struct kasumi_mount_view *view)
@@ -670,9 +704,10 @@ static void kasumi_mount_uncache(struct kasumi_mount_view *data);
 
 static struct kasumi_mount_view *
 kasumi_mount_handle(struct kasumi_mount_view *data, struct mnt_namespace *ns,
-		     const struct path *root)
+		    const struct path *root)
 {
-	struct kasumi_mount_view *view = kmemdup(data, sizeof(*view), GFP_KERNEL);
+	struct kasumi_mount_view *view =
+	    kmemdup(data, sizeof(*view), GFP_KERNEL);
 	bool valid;
 
 	if (!view) {
@@ -692,8 +727,9 @@ kasumi_mount_handle(struct kasumi_mount_view *data, struct mnt_namespace *ns,
 	refcount_set(&view->refs, 1);
 	atomic_inc(&kasumi_mount_owned);
 	down_read(kasumi_mount_namespace_lock);
-	valid = !read_seqcount_retry(&root->dentry->d_seq, view->root_sequence) &&
-		kasumi_mount_records_current(view);
+	valid =
+	    !read_seqcount_retry(&root->dentry->d_seq, view->root_sequence) &&
+	    kasumi_mount_records_current(view);
 	up_read(kasumi_mount_namespace_lock);
 	if (!valid) {
 		mutex_lock(&kasumi_mount_cache_lock);
@@ -715,7 +751,7 @@ static void kasumi_mount_uncache(struct kasumi_mount_view *data)
 }
 
 static void kasumi_mount_cache_publish(struct kasumi_mount_view *view,
-				      struct kasumi_mount_view *key)
+				       struct kasumi_mount_view *key)
 {
 	struct kasumi_mount_view *data, *old, *next;
 
@@ -728,7 +764,8 @@ static void kasumi_mount_cache_publish(struct kasumi_mount_view *view,
 	view->root_name = key->root_name;
 	key->root_name = NULL;
 	view->bytes += strlen(view->root_name) + 1;
-	if (view->event != key->event || view->rename_sequence != key->rename_sequence ||
+	if (view->event != key->event ||
+	    view->rename_sequence != key->rename_sequence ||
 	    view->rules_generation != key->rules_generation ||
 	    view->policy_generation != key->policy_generation)
 		return;
@@ -742,10 +779,12 @@ static void kasumi_mount_cache_publish(struct kasumi_mount_view *view,
 	refcount_set(&data->refs, 2);
 	view->data_owner = data;
 	mutex_lock(&kasumi_mount_cache_lock);
-	list_for_each_entry_safe(old, next, &kasumi_mount_cache_list, cache_list) {
+	list_for_each_entry_safe (old, next, &kasumi_mount_cache_list,
+				  cache_list) {
 		if (old->namespace_id == data->namespace_id &&
 		    old->root_mount_id == data->root_mount_id &&
-		    old->root_ino == data->root_ino && !strcmp(old->root_name, data->root_name))
+		    old->root_ino == data->root_ino &&
+		    !strcmp(old->root_name, data->root_name))
 			kasumi_mount_uncache(old);
 	}
 	hash_add(kasumi_mount_cache, &data->cache_node, data->namespace_id);
@@ -753,7 +792,7 @@ static void kasumi_mount_cache_publish(struct kasumi_mount_view *view,
 	kasumi_mount_cache_bytes += data->bytes;
 	while (kasumi_mount_cache_bytes > KASUMI_MOUNT_CACHE_BYTES) {
 		old = list_first_entry(&kasumi_mount_cache_list,
-				      struct kasumi_mount_view, cache_list);
+				       struct kasumi_mount_view, cache_list);
 		kasumi_mount_uncache(old);
 	}
 	mutex_unlock(&kasumi_mount_cache_lock);
@@ -877,8 +916,8 @@ u64 kasumi_mount_view_capabilities(void)
 u64 kasumi_mount_view_required_capabilities(void)
 {
 	u64 required = KASUMI_MOUNT_CAP_INFO | KASUMI_MOUNT_CAP_MOUNTS |
-		KASUMI_MOUNT_CAP_STATS | KASUMI_MOUNT_CAP_FDINFO |
-		KASUMI_MOUNT_CAP_STATX | KASUMI_MOUNT_CAP_STATFS;
+		       KASUMI_MOUNT_CAP_STATS | KASUMI_MOUNT_CAP_FDINFO |
+		       KASUMI_MOUNT_CAP_STATX | KASUMI_MOUNT_CAP_STATFS;
 
 #ifdef STATX_MNT_ID_UNIQUE
 	required |= KASUMI_MOUNT_CAP_UNIQUE;
@@ -896,7 +935,8 @@ void kasumi_mount_view_publish_capabilities(u64 set, u64 clear)
 	do {
 		previous = atomic64_read(&kasumi_mount_capabilities);
 		next = (previous | set) & ~clear;
-	} while (atomic64_cmpxchg(&kasumi_mount_capabilities, previous, next) != previous);
+	} while (atomic64_cmpxchg(&kasumi_mount_capabilities, previous, next) !=
+		 previous);
 }
 
 bool kasumi_mount_projection_available(void)
@@ -904,42 +944,45 @@ bool kasumi_mount_projection_available(void)
 	u64 required = kasumi_mount_view_required_capabilities();
 
 	return kasumi_mount_view_available() &&
-		(kasumi_mount_view_capabilities() & required) == required;
+	       (kasumi_mount_view_capabilities() & required) == required;
 }
 
 bool kasumi_mount_projection_active(void)
 {
-	return kasumi_mount_projection_available() &&
-		kasumi_config_enabled() &&
-		(kasumi_config_features() & KSM_FEATURE_MOUNT_HIDE) &&
-		kasumi_policy_current_is_spoof_target();
+	return kasumi_mount_projection_available() && kasumi_config_enabled() &&
+	       (kasumi_config_features() & KSM_FEATURE_MOUNT_HIDE) &&
+	       kasumi_policy_current_is_spoof_target();
 }
 
 int kasumi_mount_view_init(void)
 {
 	if (kasumi_mount_view_available())
 		return 0;
-	kasumi_mount_rename_lock = (void *)kasumi_lookup_name_quiet("rename_lock");
+	kasumi_mount_rename_lock =
+	    (void *)kasumi_lookup_name_quiet("rename_lock");
 	kasumi_mount_namespace_lock =
-		(void *)kasumi_lookup_name_quiet("namespace_sem");
+	    (void *)kasumi_lookup_name_quiet("namespace_sem");
 	kasumi_mount_show_info =
-		(void *)kasumi_lookup_callable_quiet("show_mountinfo");
+	    (void *)kasumi_lookup_callable_quiet("show_mountinfo");
 	kasumi_mount_root_name =
-		(void *)kasumi_lookup_callable_quiet("dentry_path_raw");
-	kasumi_mount_get_ns = (void *)kasumi_lookup_callable_quiet("copy_mnt_ns");
-	kasumi_mount_put_ns = (void *)kasumi_lookup_callable_quiet("put_mnt_ns");
+	    (void *)kasumi_lookup_callable_quiet("dentry_path_raw");
+	kasumi_mount_get_ns =
+	    (void *)kasumi_lookup_callable_quiet("copy_mnt_ns");
+	kasumi_mount_put_ns =
+	    (void *)kasumi_lookup_callable_quiet("put_mnt_ns");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	kasumi_mount_release_passive =
-		(void *)kasumi_lookup_callable_quiet("mnt_ns_release");
+	    (void *)kasumi_lookup_callable_quiet("mnt_ns_release");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	kasumi_mount_release_passive_rcu =
-		(void *)kasumi_lookup_callable_quiet("mnt_ns_release_rcu");
+	    (void *)kasumi_lookup_callable_quiet("mnt_ns_release_rcu");
 #endif
 	if (!kasumi_mount_release_passive && !kasumi_mount_release_passive_rcu)
 		return -ENOENT;
 #endif
-	if (!kasumi_mount_namespace_lock || !kasumi_mount_rename_lock || !kasumi_mount_show_info ||
-	    !kasumi_mount_get_ns || !kasumi_mount_put_ns)
+	if (!kasumi_mount_namespace_lock || !kasumi_mount_rename_lock ||
+	    !kasumi_mount_show_info || !kasumi_mount_get_ns ||
+	    !kasumi_mount_put_ns)
 		return -ENOENT;
 	WRITE_ONCE(kasumi_mount_ready, true);
 	return 0;
@@ -951,7 +994,8 @@ void kasumi_mount_view_exit(void)
 
 	WRITE_ONCE(kasumi_mount_ready, false);
 	mutex_lock(&kasumi_mount_cache_lock);
-	list_for_each_entry_safe(data, next, &kasumi_mount_cache_list, cache_list)
+	list_for_each_entry_safe (data, next, &kasumi_mount_cache_list,
+				  cache_list)
 		kasumi_mount_uncache(data);
 	mutex_unlock(&kasumi_mount_cache_lock);
 	wait_event(kasumi_mount_wait, !atomic_read(&kasumi_mount_owned));
