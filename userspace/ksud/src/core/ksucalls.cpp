@@ -144,16 +144,7 @@ auto scan_driver_fd() -> DriverFd {
     return {found_fd, false};
 }
 
-auto request_driver_fd() -> int {
-    // Method 2: Try prctl to get fd (SECCOMP-safe)
-    PrctlGetFdCmd prctl_cmd = {-1, -1};
-    prctl(KSU_PRCTL_GET_FD, &prctl_cmd, 0, 0, 0);
-    if (prctl_cmd.result == 0 && prctl_cmd.fd >= 0) {
-        LOGD("Got driver fd via prctl: %d", prctl_cmd.fd);
-        return prctl_cmd.fd;
-    }
-
-    // Method 3: Fallback to reboot syscall (may be blocked by SECCOMP)
+auto request_driver_fd_via_reboot() -> int {
     setup_sigsys_handler();
     if (g_sigsys_handler_installed == 0) {
         LOGE("Skipping KernelSU driver fd fallback without a SIGSYS handler");
@@ -174,6 +165,17 @@ auto request_driver_fd() -> int {
 
     LOGE("Failed to get driver fd");
     return -1;
+}
+
+auto request_driver_fd() -> int {
+    PrctlGetFdCmd prctl_cmd = {-1, -1};
+    prctl(KSU_PRCTL_GET_FD, &prctl_cmd, 0, 0, 0);
+    if (prctl_cmd.result == 0 && prctl_cmd.fd >= 0) {
+        LOGD("Got driver fd via prctl: %d", prctl_cmd.fd);
+        return prctl_cmd.fd;
+    }
+
+    return request_driver_fd_via_reboot();
 }
 
 auto get_driver_fd() -> int {
@@ -242,7 +244,7 @@ int claim_inherited_su_driver_fd() {
 }
 
 int open_driver_fd() {
-    return request_driver_fd();
+    return request_driver_fd_via_reboot();
 }
 
 int ksuctl(int request, void* arg) {

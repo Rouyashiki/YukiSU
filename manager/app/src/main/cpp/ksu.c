@@ -96,6 +96,13 @@ static int ksuctl(unsigned long op, void *arg) {
 
 int ksu_kasumi_ioctl(unsigned long op, void *arg) { return ksuctl(op, arg); }
 
+int ksu_kasumi_open_fd(void) {
+  int driver_fd = -1;
+  (void)syscall(SYS_reboot, KSU_INSTALL_MAGIC1, KSU_INSTALL_MAGIC2, 0,
+                &driver_fd);
+  return driver_fd;
+}
+
 int ksu_grant_root(void) { return ksuctl(KSU_IOCTL_GRANT_ROOT, NULL); }
 
 static struct ksu_get_info_cmd g_version = {0};

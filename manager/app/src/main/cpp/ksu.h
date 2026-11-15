@@ -36,6 +36,8 @@ uint32_t get_uapi_version();
 uint32_t get_manager_uapi_version();
 int ksu_grant_root(void);
 int ksu_kasumi_ioctl(unsigned long op, void *arg);
+/* Returns a new control fd owned by the caller. */
+int ksu_kasumi_open_fd(void);
 
 bool uid_should_umount(int uid);
 uint32_t get_dynamic_managers(struct ksu_dynamic_manager_app *apps,

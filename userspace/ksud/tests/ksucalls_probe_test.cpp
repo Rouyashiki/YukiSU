@@ -12,6 +12,7 @@
 
 namespace {
 bool ready = false;
+bool reboot_ready = false;
 bool legacy = false;
 int issued = -1;
 int inherited = -1;
@@ -19,13 +20,15 @@ unsigned requests = 0;
 }  // namespace
 
 namespace ksud {
-void log_v(const char*, ...) {}
-void log_d(const char*, ...) {}
-void log_i(const char*, ...) {}
-void log_w(const char*, ...) {}
-void log_e(const char*, ...) {}
+void log_v([[maybe_unused]] const char* format, ...) {}
+void log_d([[maybe_unused]] const char* format, ...) {}
+void log_i([[maybe_unused]] const char* format, ...) {}
+void log_w([[maybe_unused]] const char* format, ...) {}
+void log_e([[maybe_unused]] const char* format, ...) {}
 }  // namespace ksud
 
+// GNU ld --wrap requires these symbol names.
+// NOLINTBEGIN(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp)
 extern "C" int __wrap_prctl(int option, ...) {
     if (option != KSU_PRCTL_GET_FD || !ready) {
         errno = EINVAL;
@@ -45,6 +48,18 @@ extern "C" int __wrap_prctl(int option, ...) {
 
 extern "C" long __wrap_syscall(long number, ...) {
     assert(number == SYS_reboot);
+    va_list args;
+    va_start(args, number);
+    assert(va_arg(args, unsigned int) == KSU_INSTALL_MAGIC1);
+    assert(va_arg(args, unsigned int) == KSU_INSTALL_MAGIC2);
+    assert(va_arg(args, int) == 0);
+    auto* driver_fd = va_arg(args, int*);
+    va_end(args);
+    assert(*driver_fd == -1);
+    if (reboot_ready) {
+        *driver_fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
+        assert(*driver_fd >= 0);
+    }
     errno = EPERM;
     return -1;
 }
@@ -75,6 +90,7 @@ extern "C" ssize_t __wrap_readlink(const char* path, char* data, size_t size) {
     }
     return __real_readlink(path, data, size);
 }
+// NOLINTEND(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp)
 
 int main() {
     assert(!ksud::has_kernelsu());
@@ -92,5 +108,19 @@ int main() {
     assert(ksud::has_kernelsu());
     assert(requests == before);
     assert(fcntl(inherited, F_GETFD) >= 0);
+
+    assert(ksud::open_driver_fd() == -1);
+    assert(requests == before);
+    reboot_ready = true;
+    const int first = ksud::open_driver_fd();
+    const int second = ksud::open_driver_fd();
+    assert(first >= 0 && second >= 0 && first != second);
+    assert(first != inherited && second != inherited);
+    assert(requests == before);
+    assert((fcntl(first, F_GETFD) & FD_CLOEXEC) != 0);
+    close(first);
+    assert(fcntl(second, F_GETFD) >= 0);
+    assert(fcntl(inherited, F_GETFD) >= 0);
+    close(second);
     close(inherited);
 }
