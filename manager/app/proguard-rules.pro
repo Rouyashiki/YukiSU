@@ -41,21 +41,21 @@
 
 # MMRL:webui reflection
 -keep class com.dergoogler.mmrl.webui.interfaces.** { *; }
--keep class com.anatdx.yukisu.ui.webui.WebViewInterface { *; }
+-keep class org.rouyashiki.yukisu.ui.webui.WebViewInterface { *; }
 
 -keep,allowobfuscation class * extends com.dergoogler.mmrl.platform.content.IService { *; }
 
 # Module repository state is read by Gson through reflection. Keep the generic signatures and
 # persisted model fields stable across release builds.
 -keepattributes Signature
--keep class com.anatdx.yukisu.data.repository.ModuleRepositoryManager$PersistedState { *; }
--keep class com.anatdx.yukisu.data.repository.RepositoryFormat { *; }
--keep class com.anatdx.yukisu.data.repository.RepositorySource { *; }
--keep class com.anatdx.yukisu.data.repository.ModuleCompatibility { *; }
--keep class com.anatdx.yukisu.data.repository.RepositoryModuleVersion { *; }
--keep class com.anatdx.yukisu.data.repository.RepositoryModule { *; }
--keep class com.anatdx.yukisu.data.repository.RepositorySnapshot { *; }
--keep class com.anatdx.yukisu.data.repository.InstalledModuleBinding { *; }
+-keep class org.rouyashiki.yukisu.data.repository.ModuleRepositoryManager$PersistedState { *; }
+-keep class org.rouyashiki.yukisu.data.repository.RepositoryFormat { *; }
+-keep class org.rouyashiki.yukisu.data.repository.RepositorySource { *; }
+-keep class org.rouyashiki.yukisu.data.repository.ModuleCompatibility { *; }
+-keep class org.rouyashiki.yukisu.data.repository.RepositoryModuleVersion { *; }
+-keep class org.rouyashiki.yukisu.data.repository.RepositoryModule { *; }
+-keep class org.rouyashiki.yukisu.data.repository.RepositorySnapshot { *; }
+-keep class org.rouyashiki.yukisu.data.repository.InstalledModuleBinding { *; }
 
 # commons-compress reaches for zstd-jni, which we do not ship.
 -dontwarn com.github.luben.zstd.**

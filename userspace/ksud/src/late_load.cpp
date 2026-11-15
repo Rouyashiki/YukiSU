@@ -89,7 +89,7 @@ void run_stage_scripts(const std::string& stage, ScriptWait wait) {
 }
 
 void restart_manager(const std::string& package_name) {
-    const std::string activity = package_name + "/com.anatdx.yukisu.ui.MainActivity";
+    const std::string activity = package_name + "/org.rouyashiki.yukisu.ui.MainActivity";
     LOGI("late-load: restarting manager %s", package_name.c_str());
     (void)exec_command({"am", "force-stop", package_name});
     (void)exec_command({"am", "start", "-n", activity});

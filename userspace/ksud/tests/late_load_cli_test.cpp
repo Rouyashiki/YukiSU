@@ -17,9 +17,9 @@ bool validate_config_patch(const json::Value&, std::string&) {
 
 int main() {
     ksud::CliArguments parsed;
-    assert(ksud::parse_cli({"late-load", "--package-name", "com.anatdx.yukisu"}, parsed) == -1);
+    assert(ksud::parse_cli({"late-load", "--package-name", "org.rouyashiki.yukisu"}, parsed) == -1);
     assert(parsed.command == "late-load");
-    assert(parsed.value("--package-name") == "com.anatdx.yukisu");
+    assert(parsed.value("--package-name") == "org.rouyashiki.yukisu");
     assert(ksud::parse_cli({"late-load", "--kmi", "android16-6.12"}, parsed) == -1);
     assert(parsed.value("--kmi") == "android16-6.12");
     assert(ksud::parse_cli({"late-load", "--post-magica", "--package-name", "com.example.manager",

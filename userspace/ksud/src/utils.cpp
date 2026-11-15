@@ -1172,7 +1172,7 @@ int uninstall(const std::optional<std::string>& magiskboot_path) {
     }
 
     printf("- Uninstall YukiSU manager..\n");
-    const auto uninstall_result = exec_command({"pm", "uninstall", "com.anatdx.yukisu"});
+    const auto uninstall_result = exec_command({"pm", "uninstall", DEFAULT_PACKAGE_NAME});
     if (uninstall_result.exit_code != 0) {
         LOGW("Manager uninstall failed: %s", uninstall_result.stderr_str.c_str());
     }

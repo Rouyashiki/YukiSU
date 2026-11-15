@@ -41,7 +41,7 @@ namespace {
 
 static_assert(sizeof(ksu_su_prompt_request) == 56, "su prompt request ABI drift");
 
-constexpr const char* kManagerActivityClass = "com.anatdx.yukisu.ui.SuRequestActivity";
+constexpr const char* kManagerActivityClass = "org.rouyashiki.yukisu.ui.SuRequestActivity";
 constexpr const char* kMsudLockPath = "/data/adb/ksu/msud.lock";
 constexpr uint32_t kPerUserRange = 100000U;
 constexpr uint32_t kMsudStateMagic = 0x4D535553U;  // "MSUS"

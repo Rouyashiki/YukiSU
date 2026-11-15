@@ -60,7 +60,7 @@ bool valid_sha1(std::string_view value) {
 
 std::vector<fs::path> directories() {
     return {KSU_BACKUP_DIR, fs::path("/data/user_de") / std::to_string(getuid() / 100000) /
-                                "com.anatdx.yukisu/boot_backup"};
+                                DEFAULT_PACKAGE_NAME / "boot_backup"};
 }
 
 bool sync_directory(const fs::path& directory) {

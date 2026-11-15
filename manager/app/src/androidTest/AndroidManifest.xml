@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity android:name="ui.screen.ramdisk.RamdiskExportRecipientActivity" android:exported="true">
+        <activity android:name="org.rouyashiki.yukisu.ui.screen.ramdisk.RamdiskExportRecipientActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.SEND" />

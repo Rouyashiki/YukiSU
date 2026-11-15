@@ -147,7 +147,7 @@ static void fillArrayWithList(JNIEnv *env, jobject list, int *data, int count) {
 static jobject app_profile_to_java(JNIEnv *env, struct app_profile profile,
                                    bool useDefaultProfile) {
   jclass cls =
-      GetEnvironment()->FindClass(env, "com/anatdx/yukisu/Natives$Profile");
+      GetEnvironment()->FindClass(env, "org/rouyashiki/yukisu/Natives$Profile");
   jmethodID constructor =
       GetEnvironment()->GetMethodID(env, cls, "<init>", "()V");
   jobject obj = GetEnvironment()->NewObject(env, cls, constructor);
@@ -373,7 +373,7 @@ NativeBridgeNP(getProtectedProfileAppIds, jintArray) {
 
 NativeBridge(setAppProfile, jboolean, jobject profile) {
   jclass cls =
-      GetEnvironment()->FindClass(env, "com/anatdx/yukisu/Natives$Profile");
+      GetEnvironment()->FindClass(env, "org/rouyashiki/yukisu/Natives$Profile");
 
   jfieldID keyField =
       GetEnvironment()->GetFieldID(env, cls, "name", "Ljava/lang/String;");
@@ -720,7 +720,7 @@ static int fork_dont_care_and_exec_ksud(const char *path) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_anatdx_yukisu_magica_AppZygotePreload_forkDontCareAndExecKsud(
+Java_org_rouyashiki_yukisu_magica_AppZygotePreload_forkDontCareAndExecKsud(
     JNIEnv *env, jclass clazz, jstring ksud_path) {
   (void)clazz;
   if (!ksud_path) {

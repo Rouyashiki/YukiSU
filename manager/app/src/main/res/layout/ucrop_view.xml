@@ -11,7 +11,7 @@
         android:layout_height="match_parent"
         android:padding="@dimen/crop_frame_padding" />
 
-    <ui.screen.moreSettings.ScreenRatioOverlayView
+    <org.rouyashiki.yukisu.ui.screen.moreSettings.ScreenRatioOverlayView
         android:id="@+id/view_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

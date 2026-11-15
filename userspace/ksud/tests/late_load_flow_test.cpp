@@ -152,10 +152,11 @@ ExecResult exec_command(const std::vector<std::string>& args) {
 
 int main() {
     using namespace ksud;
-    const auto run = [](bool magica = true) {
+    const auto run = [](bool magica = true,
+                        const std::string& package_name = "org.rouyashiki.yukisu") {
         stages.clear();
         commands.clear();
-        return late_load::run("com.anatdx.yukisu", magica, true);
+        return late_load::run(package_name, magica, true);
     };
     daemon_result = ProcessDaemonizeResult::Parent;
     assert(run() == 0 && cleanup == 0 && loads == 0 && stages.empty());
@@ -168,8 +169,13 @@ int main() {
         assert((stages == std::vector<std::string>{"late-load.d", "system.prop", "mount",
                                                    "post-mount.d", "service", "boot-completed"}));
         assert(commands.size() == 2 && commands[0][1] == "force-stop" &&
-               commands[1][3] == "com.anatdx.yukisu/com.anatdx.yukisu.ui.MainActivity");
+               commands[1][3] == "org.rouyashiki.yukisu/org.rouyashiki.yukisu.ui.MainActivity");
     }
+    assert(run(false, "com.example.manager") == 0 && cleanup == 3);
+    assert((commands[0] == std::vector<std::string>{"am", "force-stop", "com.example.manager"}));
+    assert((commands[1] ==
+            std::vector<std::string>{"am", "start", "-n",
+                                     "com.example.manager/org.rouyashiki.yukisu.ui.MainActivity"}));
     mount_result = 1;
     assert(run(false) == 0 && cleanup == 3);
     assert((stages == std::vector<std::string>{"late-load.d", "system.prop", "mount",

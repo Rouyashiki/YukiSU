@@ -1,4 +1,4 @@
-manager/app/src/main/java/com/anatdx/yukisu/ui/webui/MimeUtil.kt
+manager/app/src/main/java/org/rouyashiki/yukisu/ui/webui/MimeUtil.kt
 
 /*
  * Copyright 2023 The Android Open Source Project
@@ -16,7 +16,7 @@ manager/app/src/main/java/com/anatdx/yukisu/ui/webui/MimeUtil.kt
  * limitations under the License.
  */
 
-manager/app/src/main/java/com/anatdx/yukisu/ui/util/HanziToPinyin.kt
+manager/app/src/main/java/org/rouyashiki/yukisu/ui/util/HanziToPinyin.kt
 
 /*
  * Copyright (C) 2009 The Android Open Source Project

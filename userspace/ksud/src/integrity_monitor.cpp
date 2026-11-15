@@ -36,8 +36,7 @@ namespace {
 constexpr const char* kMonitorLockPath = "/data/adb/ksu/ksud-integrity.lock";
 constexpr const char* kMonitorStatePath = "/data/adb/ksu/ksud-integrity.json";
 constexpr const char* kMonitorStateTemporaryPath = "/data/adb/ksu/.ksud-integrity.tmp";
-constexpr const char* kBroadcastAction = "com.anatdx.yukisu.action.KSUD_INTEGRITY_CHANGED";
-constexpr const char* kFallbackManagerPackage = "com.anatdx.yukisu";
+constexpr const char* kBroadcastAction = "org.rouyashiki.yukisu.action.KSUD_INTEGRITY_CHANGED";
 constexpr uint64_t kMaximumDaemonSize = 128ULL * 1024ULL * 1024ULL;
 constexpr int kSettleMilliseconds = 300;
 constexpr int kReadyTimeoutMilliseconds = 5000;
@@ -343,8 +342,8 @@ void notify_manager() {
     const std::string package = manager_package(manager_uid);
     if (!package.empty())
         broadcast_manager(package, user_id);
-    if (package != kFallbackManagerPackage)
-        broadcast_manager(kFallbackManagerPackage, user_id);
+    if (package != DEFAULT_PACKAGE_NAME)
+        broadcast_manager(DEFAULT_PACKAGE_NAME, user_id);
 }
 
 void publish_change(const FileSnapshot& baseline, const FileSnapshot& current, bool mismatch) {

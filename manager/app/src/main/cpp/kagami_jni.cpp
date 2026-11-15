@@ -507,9 +507,10 @@ jbyteArray result(JNIEnv *env, std::function<std::string()> action) {
 } // namespace
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_anatdx_yukisu_Natives_kagamiRequest(JNIEnv *env, jobject /* thiz */,
-                                             jbyteArray ksud,
-                                             jbyteArray request) {
+Java_org_rouyashiki_yukisu_Natives_kagamiRequest(JNIEnv *env,
+                                                 jobject /* thiz */,
+                                                 jbyteArray ksud,
+                                                 jbyteArray request) {
   try {
     const auto input =
         std::make_shared<const std::pair<std::string, std::string>>(
@@ -525,15 +526,15 @@ Java_com_anatdx_yukisu_Natives_kagamiRequest(JNIEnv *env, jobject /* thiz */,
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiKernelSnapshot(JNIEnv *env,
-                                                    jobject /* thiz */) {
+Java_org_rouyashiki_yukisu_Natives_kasumiKernelSnapshot(JNIEnv *env,
+                                                        jobject /* thiz */) {
   return result(env, kernel_snapshot);
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiRetryUserHide(JNIEnv *env,
-                                                   jobject /* thiz */,
-                                                   jbyteArray path) {
+Java_org_rouyashiki_yukisu_Natives_kasumiRetryUserHide(JNIEnv *env,
+                                                       jobject /* thiz */,
+                                                       jbyteArray path) {
   try {
     const auto input = std::make_shared<const std::string>(bytes(env, path));
     return result(env, [input] {
@@ -549,8 +550,9 @@ Java_com_anatdx_yukisu_Natives_kasumiRetryUserHide(JNIEnv *env,
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_anatdx_yukisu_Natives_saveSuPath(JNIEnv *env, jobject /* thiz */,
-                                          jbyteArray ksud, jbyteArray path) {
+Java_org_rouyashiki_yukisu_Natives_saveSuPath(JNIEnv *env, jobject /* thiz */,
+                                              jbyteArray ksud,
+                                              jbyteArray path) {
   try {
     const auto input =
         std::make_shared<const std::pair<std::string, std::string>>(
@@ -565,26 +567,26 @@ Java_com_anatdx_yukisu_Natives_saveSuPath(JNIEnv *env, jobject /* thiz */,
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiIsInitialized(JNIEnv * /*env*/,
-                                                   jobject /*thiz*/) {
+Java_org_rouyashiki_yukisu_Natives_kasumiIsInitialized(JNIEnv * /*env*/,
+                                                       jobject /*thiz*/) {
   return ksm::is_available() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiRuntimeState(JNIEnv * /*env*/,
-                                                  jobject /*thiz*/) {
+Java_org_rouyashiki_yukisu_Natives_kasumiRuntimeState(JNIEnv * /*env*/,
+                                                      jobject /*thiz*/) {
   return ksm::enabled_state();
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_anatdx_yukisu_Natives_getKasumiConflicts(JNIEnv *env,
-                                                  jobject /*thiz*/) {
+Java_org_rouyashiki_yukisu_Natives_getKasumiConflicts(JNIEnv *env,
+                                                      jobject /*thiz*/) {
   kasumi_conflicts_arg cmd{};
   if (ksu_kasumi_ioctl(KSM_IOC_GET_CONFLICTS, &cmd) != 0 ||
       cmd.count > KSM_CONFLICT_MAX)
     return nullptr;
 
-  jclass cls = env->FindClass("com/anatdx/yukisu/ui/util/KasumiConflict");
+  jclass cls = env->FindClass("org/rouyashiki/yukisu/ui/util/KasumiConflict");
   if (!cls)
     return nullptr;
   jmethodID constructor =
@@ -619,9 +621,9 @@ Java_com_anatdx_yukisu_Natives_getKasumiConflicts(JNIEnv *env,
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_anatdx_yukisu_Natives_ackKasumiConflicts(JNIEnv * /*env*/,
-                                                  jobject /*thiz*/,
-                                                  jlong sequence) {
+Java_org_rouyashiki_yukisu_Natives_ackKasumiConflicts(JNIEnv * /*env*/,
+                                                      jobject /*thiz*/,
+                                                      jlong sequence) {
   kasumi_conflict_ack_arg ack{};
   ack.sequence = static_cast<std::uint64_t>(sequence);
   return ksu_kasumi_ioctl(KSM_IOC_ACK_CONFLICTS, &ack) == 0 ? JNI_TRUE
@@ -629,8 +631,9 @@ Java_com_anatdx_yukisu_Natives_ackKasumiConflicts(JNIEnv * /*env*/,
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiReadLog(JNIEnv *env, jobject /* thiz */,
-                                             jboolean kernel) {
+Java_org_rouyashiki_yukisu_Natives_kasumiReadLog(JNIEnv *env,
+                                                 jobject /* thiz */,
+                                                 jboolean kernel) {
   return result(env, [kernel] {
     if (!kernel)
       return read_tail(log_path, 256UL * 1024, 1000);
@@ -645,9 +648,9 @@ Java_com_anatdx_yukisu_Natives_kasumiReadLog(JNIEnv *env, jobject /* thiz */,
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiStorageInfo(JNIEnv *env,
-                                                 jobject /* thiz */,
-                                                 jbyteArray path) {
+Java_org_rouyashiki_yukisu_Natives_kasumiStorageInfo(JNIEnv *env,
+                                                     jobject /* thiz */,
+                                                     jbyteArray path) {
   try {
     const auto target = std::make_shared<const std::string>(bytes(env, path));
     return result(env, [target] {
@@ -678,7 +681,8 @@ Java_com_anatdx_yukisu_Natives_kasumiStorageInfo(JNIEnv *env,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiClearLog(JNIEnv *env, jobject /* thiz */) {
+Java_org_rouyashiki_yukisu_Natives_kasumiClearLog(JNIEnv *env,
+                                                  jobject /* thiz */) {
   auto *unused = result(env, [] {
     clear_log(log_path);
     return std::string{};
@@ -688,8 +692,8 @@ Java_com_anatdx_yukisu_Natives_kasumiClearLog(JNIEnv *env, jobject /* thiz */) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiClearMapsRules(JNIEnv *env,
-                                                    jobject /* thiz */) {
+Java_org_rouyashiki_yukisu_Natives_kasumiClearMapsRules(JNIEnv *env,
+                                                        jobject /* thiz */) {
   auto *unused = result(env, [] {
     if (!ksm::clear_maps_rules())
       failure("Clear Maps rules");
@@ -700,10 +704,10 @@ Java_com_anatdx_yukisu_Natives_kasumiClearMapsRules(JNIEnv *env,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_anatdx_yukisu_Natives_kasumiAddMapsRule(JNIEnv *env,
-                                                 jobject /* thiz */,
-                                                 jlongArray numbers,
-                                                 jbyteArray path) {
+Java_org_rouyashiki_yukisu_Natives_kasumiAddMapsRule(JNIEnv *env,
+                                                     jobject /* thiz */,
+                                                     jlongArray numbers,
+                                                     jbyteArray path) {
   try {
     if (!numbers || env->GetArrayLength(numbers) != 4)
       failure("Invalid Maps fields", EINVAL);

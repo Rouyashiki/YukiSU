@@ -276,7 +276,7 @@ abstract class WebUiReflectionPatch : AsmClassVisitorFactory<InstrumentationPara
 
     companion object {
         const val WEB_COLORS = "com/dergoogler/mmrl/webui/model/WebColors"
-        const val HELPER = "com/anatdx/yukisu/ui/webui/WebUiColorMaps"
+        const val HELPER = "org/rouyashiki/yukisu/ui/webui/WebUiColorMaps"
         const val SNAPSHOT = "$HELPER\$Snapshot"
         val TARGETS = mapOf(
             WEB_COLORS to "<init>(Landroidx/compose/material3/ColorScheme;)V",
@@ -750,10 +750,11 @@ android {
             }
         }
     }
-    namespace = "com.anatdx.yukisu"
+    namespace = "org.rouyashiki.yukisu"
 
     defaultConfig {
-        testInstrumentationRunner = "ui.screen.ramdisk.RamdiskFileActionsTestRunner"
+        applicationId = "org.rouyashiki.yukisu"
+        testInstrumentationRunner = "org.rouyashiki.yukisu.ui.screen.ramdisk.RamdiskFileActionsTestRunner"
         buildConfigField("String", "KSUD_BUNDLED_VERSION", "\"$ksudBundledVersion\"")
         buildConfigField("long", "CI_RUN_ID", "${ciRunId}L")
         manifestPlaceholders["ciRunId"] = "run-$ciRunId"

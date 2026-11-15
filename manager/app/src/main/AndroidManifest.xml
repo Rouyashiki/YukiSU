@@ -40,10 +40,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.KernelSU"
         android:directBootAware="true"
-        android:zygotePreloadName="com.anatdx.yukisu.magica.AppZygotePreload"
+        android:zygotePreloadName="org.rouyashiki.yukisu.magica.AppZygotePreload"
         tools:targetApi="34">
         <meta-data
-            android:name="com.anatdx.yukisu.CI_RUN_ID"
+            android:name="org.rouyashiki.yukisu.CI_RUN_ID"
             android:value="${ciRunId}" />
         <activity
             android:name=".ui.MainActivity"
@@ -162,7 +162,7 @@
             android:permission="${applicationId}.permission.REPORT_KSUD_INTEGRITY"
             android:process=":boot">
             <intent-filter>
-                <action android:name="com.anatdx.yukisu.action.KSUD_INTEGRITY_CHANGED" />
+                <action android:name="org.rouyashiki.yukisu.action.KSUD_INTEGRITY_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -186,7 +186,7 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
             <intent-filter>
-                <action android:name="com.anatdx.yukisu.magica.LAUNCH" />
+                <action android:name="org.rouyashiki.yukisu.magica.LAUNCH" />
             </intent-filter>
         </receiver>
 

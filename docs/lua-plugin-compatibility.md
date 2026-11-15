@@ -87,8 +87,8 @@ ctest --test-dir build/soft-reboot --output-on-failure
 ```sh
 cd manager
 ./gradlew :app:testDebugUnitTest \
-  --tests com.anatdx.yukisu.ui.viewmodel.PluginCompatibilityTest \
-  --tests com.anatdx.yukisu.ui.screen.PluginConfigDialogTest \
+  --tests org.rouyashiki.yukisu.ui.viewmodel.PluginCompatibilityTest \
+  --tests org.rouyashiki.yukisu.ui.screen.PluginConfigDialogTest \
   :app:lintRelease
 ```
 

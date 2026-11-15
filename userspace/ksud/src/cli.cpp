@@ -207,7 +207,7 @@ int cmd_debug(const std::vector<std::string>& args) {
     const std::string& subcmd = args[0];
 
     if (subcmd == "set-manager") {
-        const std::string pkg = args.size() > 1 ? args[1] : "com.anatdx.yukisu";
+        const std::string pkg = args.size() > 1 ? args[1] : DEFAULT_PACKAGE_NAME;
         return debug_set_manager(pkg);
     } else if (subcmd == "insmod" && args.size() > 1) {
         return debug_insmod(args[1], std::vector<std::string>(args.begin() + 2, args.end()));

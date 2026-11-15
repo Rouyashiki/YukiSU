@@ -1,0 +1,390 @@
+package org.rouyashiki.yukisu.ui.screen.moreSettings.component
+
+import android.content.Context
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
+import com.maxkeppeker.sheets.core.models.base.Header
+import com.maxkeppeker.sheets.core.models.base.rememberUseCaseState
+import com.maxkeppeler.sheets.list.ListDialog
+import com.maxkeppeler.sheets.list.models.ListOption
+import com.maxkeppeler.sheets.list.models.ListSelection
+import org.rouyashiki.yukisu.ui.screen.moreSettings.util.LocaleHelper
+import org.rouyashiki.yukisu.R
+import org.rouyashiki.yukisu.ui.theme.*
+import org.rouyashiki.yukisu.ui.component.YukiIcon
+import org.rouyashiki.yukisu.ui.component.YukiAlertDialog
+import org.rouyashiki.yukisu.ui.component.YukiDialogTheme
+import org.rouyashiki.yukisu.ui.component.performClickHapticFeedback
+import org.rouyashiki.yukisu.ui.screen.moreSettings.MoreSettingsHandlers
+import org.rouyashiki.yukisu.ui.screen.moreSettings.state.MoreSettingsState
+
+@Composable
+fun MoreSettingsDialogs(
+    state: MoreSettingsState,
+    handlers: MoreSettingsHandlers
+) {
+    if (state.showMotionPresetDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.motion_preset_title),
+            options = state.motionPresetOptions,
+            selectedIndex = ThemeConfig.motionPreset.ordinal,
+            onOptionSelected = handlers::handleMotionPresetChange,
+            onDismiss = { state.showMotionPresetDialog = false },
+        )
+    }
+
+    if (state.showPageTransitionStyleDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.page_transition_title),
+            options = state.pageTransitionStyleOptions,
+            selectedIndex = ThemeConfig.pageTransitionStyle.ordinal,
+            onOptionSelected = handlers::handlePageTransitionStyleChange,
+            onDismiss = { state.showPageTransitionStyleDialog = false },
+        )
+    }
+
+    if (state.showThemeModeDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.theme_mode),
+            options = state.themeOptions,
+            selectedIndex = state.themeMode,
+            onOptionSelected = { index ->
+                handlers.handleThemeModeChange(index)
+            },
+            onDismiss = { state.showThemeModeDialog = false }
+        )
+    }
+
+    if (state.showDpiConfirmDialog) {
+        ConfirmDialog(
+            title = stringResource(R.string.dpi_confirm_title),
+            message = stringResource(R.string.dpi_confirm_message, state.currentDpi, state.tempDpi),
+            summaryText = stringResource(R.string.dpi_confirm_summary),
+            confirmText = stringResource(R.string.confirm),
+            dismissText = stringResource(R.string.cancel),
+            onConfirm = { handlers.handleDpiApply() },
+            onDismiss = {
+                state.showDpiConfirmDialog = false
+                state.tempDpi = state.currentDpi
+            }
+        )
+    }
+
+    if (state.showThemeColorDialog) {
+        ThemeColorDialog(
+            onColorSelected = { theme ->
+                handlers.handleThemeColorChange(theme)
+                state.showThemeColorDialog = false
+            },
+            onDismiss = { state.showThemeColorDialog = false }
+        )
+    }
+}
+
+@Composable
+fun SingleChoiceDialog(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    YukiAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                options.forEachIndexed { index, option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onOptionSelected(index)
+                                onDismiss()
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedIndex == index,
+                            onClick = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(option)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun ConfirmDialog(
+    title: String,
+    message: String,
+    summaryText: String? = null,
+    confirmText: String = stringResource(R.string.confirm),
+    dismissText: String = stringResource(R.string.cancel),
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    YukiAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(message)
+                if (summaryText != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        summaryText,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmText)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(dismissText)
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LanguageSelectionDialog(
+    onLanguageSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val feedbackView = LocalView.current
+    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    // Check if should use system language settings
+    if (LocaleHelper.useSystemLanguageSettings) {
+        // Android 13+ - Jump to system settings
+        LocaleHelper.launchSystemLanguageSettings(context)
+        onDismiss()
+    } else {
+        // Android < 13 - Show app language selector
+        // Dynamically detect supported locales from resources
+        val supportedLocales = remember(resources.configuration) {
+            val locales = mutableListOf<java.util.Locale>()
+
+            // Add system default first
+            locales.add(java.util.Locale.ROOT) // This will represent "System Default"
+
+            // Dynamically detect available locales by checking resource directories
+            val resourceDirs = listOf(
+                "ar", "bg", "de", "fa", "fr", "hu", "in", "it",
+                "ja", "ko", "pl", "pt-rBR", "ru", "th", "tr",
+                "uk", "vi", "zh-rCN", "zh-rTW"
+            )
+
+            resourceDirs.forEach { dir ->
+                try {
+                    val locale = when {
+                        dir.contains("-r") -> {
+                            val parts = dir.split("-r")
+                            java.util.Locale.Builder()
+                                .setLanguage(parts[0])
+                                .setRegion(parts[1])
+                                .build()
+                        }
+                        else -> java.util.Locale.Builder()
+                            .setLanguage(dir)
+                            .build()
+                    }
+
+                    // Test if this locale has translated resources
+                    val config = android.content.res.Configuration()
+                    config.setLocale(locale)
+                    val localizedContext = context.createConfigurationContext(config)
+
+                    // Try to get a translated string to verify the locale is supported
+                    val testString = localizedContext.getString(R.string.settings_language)
+                    val defaultString = resources.getString(R.string.settings_language)
+
+                    // If the string is different or it's English, it's supported
+                    if (testString != defaultString || locale.language == "en") {
+                        locales.add(locale)
+                    }
+                } catch (_: Exception) {
+                    // Skip unsupported locales
+                }
+            }
+
+            // Sort by display name
+            val sortedLocales = locales.drop(1).sortedBy { it.getDisplayName(it) }
+            mutableListOf<java.util.Locale>().apply {
+                add(locales.first()) // System default first
+                addAll(sortedLocales)
+            }
+        }
+
+        val allOptions = supportedLocales.map { locale ->
+            val tag = if (locale == java.util.Locale.ROOT) {
+                "system"
+            } else if (locale.country.isEmpty()) {
+                locale.language
+            } else {
+                "${locale.language}_${locale.country}"
+            }
+
+            val displayName = if (locale == java.util.Locale.ROOT) {
+                resources.getString(R.string.language_system_default)
+            } else {
+                locale.getDisplayName(locale)
+            }
+
+            tag to displayName
+        }
+
+        val currentLocale = prefs.getString("app_locale", "system") ?: "system"
+        val options = allOptions.map { (tag, displayName) ->
+            ListOption(
+                titleText = displayName,
+                selected = currentLocale == tag
+            )
+        }
+
+        var selectedIndex by remember {
+            mutableIntStateOf(allOptions.indexOfFirst { (tag, _) -> currentLocale == tag })
+        }
+
+        YukiDialogTheme {
+            ListDialog(
+                state = rememberUseCaseState(
+                    visible = true,
+                    onFinishedRequest = {
+                        feedbackView.performClickHapticFeedback()
+                        if (selectedIndex >= 0 && selectedIndex < allOptions.size) {
+                            val newLocale = allOptions[selectedIndex].first
+                            prefs.edit { putString("app_locale", newLocale) }
+                            onLanguageSelected(newLocale)
+                        }
+                        onDismiss()
+                    },
+                    onCloseRequest = {
+                        onDismiss()
+                    }
+                ),
+                header = Header.Default(
+                    title = stringResource(R.string.settings_language),
+                ),
+                selection = ListSelection.Single(
+                    showRadioButtons = true,
+                    options = options
+                ) { index, _ ->
+                    feedbackView.performClickHapticFeedback()
+                    selectedIndex = index
+                }
+            )
+        }
+    }
+}
+@Composable
+fun ThemeColorDialog(
+    onColorSelected: (ThemeColors) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val baseThemeColorOptions = listOf(
+        stringResource(R.string.color_default) to ThemeColors.Default,
+        stringResource(R.string.color_green) to ThemeColors.Green,
+        stringResource(R.string.color_purple) to ThemeColors.Purple,
+        stringResource(R.string.color_orange) to ThemeColors.Orange,
+        stringResource(R.string.color_pink) to ThemeColors.Pink,
+        stringResource(R.string.color_gray) to ThemeColors.Gray,
+        stringResource(R.string.color_yellow) to ThemeColors.Yellow
+    )
+
+    val themeColorOptions = if (ThemeConfig.isTransPrideUnlocked) {
+        baseThemeColorOptions + (stringResource(R.string.color_trans_pride) to ThemeColors.TransPride)
+    } else {
+        baseThemeColorOptions
+    }
+
+    YukiAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.choose_theme_color)) },
+        text = {
+            Column {
+                themeColorOptions.forEach { (name, theme) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onColorSelected(theme) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val isDark = isSystemInDarkTheme()
+                        Box(
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                ColorCircle(
+                                    color = if (isDark) theme.primaryDark else theme.primaryLight,
+                                    isSelected = false,
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+                                ColorCircle(
+                                    color = if (isDark) theme.secondaryDark else theme.secondaryLight,
+                                    isSelected = false,
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+                                ColorCircle(
+                                    color = if (isDark) theme.tertiaryDark else theme.tertiaryLight,
+                                    isSelected = false,
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+                            }
+                        }
+                        Text(name)
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (ThemeConfig.currentTheme::class == theme::class) {
+                            YukiIcon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss
+            ) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}

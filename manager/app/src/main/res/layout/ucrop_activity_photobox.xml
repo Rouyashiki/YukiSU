@@ -40,7 +40,7 @@
             tools:background="@drawable/crop_logo"
             tools:ignore="ContentDescription,MissingPrefix" />
 
-        <ui.screen.moreSettings.ScreenRatioUCropView
+        <org.rouyashiki.yukisu.ui.screen.moreSettings.ScreenRatioUCropView
             android:id="@+id/ucrop"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
