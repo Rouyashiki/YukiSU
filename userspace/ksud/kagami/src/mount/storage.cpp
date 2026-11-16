@@ -1,4 +1,5 @@
 #include "mount/storage.hpp"
+#include "core/ksucalls.hpp"
 #include "core/runtime.hpp"
 #include "kagami/embedded.hpp"
 #include "utils.hpp"
@@ -432,6 +433,11 @@ Handle setup(const Config& config) {
     }
     if (!finalize(h.content_dir))
         return Handle{};
+    if (ksud::nuke_ext4_sysfs(h.content_dir) != 0) {
+        mlog("storage: nuke ext4 sysfs failed for " + h.content_dir + ": " + std::strerror(errno),
+             logging::Level::Error);
+        return Handle{};
+    }
     h.mode = Mode::Ext4;
     if (!record_mirror(config, base, h.mode == Mode::Erofs ? h.rw_dir : ""))
         return Handle{};
