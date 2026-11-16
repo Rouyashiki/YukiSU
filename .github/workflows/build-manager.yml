@@ -352,6 +352,7 @@ jobs:
       - name: Sign CI update metadata with GPG
         if: steps.gpg_check.outputs.available == 'true' && github.ref_name == 'main'
         env:
+          CI_REPOSITORY: ${{ github.repository }}
           CI_BRANCH: ${{ github.ref_name }}
           CI_COMMIT_SHA: ${{ github.sha }}
           CI_RUN_ID: ${{ github.run_id }}
@@ -384,7 +385,7 @@ jobs:
           apk_path = Path(os.environ["MANAGER_APK"])
           metadata = {
               "schema_version": 1,
-              "repository": "Anatdx/YukiSU",
+              "repository": os.environ["CI_REPOSITORY"],
               "workflow": "build-manager.yml",
               "branch": os.environ["CI_BRANCH"],
               "run_id": int(os.environ["CI_RUN_ID"]),

@@ -78,18 +78,20 @@ sealed interface CiInstallResult {
 
 object CiUpdateManager {
     private const val TAG = "CiUpdateManager"
+    private const val REPOSITORY = "Rouyashiki/YukiSU"
+    private const val PAGES_BASE_URL = "https://yukisuupdates.rouyashiki.org"
     private const val RUNS_API =
-        "https://api.github.com/repos/Anatdx/YukiSU/actions/workflows/build-manager.yml/runs" +
+        "https://api.github.com/repos/$REPOSITORY/actions/workflows/build-manager.yml/runs" +
             "?branch=main&status=success&per_page=1&exclude_pull_requests=true"
-    private const val PAGES_METADATA_URL = "https://ci.yukisu.anatdx.com/ci-update.json"
-    private const val PAGES_METADATA_SIGNATURE_URL = "https://ci.yukisu.anatdx.com/ci-update.sig"
+    private const val PAGES_METADATA_URL = "$PAGES_BASE_URL/ci-update.json"
+    private const val PAGES_METADATA_SIGNATURE_URL = "$PAGES_BASE_URL/ci-update.sig"
     private const val NIGHTLY_METADATA_URL =
-        "https://nightly.link/Anatdx/YukiSU/workflows/build-manager/main/" +
+        "https://nightly.link/$REPOSITORY/workflows/build-manager/main/" +
             "Manager-update-metadata.zip"
     private const val PAGES_ARCHIVE_URL =
-        "https://ci.yukisu.anatdx.com/Manager-arm64-v8a.zip"
+        "$PAGES_BASE_URL/Manager-arm64-v8a.zip"
     private const val NIGHTLY_ARCHIVE_URL =
-        "https://nightly.link/Anatdx/YukiSU/workflows/build-manager/main/Manager-arm64-v8a.zip"
+        "https://nightly.link/$REPOSITORY/workflows/build-manager/main/Manager-arm64-v8a.zip"
     private const val APK_NAME = "app-release.apk"
     private const val SIGNATURE_NAME = "app-release.sig"
     private const val UPDATE_CACHE_DIR = "ci-update"
@@ -326,7 +328,7 @@ object CiUpdateManager {
 
     private suspend fun requestManagerVersionCode(commitSha: String): Int {
         val request = Request.Builder()
-            .url("https://api.github.com/repos/Anatdx/YukiSU/commits?sha=$commitSha&per_page=1")
+            .url("https://api.github.com/repos/$REPOSITORY/commits?sha=$commitSha&per_page=1")
             .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -380,7 +382,7 @@ object CiUpdateManager {
         check(metadata.optInt("schema_version") == 1) {
             message(R.string.ci_update_error_metadata_invalid)
         }
-        check(metadata.optString("repository") == "Anatdx/YukiSU") {
+        check(metadata.optString("repository") == REPOSITORY) {
             message(R.string.ci_update_error_metadata_invalid)
         }
         check(metadata.optString("workflow") == "build-manager.yml") {
