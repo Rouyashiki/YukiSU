@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -79,6 +80,9 @@ internal class PageMotion(
     fun <T> enterSpec(): FiniteAnimationSpec<T> =
         if (motion.enabled) tween(360, easing = FastOutSlowInEasing) else snap()
 
+    fun revealScaleSpec(): FiniteAnimationSpec<Float> =
+        if (motion.enabled) tween(360, easing = LinearOutSlowInEasing) else snap()
+
     fun <T> returnSpec(): FiniteAnimationSpec<T> =
         if (motion.enabled) tween(220, easing = FastOutSlowInEasing) else snap()
 
@@ -117,7 +121,7 @@ internal class ForwardPageMotion(
         slide -> motion.slideOpeningScale
         else -> motion.openingScale
     })
-    private val alpha = Animatable(if (slide) 1f else if (bottomBar) 0f else 0.35f)
+    private val alpha = Animatable(if (slide) 1f else 0f)
     private var job: Job? = null
     private var frozen by mutableStateOf<ForwardPageTransform?>(null)
     var finished by mutableStateOf(false)
@@ -142,8 +146,8 @@ internal class ForwardPageMotion(
         try {
             coroutineScope {
                 launch { offset.animateTo(0f, if (slide) motion.slideOffsetSpec() else snap()) }
-                launch { scale.animateTo(1f, if (slide) motion.slideScaleSpec() else motion.enterSpec()) }
-                launch { alpha.animateTo(1f, if (bottomBar) motion.enterSpec() else tween(140)) }
+                launch { scale.animateTo(1f, if (slide) motion.slideScaleSpec() else motion.revealScaleSpec()) }
+                launch { alpha.animateTo(1f, if (bottomBar) motion.enterSpec() else tween(140, easing = LinearEasing)) }
             }
             finished = true
         } finally {

@@ -62,6 +62,33 @@ class NavigationHostUiTest {
     private var preset by mutableStateOf(MotionPreset.QBouncy)
 
     @Test
+    fun aRevealDoesNotFlashAStillPageBeforeItsFirstAnimatedFrame() {
+        mount()
+        for (mode in listOf(MotionPreset.Soft, MotionPreset.QBouncy)) {
+            compose.runOnIdle { preset = mode }
+            compose.onNodeWithTag("open").performClick()
+            frames(2)
+            val initial = bounds("detail")
+            assertColor(Color.Blue)
+            frames(1)
+            assertColor(Color.Blue)
+            frames(1)
+            val entering = bounds("detail")
+            assertTrue(entering.width > initial.width + 1f, "$mode barely moved on its first animated frame")
+            val pixels = compose.onNodeWithTag("viewport").captureToImage().toPixelMap()
+            val center = pixels[pixels.width / 2, pixels.height / 2]
+            assertTrue(center.red in 0.05f..0.5f && center.blue in 0.5f..0.95f,
+                "$mode did not fade in smoothly from the previous page: $center")
+            frames(30)
+            assertFullPage("detail", bounds("viewport"))
+            assertColor(Color.Red)
+            compose.onNodeWithTag("back").performClick()
+            frames(30)
+            assertColor(Color.Blue)
+        }
+    }
+
+    @Test
     fun realPredictiveEventsShrinkThePageFromBothEdgesAndCancelWithoutFadingItAway() {
         mount()
         for (mode in PageTransitionStyle.entries) {
