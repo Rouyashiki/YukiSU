@@ -24,11 +24,22 @@ jobs:
 
       - name: Merge Manager APKs
         run: |
+          set -euo pipefail
           mkdir -p Manager
           for dir in Manager-arm64-v8a; do
             if [ -d "$dir" ]; then
-              find "$dir" -name "*.apk" -exec cp {} Manager/ \;
-              find "$dir" -name "*.sig" -exec cp {} Manager/ \;
+              gradle_dir="${dir/Manager-/Manager-gradle-}"
+              gradle_apks=("$gradle_dir"/*.apk)
+              if [ "${#gradle_apks[@]}" -ne 1 ] || [ ! -f "${gradle_apks[0]}" ]; then
+                echo "Expected exactly one Gradle APK in $gradle_dir" >&2
+                exit 1
+              fi
+              apk_name=$(basename "${gradle_apks[0]}")
+              # Preserve the final payloads; Gradle supplies only the versioned filename.
+              cp -- "$dir/app-release.apk" "Manager/$apk_name"
+              if [ -f "$dir/app-release.sig" ]; then
+                cp -- "$dir/app-release.sig" "Manager/${apk_name%.apk}.sig"
+              fi
             fi
           done
           ls -la Manager/
@@ -106,4 +117,3 @@ jobs:
             android*-lkm/*_kernelsu.ko
             android*-lkm/*_kernelsu.ko.sig
             ksud/ksud-*
-            ksud/*.sig
