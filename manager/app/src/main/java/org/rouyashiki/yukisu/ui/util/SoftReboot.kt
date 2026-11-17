@@ -21,7 +21,8 @@ private const val SETTINGS_PREFS = "settings"
 private const val KEY_USE_SOFT_REBOOT = "soft_reboot"
 private val softRebootScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 private var refreshJob: Job? = null
-private var rebootJob: Job? = null
+internal var rebootRequestPending by mutableStateOf(false)
+    private set
 
 data class SoftRebootStatus(
     val known: Boolean = false,
@@ -59,7 +60,7 @@ private suspend fun querySoftRebootStatus(): SoftRebootStatus = withContext(Disp
 }
 
 fun refreshSoftRebootStatus() {
-    if (refreshJob?.isActive == true || rebootJob?.isActive == true) return
+    if (refreshJob?.isActive == true || rebootRequestPending) return
     refreshJob = softRebootScope.launch { softRebootStatus = querySoftRebootStatus() }
 }
 
@@ -93,30 +94,49 @@ fun softRebootResultMessage(
     else -> null
 }
 
-fun requestSoftReboot() {
-    if (rebootJob?.isActive == true) return
-    refreshJob?.cancel()
-    rebootJob = softRebootScope.launch {
-        softRebootStatus = querySoftRebootStatus()
-        if (!softRebootStatus.supported) {
-            Toast.makeText(ksuApp, softRebootBlockedMessage(), Toast.LENGTH_LONG).show()
+internal fun requestReboot(soft: Boolean) {
+    softRebootScope.launch {
+        if (rebootRequestPending || softRebootStatus.running) return@launch
+        rebootRequestPending = true
+        if (!soft) {
+            val accepted = withContext(Dispatchers.IO) {
+                runCatching { rebootDevice() }.getOrDefault(false)
+            }
+            if (!accepted) {
+                rebootRequestPending = false
+                Toast.makeText(ksuApp, R.string.operation_failed, Toast.LENGTH_LONG).show()
+            }
             return@launch
         }
-        val accepted = withContext(Dispatchers.IO) {
-            runCatching { execKsud("soft-reboot", newShell = true) }.getOrDefault(false)
+        refreshJob?.cancel()
+        try {
+            submitSoftReboot()
+        } finally {
+            rebootRequestPending = false
         }
-        if (accepted) {
-            softRebootStatus = softRebootStatus.copy(supported = false, running = true)
-            Toast.makeText(ksuApp, R.string.soft_reboot_accepted, Toast.LENGTH_LONG).show()
-        } else {
-            softRebootStatus = querySoftRebootStatus()
-            Toast.makeText(
-                ksuApp,
-                if (softRebootStatus.result == "failed") softRebootResultMessage()
-                    else ksuApp.getString(R.string.soft_reboot_rejected),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
+    }
+}
+
+private suspend fun submitSoftReboot() {
+    softRebootStatus = querySoftRebootStatus()
+    if (!softRebootStatus.supported) {
+        Toast.makeText(ksuApp, softRebootBlockedMessage(), Toast.LENGTH_LONG).show()
+        return
+    }
+    val accepted = withContext(Dispatchers.IO) {
+        runCatching { execKsud("soft-reboot", newShell = true) }.getOrDefault(false)
+    }
+    if (accepted) {
+        softRebootStatus = softRebootStatus.copy(supported = false, running = true)
+        Toast.makeText(ksuApp, R.string.soft_reboot_accepted, Toast.LENGTH_LONG).show()
+    } else {
+        softRebootStatus = querySoftRebootStatus()
+        Toast.makeText(
+            ksuApp,
+            if (softRebootStatus.result == "failed") softRebootResultMessage()
+                else ksuApp.getString(R.string.soft_reboot_rejected),
+            Toast.LENGTH_LONG,
+        ).show()
     }
 }
 

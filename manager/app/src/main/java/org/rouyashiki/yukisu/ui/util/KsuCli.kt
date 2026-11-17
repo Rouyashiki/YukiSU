@@ -1906,15 +1906,19 @@ fun restartAdbd(): Boolean =
 
 fun reboot(reason: String = "") {
     if (reason == "soft_reboot") {
-        requestSoftReboot()
+        requestReboot(soft = true)
         return
     }
+    rebootDevice(reason)
+}
+
+internal fun rebootDevice(reason: String = ""): Boolean {
     val shell = getRootShell()
     if (reason == "recovery") {
         // KEYCODE_POWER = 26, hide incorrect "Factory data reset" message
         ShellUtils.fastCmd(shell, "/system/bin/input keyevent 26")
     }
-    ShellUtils.fastCmd(shell, "/system/bin/svc power reboot $reason || /system/bin/reboot $reason")
+    return ShellUtils.fastCmdResult(shell, "/system/bin/svc power reboot $reason || /system/bin/reboot $reason")
 }
 
 fun rootAvailable(): Boolean {

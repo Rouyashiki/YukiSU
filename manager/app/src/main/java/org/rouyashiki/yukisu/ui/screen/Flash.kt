@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.Warning
@@ -31,11 +32,15 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.ui.platform.LocalUriHandler
 import com.ramcosta.composedestinations.annotation.Destination
@@ -75,8 +80,6 @@ enum class FlashingStatus {
     FAILED
 }
 
-private var currentFlashingStatus = mutableStateOf(FlashingStatus.FLASHING)
-
 // ??????????
 data class ModuleInstallStatus(
     val totalModules: Int = 0,
@@ -86,10 +89,6 @@ data class ModuleInstallStatus(
 )
 
 private var moduleInstallStatus = mutableStateOf(ModuleInstallStatus())
-
-fun setFlashingStatus(status: FlashingStatus) {
-    currentFlashingStatus.value = status
-}
 
 fun updateModuleInstallStatus(
     totalModules: Int? = null,
@@ -118,9 +117,11 @@ fun updateModuleInstallStatus(
 @Destination<RootGraph>
 fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
     val context = LocalContext.current
-    val softReboot = (flashIt is FlashIt.FlashModule ||
+    val isModuleFlash = flashIt is FlashIt.FlashModule ||
         flashIt is FlashIt.FlashModules ||
-        flashIt is FlashIt.FlashModuleUpdate) && isSoftRebootPreferred(context)
+        flashIt is FlashIt.FlashModuleUpdate
+    val softReboot = isModuleFlash && isSoftRebootPreferred(context)
+    val isLastFlash = flashIt !is FlashIt.FlashModules || flashIt.currentIndex >= flashIt.uris.lastIndex
 
     val isExternalInstall = remember {
         when (flashIt) {
@@ -140,7 +141,8 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
     var text by rememberSaveable { mutableStateOf("") }
     var tempText: String
     val logContent = remember { StringBuilder() }
-    var showFloatAction by rememberSaveable { mutableStateOf(false) }
+    var flashingStatus by rememberSaveable(flashIt) { mutableStateOf(FlashingStatus.FLASHING) }
+    var showRebootAction by rememberSaveable(flashIt) { mutableStateOf(false) }
     var shouldWarningUserMetaModule by rememberSaveable { mutableStateOf(false) }
     var hasFlashCompleted by rememberSaveable { mutableStateOf(false) }
     var hasExecuted by rememberSaveable { mutableStateOf(false) }
@@ -231,8 +233,6 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
         hasUpdateExecuted = true
 
         withContext(Dispatchers.IO) {
-            setFlashingStatus(FlashingStatus.FLASHING)
-
             try {
                 logContent.append(text).append("\n")
             } catch (_: Exception) {
@@ -240,11 +240,12 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
             }
 
             flashModuleUpdate(flashIt.uri, onFinish = { showReboot, code ->
+                showRebootAction = showReboot
                 if (code != 0) {
                     text += "$errorCodeString $code.\n$checkLogString\n"
-                    setFlashingStatus(FlashingStatus.FAILED)
+                    flashingStatus = FlashingStatus.FAILED
                 } else {
-                    setFlashingStatus(FlashingStatus.SUCCESS)
+                    flashingStatus = FlashingStatus.SUCCESS
                     viewModel.markNeedRefresh()
                     scope.launch(Dispatchers.IO) {
                         getModuleIdFromUri(context, flashIt.uri)?.let { moduleId ->
@@ -254,7 +255,6 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                 }
                 if (showReboot) {
                     text += "\n\n\n"
-                    showFloatAction = true
 
                     // ????????????????????
                     if (isExternalInstall) {
@@ -300,8 +300,6 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
         hasExecuted = true
 
         withContext(Dispatchers.IO) {
-            setFlashingStatus(FlashingStatus.FLASHING)
-
             if (flashIt is FlashIt.FlashModules) {
                 try {
                     val currentUri = flashIt.uris[flashIt.currentIndex]
@@ -318,9 +316,10 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
             }
 
             flashIt(flashIt, onFinish = { showReboot, code ->
+                showRebootAction = showReboot
                 if (code != 0) {
                     text += "$errorCodeString $code.\n$checkLogString\n"
-                    setFlashingStatus(FlashingStatus.FAILED)
+                    flashingStatus = FlashingStatus.FAILED
 
                     if (flashIt is FlashIt.FlashModules) {
                         updateModuleInstallStatus(
@@ -336,7 +335,7 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                     configuredSuperKey?.takeIf(String::isNotBlank)?.let { superKey ->
                         SuperKeyHelper.saveSuperKey(context, superKey)
                     }
-                    setFlashingStatus(FlashingStatus.SUCCESS)
+                    flashingStatus = FlashingStatus.SUCCESS
                     viewModel.markNeedRefresh()
                     if (flashIt is FlashIt.FlashModule &&
                         flashIt.repositorySourceId != null &&
@@ -381,7 +380,6 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                 }
                 if (showReboot) {
                     text += "\n\n\n"
-                    showFloatAction = true
                 }
 
                 hasFlashCompleted = true
@@ -446,13 +444,8 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
         }
     }
 
-    val onBack: () -> Unit = {
-        val canGoBack = when (flashIt) {
-            is FlashIt.FlashModuleUpdate -> currentFlashingStatus.value != FlashingStatus.FLASHING
-            else -> currentFlashingStatus.value != FlashingStatus.FLASHING
-        }
-
-        if (canGoBack) {
+    val onBack = dropUnlessResumed {
+        if (flashingStatus != FlashingStatus.FLASHING) {
             if (isExternalInstall) {
                 (context as? ComponentActivity)?.finish()
             } else {
@@ -476,7 +469,7 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
     Scaffold(
         topBar = {
             TopBar(
-                currentFlashingStatus.value,
+                flashingStatus,
                 currentStatus,
                 onBack = onBack,
                 onSave = {
@@ -495,33 +488,40 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
             )
         },
         floatingActionButton = {
-            if (showFloatAction) {
+            if (isLastFlash && flashingStatus != FlashingStatus.FLASHING &&
+                (showRebootAction || flashingStatus == FlashingStatus.SUCCESS)
+            ) {
+                val label = stringResource(
+                    when {
+                        !showRebootAction -> R.string.close
+                        softReboot -> R.string.reboot_soft
+                        else -> R.string.reboot
+                    }
+                )
+                val busy = showRebootAction && (rebootRequestPending || softRebootStatus.running)
                 ExtendedFloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                reboot(if (softReboot) "soft_reboot" else "")
-                            }
+                    onClick = if (showRebootAction) {
+                        dropUnlessResumed { requestReboot(soft = softReboot) }
+                    } else {
+                        onBack
+                    },
+                    modifier = if (busy) {
+                        Modifier.semantics {
+                            contentDescription = label
+                            disabled()
+                        }
+                    } else Modifier,
+                    icon = {
+                        if (busy) {
+                            CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
+                        } else {
+                            YukiIcon(if (showRebootAction) Icons.Filled.Refresh else Icons.Filled.Close, null)
                         }
                     },
-                    icon = {
-                        YukiIcon(
-                            Icons.Filled.Refresh,
-                            contentDescription = stringResource(
-                                id = if (softReboot) R.string.reboot_soft else R.string.reboot
-                            )
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = stringResource(
-                                id = if (softReboot) R.string.reboot_soft else R.string.reboot
-                            )
-                        )
-                    },
+                    text = { Text(label) },
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    expanded = true
+                    expanded = !busy
                 )
             }
         },
@@ -545,14 +545,14 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                         currentIndex = flashIt.currentIndex + 1,
                         totalCount = flashIt.uris.size,
                         currentModuleName = currentStatus.currentModuleName,
-                        status = currentFlashingStatus.value,
+                        status = flashingStatus,
                         failedModules = currentStatus.failedModules
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 is FlashIt.FlashAk3 -> {
-                    val ak3ProgressTitle = when (currentFlashingStatus.value) {
+                    val ak3ProgressTitle = when (flashingStatus) {
                         FlashingStatus.FLASHING ->
                             stringResource(R.string.partition_flashing, "AnyKernel3")
                         FlashingStatus.SUCCESS -> stringResource(R.string.flash_success)
@@ -560,7 +560,7 @@ fun FlashScreen(navigator: DestinationsNavigator, flashIt: FlashIt) {
                     }
                     FlashOperationProgressBar(
                         title = ak3ProgressTitle,
-                        status = currentFlashingStatus.value,
+                        status = flashingStatus,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
