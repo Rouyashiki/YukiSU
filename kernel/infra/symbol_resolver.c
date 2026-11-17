@@ -50,7 +50,7 @@ struct ksu_lookup_symbol_ctx {
 static int find_kernel_symbol_exact_cb(void *data, unsigned long addr)
 {
 	*(unsigned long *)data = addr;
-	return 0;
+	return 1;
 }
 
 unsigned long __nocfi find_kernel_symbol_exact(const char *symbol_name)
