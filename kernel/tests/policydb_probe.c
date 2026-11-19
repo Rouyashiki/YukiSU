@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <linux/seqlock.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include "ss/services.h"
@@ -22,6 +23,7 @@ static unsigned int original_live, early_errors, clean_errors;
 static size_t fail_size;
 static bool hit_failure, baseline;
 static const char *failed_site;
+static unsigned int snapshot_writes, snapshot_reads, fail_snapshot_read;
 
 static void check(bool condition, const char *message)
 {
@@ -93,7 +95,27 @@ void *test_copy(const void *ptr, size_t size, gfp_t flags, const char *site)
 	return copy;
 }
 
-/* This file is generated from the production clone function and header. */
+static int test_policydb_write(struct policydb *db, struct policy_file *fp)
+{
+	snapshot_writes++;
+	return policydb_write(db, fp);
+}
+
+static int test_policydb_read(struct policydb *db, struct policy_file *fp)
+{
+	int ret;
+
+	if (++snapshot_reads != fail_snapshot_read)
+		return policydb_read(db, fp);
+
+	fail_at = attempts + 1;
+	ret = policydb_read(db, fp);
+	fail_at = 0;
+	check(hit_failure && ret == -ENOMEM,
+	      "selected read did not fail with ENOMEM");
+	return ret;
+}
+
 #include "clone_impl.c"
 
 static void reset_attempt(unsigned int nth)
@@ -105,6 +127,84 @@ static void reset_attempt(unsigned int nth)
 	hit_failure = false;
 	owner++;
 }
+
+#ifdef TEST_INITIAL_SNAPSHOT
+#include "initial_sid_to_string.h"
+
+const char *security_get_initial_sid_context(u32 sid)
+{
+	if (sid >= ARRAY_SIZE(initial_sid_to_string))
+		return NULL;
+	return initial_sid_to_string[sid];
+}
+
+static struct selinux_state test_state;
+static DEFINE_MUTEX(ksu_backup_mutex);
+static struct selinux_policy *backup_sepolicy;
+
+#define selinux_state test_state
+#define ksu_dup_sepolicy test_dup
+#define ksu_policy_decision(...) ((void)0)
+#include "initial_snapshot_impl.c"
+#undef ksu_policy_decision
+#undef ksu_dup_sepolicy
+#undef selinux_state
+
+static void exercise_initial_snapshot(struct selinux_policy *old)
+{
+	struct selinux_policy *copy, *backup;
+	unsigned int failed_read;
+
+	mutex_init(&test_state.policy_mutex);
+	for (failed_read = 0; failed_read <= 2; failed_read++) {
+		reset_attempt(0);
+		snapshot_writes = snapshot_reads = 0;
+		fail_snapshot_read = failed_read;
+		mutex_lock(&test_state.policy_mutex);
+		mutex_lock(&ksu_backup_mutex);
+		copy = dup_policy_for_kernel_rules(old);
+		mutex_unlock(&ksu_backup_mutex);
+		mutex_unlock(&test_state.policy_mutex);
+
+		check(snapshot_writes == 1 && snapshot_reads == 2,
+		      "initial load must write once and read twice");
+		backup = ksu_detach_backup_sepolicy();
+		if (failed_read == 1) {
+			check(!backup, "failed backup was published");
+		} else {
+			check(!IS_ERR_OR_NULL(backup),
+			      "initial backup missing");
+			check(backup->sidtab && backup->sidtab != old->sidtab,
+			      "initial backup lacks a private SID table");
+			check(sidtab_search(backup->sidtab, SECINITSID_KERNEL),
+			      "initial backup lost the kernel SID");
+			check(
+			    symtab_search(&backup->policydb.p_types, "target"),
+			    "initial backup type lookup failed");
+			sidtab_destroy(backup->sidtab);
+			test_kfree(backup->sidtab);
+			ksu_destroy_sepolicy(backup);
+		}
+		if (failed_read == 2) {
+			check(PTR_ERR(copy) == -ENOMEM,
+			      "writable read lost its error");
+		} else {
+			check(!IS_ERR_OR_NULL(copy),
+			      "initial writable copy missing");
+			check(copy->sidtab == old->sidtab,
+			      "initial writable copy lost the borrowed SID "
+			      "table");
+			check(symtab_search(&copy->policydb.p_types, "target"),
+			      "initial writable type lookup failed");
+			ksu_destroy_sepolicy(copy);
+		}
+		check(live == original_live,
+		      "initial load retained allocations");
+	}
+	fail_snapshot_read = 0;
+	pr_info("POLICYDB_INITIAL_SNAPSHOT_PASS\n");
+}
+#endif
 
 static void parse_case(const unsigned char *data, size_t len, unsigned int nth,
 		       bool legacy)
@@ -176,6 +276,10 @@ static void exercise_policy(const unsigned char *data, size_t len)
 		      "clone failed allocation ignored");
 		check(live == original_live, "failed clone leaked");
 	}
+#ifdef TEST_INITIAL_SNAPSHOT
+	old.latest_granting = 1;
+	exercise_initial_snapshot(&old);
+#endif
 	owner = 0;
 	policydb_destroy(&old.policydb);
 	check(live == 0, "original policy leaked");
@@ -212,4 +316,5 @@ static void __exit policydb_probe_exit(void)
 }
 module_init(policydb_probe_init);
 module_exit(policydb_probe_exit);
+MODULE_DESCRIPTION("SELinux policy database allocation and snapshot tests");
 MODULE_LICENSE("GPL");

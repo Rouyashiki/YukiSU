@@ -646,7 +646,7 @@ static int ksu_selinux_hide_enable()
 {
 	int ret;
 	pr_info("selinux_hide: init selinux hide\n");
-	if (!backup_sepolicy) {
+	if (!smp_load_acquire(&backup_sepolicy)) {
 		pr_err("no backup sepolicy available, please save feature and "
 		       "reboot to retry!\n");
 		return -EAGAIN;
@@ -904,15 +904,19 @@ void ksu_selinux_hide_exit(void)
 
 void ksu_selinux_hide_drop_backup_if_unused(void)
 {
+	struct selinux_policy *backup = NULL;
+
 	mutex_lock(&selinux_hide_mutex);
-	if (!ksu_selinux_hide_keep_backup && backup_sepolicy) {
-		pr_info("selinux_hide is not enabled - drop backup_sepolicy\n");
-		sidtab_destroy(backup_sepolicy->sidtab);
-		kfree(backup_sepolicy->sidtab);
-		ksu_destroy_sepolicy(backup_sepolicy);
-		backup_sepolicy = NULL;
-	}
+	if (!ksu_selinux_hide_keep_backup)
+		backup = ksu_detach_backup_sepolicy();
 	mutex_unlock(&selinux_hide_mutex);
+
+	if (backup) {
+		pr_info("selinux_hide is not enabled - drop backup_sepolicy\n");
+		sidtab_destroy(backup->sidtab);
+		kfree(backup->sidtab);
+		ksu_destroy_sepolicy(backup);
+	}
 }
 
 /*

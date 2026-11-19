@@ -23,6 +23,10 @@
 
 #define ALL NULL
 
+#define ksu_policy_decision(op, action, reason)                                \
+	pr_debug("sepolicy_decision op=" op " action=" action " reason=%s\n",  \
+		 reason)
+
 struct selinux_policy *backup_sepolicy;
 
 static struct policydb *get_policydb(void)
@@ -34,7 +38,18 @@ static struct policydb *get_policydb(void)
 	return db;
 }
 
-static DEFINE_MUTEX(ksu_rules);
+static DEFINE_MUTEX(ksu_backup_mutex);
+
+struct selinux_policy *ksu_detach_backup_sepolicy(void)
+{
+	struct selinux_policy *backup;
+
+	mutex_lock(&ksu_backup_mutex);
+	backup = backup_sepolicy;
+	backup_sepolicy = NULL;
+	mutex_unlock(&ksu_backup_mutex);
+	return backup;
+}
 
 static void reset_avc_cache(u32 seqno);
 
@@ -52,48 +67,69 @@ static void publish_policy(struct selinux_policy *pol,
 	reset_avc_cache(pol->latest_granting);
 }
 
-static void backup_original_sepolicy_once(void)
+static void backup_original_sepolicy(struct selinux_policy *pol,
+				     const struct policy_file *snapshot)
 {
-	struct selinux_policy *pol;
+	struct selinux_policy *backup;
 	int ret;
 
-	if (backup_sepolicy)
-		return;
-
-	pol = rcu_dereference_protected(
-	    selinux_state.policy, lockdep_is_held(&selinux_state.policy_mutex));
-	backup_sepolicy = ksu_dup_sepolicy(pol);
-	if (IS_ERR(backup_sepolicy)) {
+	backup = ksu_read_sepolicy_snapshot(pol, snapshot);
+	if (IS_ERR(backup)) {
 		pr_err("failed to create backup sepolicy: %ld\n",
-		       PTR_ERR(backup_sepolicy));
-		backup_sepolicy = NULL;
+		       PTR_ERR(backup));
 		return;
 	}
 
-	backup_sepolicy->sidtab =
-	    kzalloc(sizeof(*backup_sepolicy->sidtab), GFP_KERNEL);
-	if (!backup_sepolicy->sidtab) {
+	backup->sidtab = kzalloc(sizeof(*backup->sidtab), GFP_KERNEL);
+	if (!backup->sidtab) {
 		pr_err("failed to alloc backup sidtab\n");
-		ksu_destroy_sepolicy(backup_sepolicy);
-		backup_sepolicy = NULL;
+		ksu_destroy_sepolicy(backup);
 		return;
 	}
 
-	ret = policydb_load_isids(&backup_sepolicy->policydb,
-				  backup_sepolicy->sidtab);
+	ret = policydb_load_isids(&backup->policydb, backup->sidtab);
 	if (ret) {
 		pr_err("failed to load isids for backup sepolicy: %d\n", ret);
-		kfree(backup_sepolicy->sidtab);
-		ksu_destroy_sepolicy(backup_sepolicy);
-		backup_sepolicy = NULL;
+		kfree(backup->sidtab);
+		ksu_destroy_sepolicy(backup);
 		return;
 	}
 
-	if (!ksu_set_original_types(&pol->policydb, &backup_sepolicy->policydb,
+	if (!ksu_set_original_types(&pol->policydb, &backup->policydb,
 				    pol->latest_granting))
 		pr_warn(
 		    "original type metadata unavailable, use name lookups\n");
+	smp_store_release(&backup_sepolicy, backup);
 	pr_info("backup sepolicy success\n");
+}
+
+static struct selinux_policy *
+dup_policy_for_kernel_rules(struct selinux_policy *old_pol)
+{
+	struct policy_file snapshot;
+	struct selinux_policy *pol;
+	int ret;
+
+	lockdep_assert_held(&selinux_state.policy_mutex);
+	lockdep_assert_held(&ksu_backup_mutex);
+	if (backup_sepolicy) {
+		ksu_policy_decision("kernel_rules", "copy", "existing_backup");
+		return ksu_dup_sepolicy(old_pol);
+	}
+
+	ksu_policy_decision("kernel_rules", "prepare", "first_backup");
+	ret = ksu_write_sepolicy_snapshot(old_pol, &snapshot);
+	if (ret) {
+		pr_err("failed to create backup sepolicy: %d\n", ret);
+		ksu_policy_decision("kernel_rules", "copy",
+				    "backup_write_failed");
+		return ksu_dup_sepolicy(old_pol);
+	}
+
+	backup_original_sepolicy(old_pol, &snapshot);
+	pol = ksu_read_sepolicy_snapshot(old_pol, &snapshot);
+	kvfree(snapshot.data);
+	return pol;
 }
 
 static const char *ksu_file_load_perms[] = {
@@ -637,12 +673,21 @@ static int ksu_file_load_policy_allow_sid(struct file *file, u32 ssid,
 	state->tmpfs_lease_refs = tmpfs_add_av ? 1 : 0;
 	state->dir_lease_refs = dir_add_av ? 1 : 0;
 
-	if (!add_av && !tmpfs_add_av && !dir_add_av)
+	if (!add_av && !tmpfs_add_av && !dir_add_av) {
+		ksu_policy_decision("file", "skip",
+				    (required_av || dir_required_av ||
+				     (tmpfs_type && tmpfs_required_av))
+					? "direct"
+					: "empty");
 		goto out_unlock;
+	}
 	commit_policy = file_commit_av || tmpfs_commit_av || dir_commit_av;
-	if (!commit_policy)
+	if (!commit_policy) {
+		ksu_policy_decision("file", "skip", "existing_lease");
 		goto add_leases;
+	}
 
+	ksu_policy_decision("file", "copy", "modify");
 	pol = ksu_dup_sepolicy(rcu_dereference_protected(
 	    old_pol, lockdep_is_held(&selinux_state.policy_mutex)));
 	if (IS_ERR(pol)) {
@@ -772,8 +817,10 @@ ksu_file_load_policy_allow_execmem_sid(u32 ssid,
 		ret = -EINVAL;
 		goto out_unlock;
 	}
-	if (state->process_lease_refs)
+	if (state->process_lease_refs) {
+		ksu_policy_decision("process", "skip", "already_held");
 		goto out_unlock;
+	}
 	src_name = ksu_type_name_by_value(db, scontext->type);
 	if (!src_name) {
 		ret = -ENOENT;
@@ -793,20 +840,25 @@ ksu_file_load_policy_allow_execmem_sid(u32 ssid,
 		state->process_class = lease->process_class;
 		state->process_added_av = lease->added_av;
 		state->process_lease_refs = 1;
+		ksu_policy_decision("process", "skip", "existing_lease");
 		goto out_unlock;
 	}
 
 	direct_av = ksu_direct_allowed_av(db, scontext->type, scontext->type,
 					  cls->value);
 	add_av = required_av & ~direct_av;
-	if (!add_av)
+	if (!add_av) {
+		ksu_policy_decision("process", "skip",
+				    required_av ? "direct" : "empty");
 		goto out_unlock;
+	}
 
 	new_lease = kzalloc(sizeof(*new_lease), GFP_KERNEL);
 	if (!new_lease) {
 		ret = -ENOMEM;
 		goto out_unlock;
 	}
+	ksu_policy_decision("process", "copy", "modify");
 	pol = ksu_dup_sepolicy(rcu_dereference_protected(
 	    old_pol, lockdep_is_held(&selinux_state.policy_mutex)));
 	if (IS_ERR(pol)) {
@@ -888,8 +940,10 @@ int ksu_file_load_policy_restore(const struct ksu_file_load_policy *state)
 	if (!!state->process_added_av != !!state->process_lease_refs)
 		return -EINVAL;
 	if (!state->added_av && !state->tmpfs_added_av &&
-	    !state->process_added_av && !state->dir_added_av)
+	    !state->process_added_av && !state->dir_added_av) {
+		ksu_policy_decision("restore", "skip", "empty");
 		return 0;
+	}
 
 	mutex_lock(&selinux_state.policy_mutex);
 
@@ -945,6 +999,7 @@ int ksu_file_load_policy_restore(const struct ksu_file_load_policy *state)
 						   state->dir_added_av,
 						   state->dir_lease_refs);
 			lease->users -= state->process_lease_refs;
+			ksu_policy_decision("restore", "skip", "retained");
 			pr_info(
 			    "file_load_policy: process lease retained type=%u "
 			    "users=%u\n",
@@ -959,6 +1014,7 @@ int ksu_file_load_policy_restore(const struct ksu_file_load_policy *state)
 					   state->tmpfs_lease_refs);
 		ksu_temp_av_release_locked(&dir_key, state->dir_added_av,
 					   state->dir_lease_refs);
+		ksu_policy_decision("restore", "skip", "retained");
 		goto out_unlock;
 	}
 
@@ -979,6 +1035,7 @@ int ksu_file_load_policy_restore(const struct ksu_file_load_policy *state)
 		goto out_unlock;
 	}
 
+	ksu_policy_decision("restore", "copy", "last_holder");
 	pol = ksu_dup_sepolicy(rcu_dereference_protected(
 	    old_pol, lockdep_is_held(&selinux_state.policy_mutex)));
 	if (IS_ERR(pol)) {
@@ -1124,14 +1181,13 @@ void apply_kernelsu_rules(void)
 		pr_info("SELinux permissive or disabled, apply rules!\n");
 	}
 
-	mutex_lock(&ksu_rules);
 	mutex_lock(&selinux_state.policy_mutex);
-
-	backup_original_sepolicy_once();
 
 	old_pol = rcu_dereference_protected(
 	    selinux_state.policy, lockdep_is_held(&selinux_state.policy_mutex));
-	pol = ksu_dup_sepolicy(old_pol);
+	mutex_lock(&ksu_backup_mutex);
+	pol = dup_policy_for_kernel_rules(old_pol);
+	mutex_unlock(&ksu_backup_mutex);
 	if (IS_ERR(pol)) {
 		pr_err("failed to dup selinux_policy: %ld\n", PTR_ERR(pol));
 		goto out_unlock;
@@ -1158,7 +1214,6 @@ void apply_kernelsu_rules(void)
 	publish_policy(pol, old_pol);
 out_unlock:
 	mutex_unlock(&selinux_state.policy_mutex);
-	mutex_unlock(&ksu_rules);
 }
 
 #define KSU_SEPOLICY_MAX_BATCH_SIZE (8U * 1024U * 1024U)
@@ -1464,6 +1519,7 @@ int handle_sepolicy(void __user *user_data, u64 data_len)
 
 	old_pol = rcu_dereference_protected(
 	    selinux_state.policy, lockdep_is_held(&selinux_state.policy_mutex));
+	ksu_policy_decision("batch", "copy", "commands");
 	pol = ksu_dup_sepolicy(old_pol);
 	if (IS_ERR(pol)) {
 		ret = PTR_ERR(pol);

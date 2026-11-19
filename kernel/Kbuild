@@ -65,6 +65,7 @@ kernelsu-objs += infra/btf_parser.o
 kernelsu-objs += selinux/inode.o
 kernelsu-objs += selinux/sepolicy.o
 kernelsu-objs += selinux/rules.o
+CFLAGS_selinux/rules.o += -DDYNAMIC_DEBUG_MODULE
 
 ifdef KBUILD_EXTMOD
 ifeq ($(CONFIG_KSU_DISABLE_MANAGER),y)

@@ -5,8 +5,16 @@
 
 #include "ss/policydb.h"
 
+/* Keep the source locked until the last read and kvfree(snapshot->data). */
+int ksu_write_sepolicy_snapshot(struct selinux_policy *old_pol,
+				struct policy_file *snapshot);
+struct selinux_policy *
+ksu_read_sepolicy_snapshot(struct selinux_policy *old_pol,
+			   const struct policy_file *snapshot);
 struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol);
 void ksu_destroy_sepolicy(struct selinux_policy *pol);
+/* The caller excludes backup retention and owns the detached policy. */
+struct selinux_policy *ksu_detach_backup_sepolicy(void);
 
 // Operation on types
 bool ksu_type(struct policydb *db, const char *name, const char *attr);

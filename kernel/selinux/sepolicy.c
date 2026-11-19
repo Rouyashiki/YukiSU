@@ -1107,12 +1107,12 @@ void ksu_destroy_sepolicy(struct selinux_policy *pol)
 	kfree(pol);
 }
 
-struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
+int ksu_write_sepolicy_snapshot(struct selinux_policy *old_pol,
+				struct policy_file *snapshot)
 {
 	int ret;
 	size_t ebitmap_extra;
 	size_t len;
-	struct selinux_policy *new_pol;
 	void *data;
 	struct policy_file fp;
 
@@ -1124,14 +1124,13 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
 			       sizeof(u32) + sizeof(u64), &ebitmap_extra) ||
 	    check_add_overflow(old_pol->policydb.len, ebitmap_extra, &len)) {
 		pr_err("sepolicy: policy buffer length overflow\n");
-		return ERR_PTR(-EOVERFLOW);
+		return -EOVERFLOW;
 	}
 
 	data = vmalloc(len);
 	if (!data) {
 		pr_err("sepolicy: alloc policy len %zu\n", len);
-		ret = -ENOMEM;
-		goto out_free_data;
+		return -ENOMEM;
 	}
 
 	fp.data = data;
@@ -1140,7 +1139,8 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
 	ret = policydb_write(&old_pol->policydb, &fp);
 	if (ret) {
 		pr_err("sepolicy: policydb_write: %d\n", ret);
-		goto out_free_data;
+		kvfree(data);
+		return ret;
 	}
 	len -= fp.len;
 
@@ -1162,32 +1162,48 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
 #endif // #ifdef POLICYDB_CONFIG_ANDROID_NETLINK_ROU...
 #endif // #if LINUX_VERSION_CODE < KERNEL_VERSION...
 
+	snapshot->data = data;
+	snapshot->len = len;
+	return 0;
+}
+
+struct selinux_policy *
+ksu_read_sepolicy_snapshot(struct selinux_policy *old_pol,
+			   const struct policy_file *snapshot)
+{
+	struct policy_file fp = *snapshot;
+	struct selinux_policy *new_pol;
+	int ret;
+
 	new_pol = kmemdup(old_pol, sizeof(*old_pol), GFP_KERNEL);
 	if (!new_pol) {
 		pr_err("sepolicy: dup old policy failed\n");
-		ret = -ENOMEM;
-		goto out_free_data;
+		return ERR_PTR(-ENOMEM);
 	}
 	memset(&new_pol->policydb, 0, sizeof(new_pol->policydb));
-
-	fp.data = data;
-	fp.len = len;
 
 	ret = policydb_read(&new_pol->policydb, &fp);
 	if (ret) {
 		pr_err("sepolicy: policydb_read: %d\n", ret);
-		goto out_free_policy;
+		if (policydb_read_needs_destroy(&new_pol->policydb))
+			policydb_destroy(&new_pol->policydb);
+		kfree(new_pol);
+		return ERR_PTR(ret);
 	}
-	new_pol->policydb.len = len;
-	kvfree(data);
-
+	new_pol->policydb.len = snapshot->len;
 	return new_pol;
+}
 
-out_free_policy:
-	if (policydb_read_needs_destroy(&new_pol->policydb))
-		policydb_destroy(&new_pol->policydb);
-	kfree(new_pol);
-out_free_data:
-	kvfree(data);
-	return ERR_PTR(ret);
+struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
+{
+	struct policy_file snapshot;
+	struct selinux_policy *pol;
+	int ret;
+
+	ret = ksu_write_sepolicy_snapshot(old_pol, &snapshot);
+	if (ret)
+		return ERR_PTR(ret);
+	pol = ksu_read_sepolicy_snapshot(old_pol, &snapshot);
+	kvfree(snapshot.data);
+	return pol;
 }

@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -59,15 +60,42 @@ standalone = (policy_root / 'kernel/host/policy.c').is_file()
 policy_dir = policy_root / ('kernel/host' if standalone else 'kernel/selinux')
 shutil.copyfile(policy_dir / 'policydb_cleanup.h', out / 'policydb_cleanup.h')
 source = (policy_dir / ('policy.c' if standalone else 'sepolicy.c')).read_text()
+def definition(name, unit=source):
+    match = re.search(r'^(?:static\s+)?(?:struct selinux_policy\s*\*\s*|(?:int|void|bool)\s+)' +
+                      name + r'\([^;{}]+\)\s*\{', unit, re.M)
+    if not match:
+        raise ValueError(f'cannot locate production definition of {name}')
+    function = unit[match.start():unit.index('\n}', match.end()) + 2]
+    return function if function.startswith('static ') else 'static ' + function
+
+
 name = 'yz_policy_dup' if standalone else 'ksu_dup_sepolicy'
-start = source.index(('static ' if standalone else '') + 'struct selinux_policy *' + name + '(')
-end = source.index('\n}', start) + 2
-clone = source[start:end].replace(name, 'test_dup').replace('yz_call_policydb_', 'policydb_')
-allocators = ['kmalloc', 'kzalloc', 'kmalloc_array', 'kcalloc', 'kvcalloc', 'vmalloc',
-              'kmem_cache_zalloc', 'kmem_cache_free', 'kfree', 'kvfree', 'vfree', 'kstrdup', 'kmemdup']
-import re
-clone = re.sub(r'\b(' + '|'.join(allocators) + r')\s*\(', lambda m: 'test_' + m[1] + '(', clone)
-(out / 'clone_impl.c').write_text('#include <linux/overflow.h>\n#include <linux/version.h>\n' + clone + '\n', newline='\n')
+snapshot = 'ksu_write_sepolicy_snapshot(' in source
+functions = ['ksu_write_sepolicy_snapshot', 'ksu_read_sepolicy_snapshot'] if snapshot else []
+clone = '\n\n'.join(definition(f) for f in [*functions, name])
+clone = clone.replace(name, 'test_dup').replace('yz_call_policydb_', 'policydb_')
+wrapped = ['kmalloc', 'kzalloc', 'kmalloc_array', 'kcalloc', 'kvcalloc', 'vmalloc',
+           'kmem_cache_zalloc', 'kmem_cache_free', 'kfree', 'kvfree', 'vfree', 'kstrdup',
+           'kmemdup', 'policydb_read', 'policydb_write']
+
+
+def instrument(code):
+    return re.sub(r'\b(' + '|'.join(wrapped) + r')\s*\(', lambda m: 'test_' + m[1] + '(', code)
+
+
+initial_snapshot = not standalone and (policy_root == root or snapshot)
+if initial_snapshot:
+    rules = (policy_dir / 'rules.c').read_text()
+    metadata = source[source.index('static DEFINE_SEQLOCK(ksu_original_types_lock)'):
+                      source.index('static void invalidate_original_types_locked(')]
+    startup = [definition(f) for f in ('invalidate_original_types_locked', 'ksu_set_original_types',
+                                       'forget_original_types', 'ksu_destroy_sepolicy')]
+    startup.extend(definition(f, rules) for f in ('backup_original_sepolicy', 'dup_policy_for_kernel_rules',
+                                                  'ksu_detach_backup_sepolicy'))
+    (out / 'initial_snapshot_impl.c').write_text(metadata + instrument('\n\n'.join(startup)) + '\n', newline='\n')
+    clone = '#define TEST_INITIAL_SNAPSHOT 1\n' + clone
+(out / 'clone_impl.c').write_text('#include <linux/overflow.h>\n#include <linux/version.h>\n' +
+                                  instrument(clone) + '\n', newline='\n')
 run(wsl([args.secilc, '-M', 'true', '-c', '33', '-o', linux(out / 'fixture.bin'),
          '-f', '/dev/null', linux(tests / 'policydb_fixture.cil')]), out / 'fixture.log')
 fixture = (out / 'fixture.bin').read_bytes()
@@ -89,8 +117,8 @@ shutil.copyfile(tests / 'prepare_policydb_modpost.sh', out / 'prepare_modpost.sh
 (out / 'prepare.py').write_text(r'''import hashlib,json,os,re,subprocess
 from pathlib import Path
 build=Path('/probe'); kdir=Path(os.environ['KDIR']); src=Path('/opt/ddk/src')/kdir.name
-names=['policydb','hashtab','symtab','ebitmap','avtab','conditional','mls','context']
-symbols=set()
+names=['policydb','hashtab','symtab','ebitmap','avtab','conditional','mls','context','sidtab']
+symbols={'security_get_initial_sid_context'}
 for n in names:
     text=subprocess.check_output(['llvm-nm','--defined-only','--extern-only',str(kdir/'security/selinux/ss'/f'{n}.o')],text=True)
     for line in text.splitlines():
@@ -115,7 +143,7 @@ for n in names:
     (build/f'{n}.c').write_text('\n'.join(lines)+'\n')
 (build/'parser-sources.json').write_text(json.dumps(hashes,indent=2))
 (build/'Makefile').write_text('''+repr('''obj-m := policydb_test.o
-policydb_test-y := policydb_probe.o parser.o
+policydb_test-y := policydb_probe.o $(or $(PARSER_OBJECTS),probe_parser.o)
 ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/ss -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(src)
 ccflags-y += -include $(src)/namespace.h -ffunction-sections -fdata-sections
 ''')+r''')
@@ -124,10 +152,14 @@ ccflags-y += -include $(src)/namespace.h -ffunction-sections -fdata-sections
 cd /probe
 python3 /probe/prepare.py
 bash /probe/prepare_modpost.sh
-make -C "$KDIR" M=/probe ARCH=arm64 LLVM=1 CC=clang -j8 policydb.o hashtab.o symtab.o ebitmap.o avtab.o conditional.o mls.o context.o
-ld.lld -r --gc-sections -u probe_policydb_read -u probe_policydb_destroy -u probe_policydb_write -u probe_ebitmap_cache_init -u probe_hashtab_cache_init -u probe_avtab_cache_init policydb.o hashtab.o symtab.o ebitmap.o avtab.o conditional.o mls.o context.o -o parser.o_shipped
-printf 'source_/probe/parser.o := /probe/policydb.c\n' > /probe/.parser.o.cmd
-make -C "$KDIR" M=/probe ARCH=arm64 LLVM=1 CC=clang MODPOST=/probe/modpost-tool/modpost modules
+# Older Kbuild includes its symbol and CRC flags in the MODPOST variable.
+install -m 755 /probe/modpost-tool/modpost "$KDIR/scripts/mod/modpost"
+objects="policydb.o hashtab.o symtab.o ebitmap.o avtab.o conditional.o mls.o context.o sidtab.o"
+make -C "$KDIR" M=/probe ARCH=arm64 LLVM=1 CC=clang PARSER_OBJECTS="$objects" -j8 $objects policydb_probe.o
+roots=$(llvm-nm -u policydb_probe.o | awk '$NF ~ /^probe_/ {print "-u", $NF}')
+ld.lld -r --gc-sections $roots $objects -o probe_parser.o
+printf 'source_/probe/probe_parser.o := /probe/policydb.c\n' > /probe/.probe_parser.o.cmd
+make -C "$KDIR" M=/probe ARCH=arm64 LLVM=1 CC=clang modules
 cp "$KDIR/arch/arm64/boot/Image" /probe/Image
 ''', newline='\n')
 run(['docker', 'run', '--rm', '--pull=never', '--entrypoint', 'bash',
@@ -159,7 +191,10 @@ run(wsl(['timeout', '180', 'qemu-system-aarch64', '-machine', 'virt,gic-version=
          '-kernel', linux(out / 'Image'), '-initrd', linux(out / 'init.cpio'), '-append',
          'console=ttyAMA0 rdinit=/init panic=-1 panic_on_warn=1 kasan=on kaslr.disabled=1']), out / 'guest.log')
 text = (out / 'guest.log').read_text(errors='replace')
-if 'POLICYDB_TEST_PASS' not in text or 'POLICYDB_GUEST_PASS' not in text or any(
+passes = ['POLICYDB_TEST_PASS', 'POLICYDB_GUEST_PASS']
+if initial_snapshot:
+    passes.append('POLICYDB_INITIAL_SNAPSHOT_PASS')
+if not all(s in text for s in passes) or any(
         s in text for s in ('POLICYDB_TEST_FAIL', 'BUG:', 'WARNING:', 'Kernel panic')):
     raise RuntimeError(f'{out / "guest.log"}: guest failed')
 print('PASS: kernel parser allocation sweep, truncated inputs and production clone')
