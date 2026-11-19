@@ -5,6 +5,7 @@
     <string name="home_not_installed">Não instalado</string>
     <string name="home_click_to_install">Clique para instalar</string>
     <string name="home_working">Em execução</string>
+    <string name="recently_installed_or_updated">Instalados ou atualizados recentemente</string>
     <string name="home_working_version">Versão: %s</string>
     <string name="home_kernel">Kernel</string>
     <string name="home_manager_version">Versão do gerenciador</string>
@@ -25,7 +26,7 @@
     <string name="install">Instalar</string>
     <string name="reboot">Reiniciar</string>
     <string name="settings">Configurações</string>
-    <string name="reboot_soft">Reinício suave</string>
+    <string name="reboot_soft">Reinicialização suave</string>
     <string name="reboot_userspace">Reinicialização suave</string>
     <string name="reboot_recovery">Reiniciar em modo Recovery</string>
     <string name="reboot_bootloader">Reiniciar em modo Bootloader</string>
@@ -33,7 +34,7 @@
     <string name="reboot_edl">Reiniciar em modo EDL</string>
     <string name="about">Sobre</string>
     <string name="module_uninstall_confirm">Tem certeza que deseja desinstalar o módulo %s?</string>
-    <string name="metamodule_uninstall_confirm">Tem certeza de que deseja desinstalar o módulo %s? Esta ação afetará todos os módulos, e alguns recursos fornecidos pelo metamódulo (como a montagem) deixarão de funcionar</string>
+    <string name="metamodule_uninstall_confirm">Tem certeza que deseja desinstalar o módulo %s? Esta ação afetará todos os módulos, e certos recursos fornecidos pelo metamódulo (como a montagem) deixarão de funcionar.</string>
     <string name="module_uninstall_success">%s desinstalado</string>
     <string name="module_uninstall_failed">Não foi possível desinstalar %s</string>
     <string name="module_version">Versão</string>
@@ -47,7 +48,8 @@
     <string name="safe_mode">Modo de segurança</string>
     <string name="home_jailbreak">Jailbreak</string>
     <string name="home_jailbreak_failed">Falha ao iniciar o serviço de jailbreak</string>
-    <string name="jailbreak_timeout">O jailbreak pode ter falhado, verifique os registros</string>
+    <string name="jailbreak_timeout">O Jailbreak pode ter falhado, verifique os registros</string>
+    <string name="jailbreak_reboot_warning">Você está no modo Jailbreak. Reiniciar fará você perder o acesso root, e será necessário refazer o jailbreak após o dispositivo iniciar. Reiniciar mesmo assim?</string>
     <string name="reboot_to_apply">Reinicie para entrar em vigor</string>
     <string name="module_magisk_conflict">Os módulos estão indisponíveis devido a um conflito com Magisk!</string>
     <string name="home_support_title">Apoio ao Desenvolvimento</string>
@@ -111,10 +113,13 @@
     <string name="settings_auto_jailbreak">Jailbreak automático</string>
     <string name="settings_auto_jailbreak_summary" tools:ignore="Typos">Usar o Magica automaticamente para iniciar o carregamento tardio quando um SELinux permissivo for detectado na inicialização. Requer conceder permissão de inicialização automática a este aplicativo.</string>
     <string name="settings_adb_root">ADB Root</string>
-    <string name="settings_adb_root_summary">Executar o adbd com privilégios de root</string>
+    <string name="settings_adb_root_summary">Executa o daemon adbd com privilégios de Root</string>
+    <string name="settings_shell_su_adb_only">Restringir o root do shell ao ADB</string>
+    <string name="settings_shell_su_adb_only_summary">Quando o shell recebe acesso root, apenas processos iniciados pelo adbd ou por um processo root do YukiSU podem usá-lo.</string>
     <string name="grant_root_failed">Falha ao conceder acesso root!</string>
     <string name="action">Executar</string>
     <string name="close">Fechar</string>
+    <string name="external_link_open_failed">Não foi possível abrir o link</string>
     <string name="enable_web_debugging">Ativar depuração do WebView</string>
     <string name="enable_web_debugging_summary">Pode ser usado para depurar o WebUI. Por favor, ative somente quando necessário.</string>
     <string name="home_auth_superkey_tag">SuperKey</string>
@@ -133,11 +138,11 @@
     <string name="install_jailbreak_button">Acionar carregamento tardio</string>
     <string name="install_jailbreak_failed">Falha ao acionar o carregamento tardio</string>
     <string name="advanced_options">Opções avançadas</string>
-    <string name="allow_shell">Sempre conceder root ao Shell</string>
-    <string name="allow_shell_summary">Sempre permitir que o adb shell chame su. Não ative isto a menos que seja absolutamente necessário.</string>
+    <string name="allow_shell">Sempre conceder Root ao Shell</string>
+    <string name="allow_shell_summary">Sempre permite que o adb shell chame o comando SU. Não ative isso a menos que seja absolutamente necessário.</string>
     <string name="enable_adb">Forçar ativação do adb na inicialização</string>
-    <string name="enable_adb_summary">Forçar a ativação da depuração USB e desativar a autenticação do adb. Não ative isto a menos que seja absolutamente necessário.</string>
-    <string name="install_upload_lkm_file">Usar um arquivo LKM local</string>
+    <string name="enable_adb_summary">Força a ativação da depuração USB e desativa a autenticação do adb. Não ative isso a menos que seja absolutamente necessário.</string>
+    <string name="install_upload_lkm_file">Usar arquivo LKM local</string>
     <string name="install_only_support_ko_file">Apenas arquivos .ko são suportados</string>
     <string name="select_file_tip">A imagem da partição %1$s é recomendada</string>
     <string name="select_kmi">Selecionar KMI</string>
@@ -158,6 +163,8 @@
     <!-- Module shortcut related -->
     <string name="module_action_success">Ação do módulo concluída</string>
     <string name="module_shortcut_title">Atalho do módulo</string>
+    <string name="module_shortcut_copy_scheme">Copiar esquema de URL</string>
+    <string name="module_shortcut_scheme_copied">Esquema de URL copiado</string>
     <string name="module_shortcut_icon_pick">Escolher ícone</string>
     <string name="module_shortcut_name_label">Nome do atalho</string>
     <string name="module_shortcut_delete">Excluir atalho</string>
@@ -190,7 +197,7 @@
     <string name="settings_disable_kernel_umount_summary">Desativar o comportamento de umount em nível de kernel controlado pelo KernelSU</string>
     <string name="settings_selinux_hide">Ativar ocultação do SELinux</string>
     <string name="settings_selinux_hide_summary">Ocultar as alterações da política SELinux do KernelSU das sondagens do lado do aplicativo.</string>
-    <string name="feature_status_unsupported_summary">O kernel não oferece suporte a este recurso</string>
+    <string name="feature_status_unsupported_summary">O kernel não suporta este recurso</string>
     <string name="feature_status_managed_summary">Este recurso é gerenciado por um módulo</string>
     <string name="module_install_multiple_confirm_with_names">Deseja instalar os %1$d módulos a seguir? \n\n%2$s</string>
     <string name="more_settings">Mais configurações</string>
@@ -387,7 +394,7 @@
     <string name="apply_config">Aplicar configuração</string>
     <string name="config_applied">Configuração aplicada ao kernel</string>
     <string name="mnt_detach">MNT_DETACH</string>
-    <string name="group_contains_apps">Contém %d aplicativos</string>
+    <string name="group_contains_apps">Contém %d apps</string>
     <string name="settings_disable_sulog">Registro de superusuário</string>
     <string name="settings_disable_sulog_summary">Registrar os acessos de superusuário do KernelSU</string>
 
@@ -494,11 +501,11 @@
     <string name="require_manager_version">É necessário atualizar o gerenciador.</string>
     <string name="home_kernel_show_original">Mostrar a versão real do kernel</string>
     <string name="home_kernel_show_effective">Mostrar a versão simulada do kernel</string>
-    <string name="home_seccomp_status">Estado do Seccomp</string>
-    <string name="seccomp_status_not_supported">Não ativado no kernel</string>
-    <string name="seccomp_status_disabled">Não ativado</string>
-    <string name="seccomp_status_strict">Modo estrito</string>
-    <string name="seccomp_status_filter">Modo de filtragem</string>
+    <string name="home_seccomp_status">Status do Seccomp</string>
+    <string name="seccomp_status_not_supported">Sem suporte</string>
+    <string name="seccomp_status_disabled">Desativado</string>
+    <string name="seccomp_status_strict">Estrito</string>
+    <string name="seccomp_status_filter">Filtro</string>
     <string name="seccomp_status_unknown">Desconhecido</string>
     <string name="plugin">Plugin</string>
     <string name="plugin_install">Instalar plugin</string>
@@ -650,7 +657,7 @@
     <string name="ci_update_error_install_failed">Não foi possível instalar a atualização CI.</string>
     <string name="ci_update_error_install_status">Falha na instalação pelo PackageInstaller, código de estado %1$d.</string>
     <string name="ci_update_error_stream_failed">Falha na transmissão do fluxo de dados da atualização CI.</string>
-    <string name="settings_soft_reboot">Usar reinicialização suave em vez de reiniciar</string>
+    <string name="settings_soft_reboot">Reinicialização suave em vez de reiniciar</string>
     <string name="settings_soft_reboot_summary">Usar reinicialização suave após instalar, atualizar, ativar, desativar ou remover módulos.</string>
     <string name="install_direct_lkm_title">Integrar o LKM diretamente ao kernel de boot</string>
     <string name="install_direct_lkm_summary">A modificação de imagens, a instalação direta e a instalação no slot OTA usam boot em vez de init_boot e removem primeiro a antiga injeção do KernelSU no ramdisk.</string>
@@ -896,8 +903,53 @@
     <string name="uts_view_unpatched_boot_message">Você alterou a configuração global de inicialização antecipada, mas ainda não aplicou a modificação LKM. Deseja modificar agora?</string>
     <string name="no_such_module">O módulo %1$s não existe</string>
     <string name="module_unavailable">O módulo %1$s está desativado, aguardando atualização ou remoção</string>
-    <string name="feature_status_forced_summary">Forced by boot config</string>
+    <string name="feature_status_forced_summary">Este recurso é forçado pela configuração de inicialização</string>
     <string name="install_block_modules">Block kernel modules</string>
     <string name="install_block_modules_summary">Comma-separated names; leave empty to block none</string>
     <string name="install_block_modules_invalid">Use letters, digits and underscores; up to 64 per name and 255 total</string>
+    <string name="safe_mode_module_disabled">A instalação de módulos está desativada no modo de segurança</string>
+    <string name="settings_module_description_max_lines">Máximo de linhas da descrição do módulo</string>
+    <string name="settings_module_description_max_lines_summary">Descrições que excederem essa quantidade de linhas serão recolhidas automaticamente.</string>
+    <string name="unit_lines">Linhas</string>
+    <string name="module_repo_script_badge">Script</string>
+    <string name="script_run">Executar</string>
+    <string name="script_run_title">Executar script</string>
+    <string name="script_preparing">Verificando e extraindo…</string>
+    <string name="script_error_title">Não é possível executar este script</string>
+    <string name="script_error_unverified">Este download não pôde ser verificado. Baixe-o novamente.</string>
+    <string name="script_error_verify_failed">Divergência de tamanho ou SHA-256. O arquivo foi excluído, baixe-o novamente.</string>
+    <string name="script_error_not_oneshot">Este ZIP não é um script de execução única (o module.prop não declara oneshot=true).</string>
+    <string name="script_error_id_mismatch">O id no module.prop não corresponde a esta entrada do registro.</string>
+    <string name="script_error_invalid_id">O module.prop tem um id ausente ou inválido.</string>
+    <string name="script_error_missing_prop">O module.prop está ausente.</string>
+    <string name="script_error_missing_action">O action.sh está ausente.</string>
+    <string name="script_error_unsafe">O ZIP contém entradas inseguras (caminhos absolutos, \"..\", links simbólicos ou arquivos especiais).</string>
+    <string name="script_error_too_large">O ZIP é grande demais para ser extraído (limite: 64 MiB).</string>
+    <string name="script_error_corrupt">O ZIP está danificado ou usa um formato não suportado.</string>
+    <string name="script_error_params">O params.json é inválido: %s</string>
+    <string name="script_error_generic">Falha ao preparar o script: %s</string>
+    <string name="script_notice">Este script é executado uma vez com privilégios de root; nada é instalado. Revise o código-fonte antes de executá-lo.</string>
+    <string name="script_local_notice">Este ZIP é um script de execução única. Você pode executá-lo uma vez sem instalá-lo ou instalá-lo como módulo mesmo assim.</string>
+    <string name="script_install_anyway">Instalar como módulo mesmo assim</string>
+    <string name="script_params">Parâmetros</string>
+    <string name="script_source">Código-fonte do action.sh</string>
+    <string name="script_source_truncated">(truncado)</string>
+    <string name="script_last_run">Última execução: %1$s, código de saída %2$d</string>
+    <string name="script_last_run_version">Última execução: %1$s (versionCode %2$d), código de saída %3$d</string>
+    <string name="script_never_run">Ainda não executado neste dispositivo</string>
+    <string name="script_run_confirm">Executar \"%s\" com privilégios de root agora?</string>
+    <string name="script_result_success">O script foi concluído com sucesso.</string>
+    <string name="script_result_not_applicable">Este script não é aplicável a este dispositivo (código de saída 2).</string>
+    <string name="script_result_failed">O script falhou com o código de saída %d.</string>
+    <string name="script_param_required">Este campo é obrigatório</string>
+    <string name="script_param_too_long">No máximo %d caracteres</string>
+    <string name="script_param_invalid_characters">Quebras de linha não são permitidas</string>
+    <string name="script_param_not_integer">Insira um número inteiro</string>
+    <string name="script_param_below_min">Deve ser no mínimo %d</string>
+    <string name="script_param_above_max">Deve ser no máximo %d</string>
+    <string name="script_param_invalid">Valor inválido</string>
+    <string name="module_preinit_no_space">preinit ignorado: espaço insuficiente em /metadata</string>
+    <string name="module_preinit_error">preinit ignorado: diretório de preinit inválido</string>
+    <string name="module_preinit_bootloop">preinit desativado após falhas repetidas de inicialização</string>
+    <string name="module_preinit_unsupported">preinit ignorado: não suportado pelo kernel atual</string>
 </resources>
