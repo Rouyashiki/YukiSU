@@ -11,6 +11,7 @@ void ksu_ksud_init(void);
 void ksu_ksud_exit(void);
 
 bool ksu_is_safe_mode(void);
+bool ksu_is_safe_mode_requested(void);
 void ksu_stop_input_hook_runtime(void);
 
 extern u32 ksu_file_sid;

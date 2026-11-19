@@ -1053,7 +1053,8 @@ std::array<JNINativeMethod, kZygoteMethodCount> g_zygote_methods = {{
        ctx.fds_to_ignore = nullptr; // server fork has no exempt channel
        g_ctx = &ctx;
        ctx_fork_pre(&ctx);
-       if (ctx.pid == 0) {         // child (system_server)
+       if (ctx.pid == 0) { // child (system_server)
+         zygisk_snapshot_process_flags(uid);
          zygisk_load_modules(env); // dlopen + onLoad here, in the child
          zygisk_run_server_pre(&args);
          ctx_sanitize_fds(&ctx);

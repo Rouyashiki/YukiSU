@@ -7,6 +7,7 @@
 #include "log.hpp"
 #include "userspace/zygisk/daemon/native_modules.hpp"
 #include "userspace/zygisk/load_policy.hpp"
+#include "userspace/zygisk/settings.hpp"
 #include "utils.hpp"
 #include "yukizygisk_diagnostics.hpp"
 
@@ -54,6 +55,35 @@ fs::path preinit_ksu_dir() {
         return PREINIT_DIR_WATCHDOG;
     }
     return PREINIT_DIR_DEFAULT;
+}
+
+bool harden_preinit_dir(const fs::path& dir, bool create) {
+    if (create && mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST)
+        return false;
+    const int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0)
+        return !create && errno == ENOENT;
+    struct stat st{};
+    if (fstat(fd, &st) != 0) {
+        const int saved = errno;
+        close(fd);
+        errno = saved;
+        return false;
+    }
+    if (st.st_uid != 0) {
+        close(fd);
+        errno = EPERM;
+        return false;
+    }
+    if ((st.st_mode & 0022) != 0 &&
+        fchmod(fd, (st.st_mode & 07777) & ~static_cast<mode_t>(0022)) != 0) {
+        const int saved = errno;
+        close(fd);
+        errno = saved;
+        return false;
+    }
+    close(fd);
+    return true;
 }
 
 bool range_ok(size_t offset, size_t size, size_t file_size) {
@@ -366,35 +396,28 @@ bool yukizygisk_enabled_for_next_boot() {
     return supported && value != 0;
 }
 
-bool early_load_enabled() {
-    const auto contents = read_file(YUKIZYGISK_CONFIG_PATH);
-    if (!contents)
-        return false;
-    const auto root = json::parse(*contents);
-    return root.type == json::Type::Object && root.at("early_load").type == json::Type::Bool &&
-           root.at("early_load").as_bool();
+json::Value read_snapshot_settings() {
+    std::string contents;
+    using namespace yukizygisk::crash;
+    if (!read_bounded(YUKIZYGISK_CONFIG_PATH, kMaxDocument, &contents, FileSource::RootPrivate))
+        return {};
+    return json::parse(contents);
 }
 
-__u16 configured_load_flags() {
+__u16 configured_load_flags(const json::Value& root) {
     yz_config config = yukizygisk::config::defaults;
-    const auto contents = read_file(YUKIZYGISK_CONFIG_PATH);
-    if (contents) {
-        const auto root = json::parse(*contents);
-        if (root.type == json::Type::Object) {
-            if (root.at("yukilinker").type == json::Type::Bool)
-                config.yukilinker = root.at("yukilinker").as_bool() ? 1 : 0;
-            if (root.at("anonymous_memory").type == json::Type::Bool)
-                config.memory_type =
-                    root.at("anonymous_memory").as_bool() ? YZ_MEMORY_ANONYMOUS : YZ_MEMORY_FILE;
-        }
-    }
+    if (root.at("yukilinker").is_bool())
+        config.yukilinker = root.at("yukilinker").as_bool() ? 1 : 0;
+    if (root.at("anonymous_memory").is_bool())
+        config.memory_type =
+            root.at("anonymous_memory").as_bool() ? YZ_MEMORY_ANONYMOUS : YZ_MEMORY_FILE;
     return yukizygisk::config::load_flags(config);
 }
 
 }  // namespace
 
 bool yukizygisk_early_load_enabled() {
-    return early_load_enabled();
+    return read_snapshot_settings().at("early_load").bool_or(false);
 }
 
 void clear_yukizygisk_early_snapshot() {
@@ -406,8 +429,66 @@ bool yukizygisk_has_native_abi32_target() {
     return has_native_abi32_target();
 }
 
+bool prepare_yukizygisk_policy_dirs() {
+    constexpr const char* kPolicyDirs[] = {PREINIT_DIR_DEFAULT, PREINIT_DIR_WATCHDOG};
+    return std::all_of(std::begin(kPolicyDirs), std::end(kPolicyDirs),
+                       [](const char* directory) { return harden_preinit_dir(directory, false); });
+}
+
+bool save_yukizygisk_policy_boot() {
+    namespace config_store = yukizygisk::settings::detail;
+    config_store::ScopedFd lock(config_store::lock_config(YUKIZYGISK_CONFIG_PATH));
+    if (lock.get() < 0)
+        return false;
+    if (!prepare_yukizygisk_policy_dirs())
+        return false;
+    yz_fixed_policy_config previous{};
+    const auto boot_profile = config_store::read_boot_profile(&previous);
+    if (boot_profile == config_store::BootProfileState::Aliased &&
+        (!yukizygisk::fixed_policy::mark_reboot_required() ||
+         !config_store::withdraw_fixed_policy()))
+        return false;
+    json::Value config;
+    if (boot_profile == config_store::BootProfileState::Error ||
+        !config_store::read_locked(YUKIZYGISK_CONFIG_PATH, &config) ||
+        !config_store::require_private_policy_config(YUKIZYGISK_CONFIG_PATH))
+        return false;
+    if (boot_profile == config_store::BootProfileState::Ready &&
+        !yukizygisk::fixed_policy::record_boot_withdrawal(previous, config))
+        return false;
+    return stage_yukizygisk_policy_boot(config);
+}
+
+bool stage_yukizygisk_policy_boot(const json::Value& config) {
+    yz_fixed_policy_config encoded{};
+    if (!yukizygisk::fixed_policy::encode(config, &encoded))
+        return false;
+    if (!encoded.enabled)
+        return prepare_yukizygisk_policy_dirs() &&
+               yukizygisk::settings::detail::withdraw_fixed_policy();
+    std::error_code check_error;
+    if (!fs::is_directory("/metadata", check_error)) {
+        errno = EOPNOTSUPP;
+        return false;
+    }
+
+    const fs::path directory = preinit_ksu_dir();
+    const fs::path other =
+        directory == PREINIT_DIR_WATCHDOG ? PREINIT_DIR_DEFAULT : PREINIT_DIR_WATCHDOG;
+    if (!harden_preinit_dir(directory, true) || !harden_preinit_dir(other, false))
+        return false;
+    const fs::path path = directory / "yukizygisk_policy.bin";
+    if (!yukizygisk::fixed_policy::write_boot(
+            path.string(), config, false,
+            [](const std::string& file) { return lsetfilecon(file, kMetadataFileCon); }))
+        return false;
+    return yukizygisk::settings::detail::remove_policy_file(
+        (other / "yukizygisk_policy.bin").string());
+}
+
 int refresh_yukizygisk_early_snapshot() {
-    if (!yukizygisk_enabled_for_next_boot() || !early_load_enabled()) {
+    const auto settings = read_snapshot_settings();
+    if (!yukizygisk_enabled_for_next_boot() || !settings.at("early_load").bool_or(false)) {
         clear_yukizygisk_early_snapshot();
         LOGI("yukizygisk early: snapshot cleared (disabled)");
         return 0;
@@ -437,6 +518,11 @@ int refresh_yukizygisk_early_snapshot() {
     fs::create_directories(module_dir, ec);
     if (ec) {
         LOGW("yukizygisk early: failed to reset %s: %s", module_dir.c_str(), ec.message().c_str());
+        return 1;
+    }
+    if (!harden_preinit_dir(preinit_dir, false) || !harden_preinit_dir(snapshot_dir, false) ||
+        !harden_preinit_dir(module_dir, false)) {
+        LOGW("yukizygisk early: failed to secure %s: %s", preinit_dir.c_str(), strerror(errno));
         return 1;
     }
 
@@ -498,7 +584,7 @@ int refresh_yukizygisk_early_snapshot() {
     header.version = YZ_EARLY_NATIVE_VERSION;
     header.header_size = sizeof(header);
     header.entry_size = sizeof(yz_early_native_entry);
-    header.load_flags = configured_load_flags();
+    header.load_flags = configured_load_flags(settings);
     header.flags = YZ_EARLY_NATIVE_FLAG_ENABLED;
     if (has_abi32)
         header.flags |= YZ_EARLY_NATIVE_FLAG_ABI32;

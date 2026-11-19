@@ -86,6 +86,40 @@ int ksu_selinux_superblock_init(void)
 #endif
 #endif
 
+#ifdef CONFIG_KSU_YUKIZYGISK
+#if defined(MODULE) && defined(CONFIG_DEBUG_INFO_BTF)
+#include <linux/bpf.h>
+#include <linux/btf.h>
+#define YZ_BTF_CALL
+#include "feature/yukizygisk/policy/inode_layout.h"
+#undef YZ_BTF_CALL
+#endif
+
+int ksu_fixed_inode_layout(void)
+{
+#if defined(MODULE) && defined(CONFIG_DEBUG_INFO_BTF)
+	const struct btf *btf;
+	s32 id;
+
+	btf = bpf_get_btf_vmlinux();
+	if (IS_ERR_OR_NULL(btf))
+		return -EOPNOTSUPP;
+	id = btf_find_by_name_kind(btf, "inode_security_struct",
+				   BTF_KIND_STRUCT);
+	if (id < 0 ||
+	    !yz_fixed_inode_btf(btf, btf_type_by_id(btf, id),
+				btf_name_by_offset, btf_type_skip_modifiers))
+		return -EOPNOTSUPP;
+	return 0;
+#elif defined(MODULE)
+	return -EOPNOTSUPP;
+#else
+	/* Built-in code uses the running kernel's own SELinux layout. */
+	return 0;
+#endif
+}
+#endif
+
 struct inode_security_struct *ksu_selinux_inode(const struct inode *inode)
 {
 	struct inode_security_struct *security;

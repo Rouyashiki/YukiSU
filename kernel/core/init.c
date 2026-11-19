@@ -11,6 +11,9 @@
 #include <linux/moduleparam.h>
 #include "infra/hook_lifetime.h"
 #include "preinit/preinit.h"
+#ifdef CONFIG_KSU_YUKIZYGISK
+#include "feature/yukizygisk/fixed_policy.h"
+#endif
 #include <linux/rcupdate.h>
 #include <linux/sched.h>
 #include <linux/version.h>
@@ -237,6 +240,9 @@ int __init kernelsu_init(void)
 		apply_kernelsu_rules();
 		cache_sid();
 		setup_ksu_cred();
+#ifdef CONFIG_KSU_YUKIZYGISK
+		yz_fixed_policy_latch();
+#endif
 
 		/*
 		 * Late-load ksud must keep root and the YukiSU SELinux domain

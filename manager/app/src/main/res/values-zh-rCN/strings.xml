@@ -1142,4 +1142,14 @@
     <string name="yukizygisk_load_partial">部分注入失败（也有成功记录）</string>
     <string name="yukizygisk_load_legacy_failure">有失败记录；此版本无法判断是否也有成功注入</string>
     <string name="yukizygisk_load_unknown">暂无可用的注入结果</string>
+    <string name="yukizygisk_fixed_policy_title">固定 SELinux 策略</string>
+    <string name="yukizygisk_fixed_policy_summary">当 YukiZygisk 内核临时放行出现异常时的回退方案，使用传统的 sepolicy.rule 一次性放行，如内核临时放行工作正常则不建议开启。</string>
+    <string name="yukizygisk_policy_fixed">固定</string>
+    <string name="yukizygisk_policy_temporary">临时</string>
+    <string name="yukizygisk_policy_unavailable">不可用</string>
+    <string name="yukizygisk_policy_pending">等待策略初始化</string>
+    <string name="yukizygisk_policy_state">本次 %1$s · 已保存的偏好 %2$s</string>
+    <string name="yukizygisk_policy_error">%1$s · 错误 %2$d</string>
+    <string name="yukizygisk_policy_denied">%1$s · 已拒绝 %2$s → %3$s（%4$s %5$s）</string>
+    <string name="yukizygisk_policy_reboot_required">%1$s · 请完整重启以撤销已加载的旧授权。</string>
 </resources>

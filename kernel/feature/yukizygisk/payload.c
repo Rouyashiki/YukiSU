@@ -10,6 +10,7 @@
 #include <linux/version.h>
 
 #include "internal.h"
+#include "fixed_policy.h"
 #include "ksu.h"
 #include "selinux/selinux.h"
 #include "klog.h" // IWYU pragma: keep
@@ -124,12 +125,17 @@ int yz_stage_fd(const char *path, const char *name,
 		return r < 0 ? (int)r : -EIO;
 	}
 
+	ret = yz_fixed_policy_label(mfd, NULL);
+	if (ret) {
+		fput(mfd);
+		return ret;
+	}
 	fd = get_unused_fd_flags(O_CLOEXEC);
 	if (fd < 0) {
 		fput(mfd);
 		return fd;
 	}
-	if (policy_state) {
+	if (policy_state || yz_fixed_policy_active()) {
 		ret = ksu_file_load_policy_allow_current(mfd, policy_state);
 		if (ret) {
 			pr_info(
@@ -157,6 +163,9 @@ int yz_stage_file_fd(const char *path,
 	int fd;
 	int ret;
 
+	if (yz_fixed_policy_active())
+		return yz_stage_fd(path, YZ_VMA_NAME, policy_state);
+
 	old_cred = ksu_cred ? override_creds(ksu_cred) : NULL;
 	file = filp_open(path, O_RDONLY, 0);
 	if (old_cred)
@@ -178,7 +187,7 @@ int yz_stage_file_fd(const char *path,
 		return -EINVAL;
 	}
 
-	if (policy_state) {
+	if (policy_state || yz_fixed_policy_active()) {
 		ret = ksu_file_load_policy_allow_current(file, policy_state);
 		if (ret) {
 			pr_info("yukizygisk: file payload policy update failed "

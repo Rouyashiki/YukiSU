@@ -24,3 +24,12 @@ yz-endpoint-vfs-ns := $(if $(yz-endpoint-symvers),$(shell awk '$$2 == "dentry_op
 ifneq ($(strip $(yz-endpoint-vfs-ns)),)
 ccflags-y += -DYZ_ENDPOINT_VFS_NS=$(yz-endpoint-vfs-ns)
 endif
+
+kernelsu-objs += feature/yukizygisk/fixed_policy.o
+ccflags-y += -I$(obj)/feature/yukizygisk
+quiet_cmd_yz_fixed = GEN     $@
+      cmd_yz_fixed = python3 $(src)/feature/yukizygisk/policy/generate.py $(src)/feature/yukizygisk/policy/sepolicy.rule $@
+$(obj)/feature/yukizygisk/policy/rules.h: $(src)/feature/yukizygisk/policy/sepolicy.rule $(src)/feature/yukizygisk/policy/generate.py FORCE
+	$(call if_changed,yz_fixed)
+$(obj)/selinux/rules.o: $(obj)/feature/yukizygisk/policy/rules.h
+targets += feature/yukizygisk/policy/rules.h

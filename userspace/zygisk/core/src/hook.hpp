@@ -10,6 +10,7 @@
 bool zygisk_hook_bootstrap(const char *self_path);
 void zygisk_cleanup_tango_stub();
 
+uint32_t zygisk_snapshot_process_flags(int uid);
 /* 0=inject, 1=inject+umount, 2=skip+umount. */
 int zygisk_inject_decision(int uid);
 struct CoreCleanupResult {

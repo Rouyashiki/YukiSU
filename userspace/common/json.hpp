@@ -11,6 +11,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -197,9 +198,14 @@ inline std::string dump(const Value& v, int indent = -1, int level = 0) {
 
 class Parser {
 public:
-    explicit Parser(const std::string& input) : input_(input) {}
+    // Optional source slices for top-level object members refer to input.
+    using MemberSources = std::map<std::string, std::string_view>;
+    explicit Parser(const std::string& input, MemberSources* members = nullptr)
+        : input_(input), members_(members) {}
 
     bool parse(Value& value, std::string& error) {
+        if (members_)
+            members_->clear();
         skip_ws();
         if (!parse_value(value, error)) {
             return false;
@@ -221,6 +227,7 @@ public:
 private:
     std::size_t depth_ = 0;
     const std::string& input_;
+    MemberSources* members_;
     std::size_t pos_ = 0;
 
     void skip_ws() {
@@ -313,6 +320,8 @@ private:
             return true;
         }
         for (;;) {
+            skip_ws();
+            const size_t begin = pos_;
             std::string key;
             if (!parse_string(key, error)) {
                 return false;
@@ -326,6 +335,8 @@ private:
                 return false;
             }
             value.o[key] = child;
+            if (members_ && depth_ == 1)
+                (*members_)[key] = std::string_view(input_).substr(begin, pos_ - begin);
             if (consume('}')) {
                 return true;
             }
@@ -528,6 +539,35 @@ private:
         return true;
     }
 };
+
+// Reuse unchanged members from the input so opaque numbers retain their precision.
+inline std::string dump_object_members(const Value& value, const std::string& source,
+                                       const Value* changes = nullptr,
+                                       const Value* omit_defaults = nullptr) {
+    if (!value.is_object() || source.empty())
+        return dump(value);
+    Parser::MemberSources members;
+    const auto old = Parser(source, &members).parse();
+    if (!old.is_object())
+        return dump(value);
+    std::string out = "{";
+    for (const auto& [key, member] : value.as_object()) {
+        const auto encoded = dump(member);
+        if (omit_defaults && omit_defaults->contains(key) &&
+            encoded == dump(omit_defaults->at(key)))
+            continue;
+        if (out.size() > 1)
+            out += omit_defaults ? "," : ", ";
+        const auto it = members.find(key);
+        if (it != members.end() && (!changes || !changes->contains(key)) &&
+            encoded == dump(old.at(key)))
+            out.append(it->second);
+        else
+            out += escape_string(key) + ":" + encoded;
+    }
+    out += '}';
+    return out;
+}
 
 inline bool parse_checked(const std::string& input, Value& out, std::string& error) {
     error.clear();

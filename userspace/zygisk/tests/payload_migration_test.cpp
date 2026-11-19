@@ -5,12 +5,16 @@
 #include "userspace/ksud/src/utils.hpp"
 #include "userspace/ksud/src/yukizygisk_diagnostics.hpp"
 #include "userspace/ksud/src/yukizygisk_snapshot.hpp"
+#include "userspace/zygisk/fixed_policy.hpp"
 #include <cassert>
+#include <cerrno>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace fs = std::filesystem;
 namespace {
@@ -96,6 +100,75 @@ int main(int argc, char **argv) {
   fs::create_directories(YUKIZYGISK_STATE_DIR);
   assert(write_file(YUKIZYGISK_CONFIG_PATH,
                     R"({"early_load":true,"yukilinker":true})"));
+  assert(chmod(YUKIZYGISK_CONFIG_PATH, 0664) == 0);
+  assert(!yukizygisk_early_load_enabled());
+  const auto policy = fs::path(PREINIT_DIR_DEFAULT) / "yukizygisk_policy.bin";
+  assert(write_file(policy, "existing profile"));
+  assert(!save_yukizygisk_policy_boot() && errno == EPERM);
+  assert(read_file(policy.string()) == "existing profile");
+  assert(fs::remove(policy));
+  assert(chmod(YUKIZYGISK_CONFIG_PATH, 0600) == 0);
+  assert(yukizygisk_early_load_enabled());
+  namespace fixed = yukizygisk::fixed_policy;
+  const auto config_before_restore = read_file(YUKIZYGISK_CONFIG_PATH).value();
+  const auto legacy_domains =
+      R"({"fixed_sepolicy":true,"fixed_zn_domains":["first","second"]})";
+  const auto fixed_only = R"({"fixed_sepolicy":true})";
+  assert(write_file(YUKIZYGISK_CONFIG_PATH, legacy_domains) &&
+         save_yukizygisk_policy_boot());
+  const auto initial_profile = read_file(policy.string()).value();
+  assert(!fs::exists(fixed::kRebootRequired));
+  assert(read_file(YUKIZYGISK_CONFIG_PATH).value().find("fixed_zn_domains") ==
+         std::string::npos);
+  const auto backup = policy.parent_path() / "profile.backup";
+  fs::create_hard_link(policy, backup);
+  assert(chmod(YUKIZYGISK_CONFIG_PATH, 0664) == 0);
+  assert(!save_yukizygisk_policy_boot() && errno == EPERM);
+  assert(!fs::exists(policy) && read_file(backup.string()) == initial_profile);
+  assert(fs::remove(fixed::kRebootRequired));
+  assert(chmod(YUKIZYGISK_CONFIG_PATH, 0600) == 0);
+  assert(save_yukizygisk_policy_boot());
+  assert(read_file(policy.string()) == initial_profile &&
+         !fs::equivalent(policy, backup));
+  yz_fixed_policy_config expected{};
+  assert(fixed::encode(json::parse(fixed_only), &expected) &&
+         expected.count == 0);
+  assert(initial_profile.size() == sizeof(expected) &&
+         memcmp(initial_profile.data(), &expected, sizeof(expected)) == 0);
+  // Legacy boot profiles carrying per-domain entries upgrade without a
+  // withdrawal warning because fixed mode now covers all SELinux domains.
+  yz_fixed_policy_config legacy_boot = expected;
+  legacy_boot.count = 1;
+  strcpy(legacy_boot.domains[0], "netd");
+  assert(write_file(policy,
+                    std::string(reinterpret_cast<const char *>(&legacy_boot),
+                                sizeof(legacy_boot))));
+  assert(save_yukizygisk_policy_boot() && !fs::exists(fixed::kRebootRequired));
+  assert(read_file(policy.string()) == initial_profile);
+  assert(write_file(YUKIZYGISK_CONFIG_PATH, config_before_restore) &&
+         save_yukizygisk_policy_boot());
+  assert(!fs::exists(policy) && fs::remove(fixed::kRebootRequired));
+  assert(fixed::status_json({}, true).at("reboot_required").as_bool() == false);
+  // Legacy umask(0) builds left /metadata/*/ksu group/world-writable; policy
+  // updates must tighten root-owned directories and still reject non-root ones.
+  const mode_t saved_umask = ::umask(0);
+  assert(chmod(PREINIT_DIR_DEFAULT, 0777) == 0);
+  assert(save_yukizygisk_policy_boot());
+  struct stat preinit_st{};
+  assert(stat(PREINIT_DIR_DEFAULT, &preinit_st) == 0 &&
+         (preinit_st.st_mode & 0022) == 0);
+  assert(chmod(PREINIT_DIR_DEFAULT, 0777) == 0);
+  assert(write_file(YUKIZYGISK_CONFIG_PATH, fixed_only) &&
+         save_yukizygisk_policy_boot());
+  assert(stat(PREINIT_DIR_DEFAULT, &preinit_st) == 0 &&
+         (preinit_st.st_mode & 0022) == 0 && fs::exists(policy));
+  assert(chown(PREINIT_DIR_DEFAULT, 1000, 0) == 0);
+  assert(!save_yukizygisk_policy_boot() && errno == EPERM);
+  assert(chown(PREINIT_DIR_DEFAULT, 0, 0) == 0);
+  assert(write_file(YUKIZYGISK_CONFIG_PATH, config_before_restore) &&
+         save_yukizygisk_policy_boot());
+  assert(!fs::exists(policy) && fs::remove(fixed::kRebootRequired));
+  assert(chmod(PREINIT_DIR_DEFAULT, 0777) == 0);
   const char *legacy[] = {"libyukilinker.so", "libyukilinker32.so",
                           "libyukilinker64.so"};
   for (const char *name : legacy) {
@@ -104,6 +177,11 @@ int main(int argc, char **argv) {
   }
   assert(ensure_yukizygisk(false) == 0);
   assert(refresh_yukizygisk_early_snapshot() == 0);
+  assert(stat(PREINIT_DIR_DEFAULT, &preinit_st) == 0 &&
+         (preinit_st.st_mode & 0022) == 0);
+  assert(stat(snapshot.c_str(), &preinit_st) == 0 &&
+         (preinit_st.st_mode & 0022) == 0);
+  ::umask(saved_umask);
   for (const char *name : {"libyloader32.so", "libyloader64.so"}) {
     const auto expected = read_file((assets / name).string());
     assert(expected &&

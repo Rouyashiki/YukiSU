@@ -25,6 +25,7 @@ void setenforce(bool);
 
 bool getenforce(void);
 
+bool is_primary_ksu_domain(const struct cred *cred);
 bool is_task_ksu_domain(const struct cred *cred);
 
 bool is_ksu_domain(void);
@@ -75,6 +76,7 @@ void escape_to_root_for_adb_root(void);
 
 struct inode;
 struct inode_security_struct;
+int ksu_fixed_inode_layout(void);
 struct inode_security_struct *ksu_selinux_inode(const struct inode *inode);
 
 struct super_block;

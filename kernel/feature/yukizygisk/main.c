@@ -2,6 +2,8 @@
 #include <linux/mutex.h>
 
 #include "internal.h"
+#include "fixed_policy.h"
+#include "runtime/ksud.h"
 #include "klog.h" // IWYU pragma: keep
 
 static DEFINE_MUTEX(yz_feature_lock);
@@ -17,6 +19,10 @@ int yz_feature_enable_early(void)
 	int ret = 0;
 
 	mutex_lock(&yz_feature_lock);
+	if (ksu_is_safe_mode_requested()) {
+		ret = -ECANCELED;
+		goto out;
+	}
 	if (READ_ONCE(yukizygisk_enabled) || yz_early_native_ready() ||
 	    !yz_early_native_active())
 		goto out;
@@ -24,6 +30,9 @@ int yz_feature_enable_early(void)
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
+	ret = yz_fixed_policy_boot(false);
+	if (ret)
+		goto out;
 	ret = yz_events_init();
 	if (ret)
 		goto out;
@@ -52,6 +61,10 @@ int yz_feature_set_enabled(bool enabled)
 	int ret = 0;
 
 	mutex_lock(&yz_feature_lock);
+	if (enabled && ksu_is_safe_mode_requested()) {
+		ret = -ECANCELED;
+		goto out;
+	}
 	if (enabled && READ_ONCE(yukizygisk_enabled))
 		goto out;
 
@@ -60,6 +73,9 @@ int yz_feature_set_enabled(bool enabled)
 			ret = -EOPNOTSUPP;
 			goto out;
 		}
+		ret = yz_fixed_policy_boot(true);
+		if (ret)
+			goto out;
 		ret = yz_events_init();
 		if (ret)
 			goto out;

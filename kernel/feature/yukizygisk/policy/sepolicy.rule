@@ -1,0 +1,15 @@
+# Fallback fixed policy: covers all SELinux process domains so Zygisk and
+# native ZN modules work without manual per-domain allowlisting.
+# $daemon is the authenticated daemon's actual SELinux domain.
+type yukizygisk_file file_type
+typeattribute yukizygisk_file mlstrustedobject
+allow domain domain process execmem
+allow domain yukizygisk_file file { open read getattr map execute }
+allow domain yukizygisk_file memfd_file { open read getattr map execute }
+allow domain $daemon fifo_file { open read write getattr }
+allow domain $daemon fd use
+allow domain $daemon unix_stream_socket { connectto read write getattr getopt setopt shutdown }
+allow $daemon yukizygisk_file file { open read write getattr map execute }
+allow $daemon yukizygisk_file memfd_file { open read write getattr map execute }
+# The kernel stages packets and payloads while alternating host and task creds.
+allow kernel yukizygisk_file file { open read write getattr map }

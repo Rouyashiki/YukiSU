@@ -14,6 +14,15 @@ namespace fs = std::filesystem;
 
 static int config_lock_signal = -1;
 static bool fail_config_sync;
+static bool stop_before_policy_retire;
+
+extern "C" int __real_unlinkat(int, const char *, int);
+extern "C" int __wrap_unlinkat(int dir, const char *name, int flags) {
+  if (stop_before_policy_retire &&
+      std::string_view(name) == "yzconfig.json.policy-pending")
+    _exit(75);
+  return __real_unlinkat(dir, name, flags);
+}
 
 extern "C" int __real_flock(int fd, int operation);
 extern "C" int __wrap_flock(int fd, int operation) {
@@ -184,6 +193,238 @@ static void protection_state(const fs::path &base) {
   put(base / "protection64.json", json::dump(old));
   assert(chown((base / "protection64.json").c_str(), 1058, 0) == 0);
   assert(suspended_modules(base.string()).a.empty());
+}
+
+static bool stage_test_profile(const json::Value &root) {
+  if (!root.at("fixed_sepolicy").as_bool())
+    return yukizygisk::settings::detail::withdraw_fixed_policy();
+  return yukizygisk::fixed_policy::write_boot(
+      std::string(ksud::PREINIT_DIR_DEFAULT) + "yukizygisk_policy.bin", root);
+}
+
+static void policy_configuration(const fs::path &base) {
+  namespace settings = yukizygisk::settings;
+  namespace policy = yukizygisk::fixed_policy;
+  fs::create_directories(base);
+  const pid_t isolated = fork();
+  assert(isolated >= 0);
+  if (isolated) {
+    int status = 0;
+    assert(waitpid(isolated, &status, 0) == isolated && WIFEXITED(status) &&
+           WEXITSTATUS(status) == 0);
+    return;
+  }
+  assert(chroot(base.c_str()) == 0 && chdir("/") == 0);
+  fs::create_directories("/dev");
+  const std::string path = ksud::YUKIZYGISK_CONFIG_PATH;
+  fs::create_directories(fs::path(path).parent_path());
+  fs::create_directories(ksud::PREINIT_DIR_DEFAULT);
+  const auto pending = path + settings::detail::kPolicyPending;
+  const auto profile =
+      std::string(ksud::PREINIT_DIR_DEFAULT) + "yukizygisk_policy.bin";
+  const std::vector<std::string> enable = {"fixed_sepolicy", "true"};
+  const std::vector<std::string> disable = {"fixed_sepolicy", "false"};
+  const auto reject = +[](const json::Value &) {
+    errno = EROFS;
+    return false;
+  };
+  put(path, R"({"fixed_sepolicy":false,"custom":7})");
+  const auto original = get(path);
+  json::Value recovered;
+  const std::string opaque =
+      R"({"id":9007199254740993,"list":[-9007199254740995,0.1250]})";
+  put(path, R"({"fixed_sepolicy":"invalid","custom":)" + opaque + "}");
+  assert(settings::read(path, &recovered) &&
+         !recovered.at("fixed_sepolicy").as_bool());
+  assert(get(path).find(opaque) != std::string::npos);
+  put(path, R"({"denylist_mode":1.0000000000000001,"custom":)" + opaque + "}");
+  assert(settings::update(path, {"denylist_mode", "1"}));
+  assert(get(path).find(opaque) != std::string::npos &&
+         get(path).find("1.0000000000000001") == std::string::npos);
+  std::string dense =
+      R"({"fixed_sepolicy":"invalid","custom":[9007199254740993)";
+  dense.append(yukizygisk::crash::kMaxDocument - dense.size() - 2, ' ');
+  dense += "]}";
+  put(path, dense);
+  assert(settings::read(path, &recovered) &&
+         !recovered.at("fixed_sepolicy").as_bool());
+  assert(get(path).find("9007199254740993") != std::string::npos);
+  put(path, original);
+  for (const bool symlink : {false, true}) {
+    const auto candidate = R"({"fixed_sepolicy":true})";
+    assert(stage_test_profile(json::parse(candidate)));
+    const auto backup = path + ".backup";
+    put(backup, candidate);
+    if (symlink)
+      fs::create_symlink(backup, pending);
+    else {
+      put(pending, candidate);
+      assert(chmod(pending.c_str(), 0664) == 0);
+    }
+    assert(settings::read(path, &recovered) &&
+           !recovered.at("fixed_sepolicy").as_bool());
+    assert(get(path) == original && !fs::exists(pending) &&
+           get(backup) == candidate);
+    assert(!fs::exists(profile) && fs::remove(policy::kRebootRequired));
+    fs::remove(backup);
+  }
+  assert(chmod(path.c_str(), 0664) == 0);
+  assert(!settings::update(path, enable, stage_test_profile) && errno == EPERM);
+  assert(chmod(path.c_str(), 0600) == 0);
+  assert(!settings::update(path, enable, reject) && errno == EROFS);
+  assert(get(path) == original && !fs::exists(pending) && !fs::exists(profile));
+  const auto restore_after_stage = +[](const json::Value &candidate) {
+    assert(stage_test_profile(candidate));
+    put(ksud::YUKIZYGISK_CONFIG_PATH, R"({"fixed_sepolicy":false,"custom":8})");
+    return true;
+  };
+  assert(!settings::update(path, enable, restore_after_stage) &&
+         errno == ESTALE);
+  assert(get(path) == R"({"fixed_sepolicy":false,"custom":8})");
+  assert(!fs::exists(pending) && !fs::exists(profile));
+  assert(fs::remove(policy::kRebootRequired));
+  put(path, original);
+  assert(settings::update(path, enable, stage_test_profile));
+  const auto enabled = get(path);
+  const auto old_profile = get(profile);
+  assert(!settings::update(path, disable, reject) && errno == EROFS);
+  assert(get(path) == enabled && !fs::exists(pending) &&
+         get(profile) == old_profile);
+
+  json::Value root;
+  assert(chmod(path.c_str(), 0664) == 0);
+  for (const std::string contents : {R"({"fixed_sepolicy":false})", "{"}) {
+    put(path, contents);
+    assert(!settings::read(path, &root) && errno == EPERM);
+    assert(!settings::update(path, disable, stage_test_profile) &&
+           errno == EPERM);
+    assert(get(path) == contents && get(profile) == old_profile);
+  }
+  assert(chmod(path.c_str(), 0600) == 0);
+  put(path, enabled);
+  assert(settings::read(path, &root));
+  root["fixed_sepolicy"] = false;
+  assert(!policy::write_boot(profile, root, false, [](const std::string &) {
+    errno = EPERM;
+    return false;
+  }));
+  assert(get(profile) == old_profile);
+  for (const bool next_fixed : {false, true}) {
+    for (const bool published : {false, true}) {
+      const auto before_config = get(path);
+      const pid_t child = fork();
+      assert(child >= 0);
+      if (child == 0) {
+        const auto before = +[](const json::Value &) -> bool { _exit(75); };
+        const auto after = +[](const json::Value &candidate) -> bool {
+          assert(stage_test_profile(candidate));
+          _exit(75);
+        };
+        settings::update(path, next_fixed ? enable : disable,
+                         published ? after : before);
+        _exit(1);
+      }
+      int status = 0;
+      assert(waitpid(child, &status, 0) == child && WIFEXITED(status) &&
+             WEXITSTATUS(status) == 75);
+      assert(get(path) == before_config && fs::exists(pending));
+      const bool expected = published ? next_fixed : !next_fixed;
+      assert(settings::read(path, &root) &&
+             root.at("fixed_sepolicy").as_bool() == expected);
+      assert(root.at("custom").as_number() == 7 && !fs::exists(pending));
+      assert(fs::exists(profile) == expected);
+    }
+  }
+  for (const bool legacy : {false, true}) {
+    for (const bool keep_fixed : {false, true}) {
+      put(path, original);
+      assert(settings::detail::withdraw_fixed_policy());
+      const pid_t child = fork();
+      assert(child >= 0);
+      if (!child) {
+        settings::update(
+            path, enable, +[](const json::Value &candidate) -> bool {
+              assert(stage_test_profile(candidate));
+              _exit(75);
+            });
+        _exit(1);
+      }
+      int status = 0;
+      assert(waitpid(child, &status, 0) == child && WIFEXITED(status) &&
+             WEXITSTATUS(status) == 75);
+      if (legacy)
+        put(pending, enabled);
+      struct stat before{}, after{};
+      assert(stat(path.c_str(), &before) == 0);
+      const auto restored = keep_fixed
+                                ? R"({"fixed_sepolicy":true,"custom":8})"
+                                : R"({"fixed_sepolicy":false,"custom":8})";
+      put(path, restored);
+      assert(stat(path.c_str(), &after) == 0 && before.st_ino == after.st_ino);
+      assert(settings::read(path, &root) && get(path) == restored);
+      assert(root.at("custom").as_number() == 8 && !fs::exists(pending));
+      assert(fs::exists(profile) == keep_fixed);
+      assert(fs::remove(policy::kRebootRequired) == !keep_fixed);
+    }
+  }
+  const auto restore_journal = +[](const json::Value &candidate) {
+    assert(stage_test_profile(candidate));
+    const std::string config = ksud::YUKIZYGISK_CONFIG_PATH;
+    const auto current = get(config);
+    auto journal = current;
+    journal.append(2, '\0').append(current);
+    put(config + settings::detail::kPolicyPending, journal);
+    return true;
+  };
+  put(path, original);
+  assert(stage_test_profile(json::parse(original)));
+  assert(!settings::update(path, enable, restore_journal));
+  assert(errno == ESTALE && get(path) == original && !fs::exists(pending));
+  assert(!fs::exists(profile) && fs::remove(policy::kRebootRequired));
+
+  const std::string legacy_domains =
+      R"({"fixed_sepolicy":true,"fixed_zn_domains":["first"],"custom":8})";
+  put(path, legacy_domains);
+  assert(settings::read(path, &root));
+  assert(root.at("fixed_sepolicy").as_bool() &&
+         root.at("custom").as_number() == 8 &&
+         root.at("fixed_zn_domains").is_null());
+  assert(get(path).find("fixed_zn_domains") == std::string::npos);
+  assert(!settings::update(path, {"fixed_zn_domains", R"(["first"])"},
+                           stage_test_profile) &&
+         errno == EINVAL);
+
+  const std::string fixed_saved = R"({"fixed_sepolicy":true,"custom":8})";
+  put(path, fixed_saved);
+  assert(stage_test_profile(json::parse(fixed_saved)));
+  assert(!settings::update(path, enable, reject) && errno == EROFS);
+  assert(get(path) == fixed_saved && !fs::exists(pending));
+  for (const bool legacy_baseline : {false, true}) {
+    put(path, original);
+    assert(stage_test_profile(json::parse(original)));
+    const pid_t child = fork();
+    assert(child >= 0);
+    if (!child) {
+      stop_before_policy_retire = true;
+      settings::update(path, enable, stage_test_profile);
+      _exit(1);
+    }
+    int status = 0;
+    assert(waitpid(child, &status, 0) == child && WIFEXITED(status) &&
+           WEXITSTATUS(status) == 75);
+    auto published = get(path);
+    assert(json::parse(published).at("fixed_sepolicy").as_bool());
+    if (legacy_baseline) {
+      published.push_back('\0');
+      published += original;
+      put(pending, published);
+    }
+    put(path, original);
+    assert(settings::read(path, &root) && get(path) == original);
+    assert(!fs::exists(profile) && !fs::exists(pending));
+    assert(fs::remove(policy::kRebootRequired));
+  }
+  _exit(0);
 }
 
 static void configuration(const fs::path &base) {
@@ -371,6 +612,7 @@ backtrace:
   replay(base / "wrong-pid", dump, true, true, true, false, stale);
   protection_state(base / "protection");
   configuration(base / "config");
+  policy_configuration(base / "policy-config");
   configuration_recovery(base / "config-recovery");
   Frame malformed;
   assert(!frame_line("#999999999999 pc 1234 " + parsed.frames[0].path,

@@ -212,9 +212,14 @@ static bool is_sid_match(const struct cred *cred, u32 cached_sid,
 	return result;
 }
 
+bool is_primary_ksu_domain(const struct cred *cred)
+{
+	return is_sid_match(cred, cached_ksu_sid, KERNEL_SU_CONTEXT);
+}
+
 bool is_task_ksu_domain(const struct cred *cred)
 {
-	return is_sid_match(cred, cached_ksu_sid, KERNEL_SU_CONTEXT) ||
+	return is_primary_ksu_domain(cred) ||
 	       is_sid_match(cred, cached_legacy_su_sid, KSU_LEGACY_SU_CONTEXT);
 }
 

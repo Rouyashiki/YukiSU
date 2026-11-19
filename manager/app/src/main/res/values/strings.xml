@@ -1148,4 +1148,14 @@
     <string name="yukizygisk_load_partial" tools:ignore="MissingTranslation">Some injections failed; others succeeded</string>
     <string name="yukizygisk_load_legacy_failure" tools:ignore="MissingTranslation">Failure recorded; this version cannot report whether other injections succeeded</string>
     <string name="yukizygisk_load_unknown" tools:ignore="MissingTranslation">No injection outcome available</string>
+    <string name="yukizygisk_fixed_policy_title" tools:ignore="MissingTranslation">Fixed SELinux policy</string>
+    <string name="yukizygisk_fixed_policy_summary" tools:ignore="MissingTranslation">Fallback when YukiZygisk temporary kernel policy grants fail, using traditional one-shot sepolicy.rule grants instead. Not recommended if temporary grants work normally.</string>
+    <string name="yukizygisk_policy_fixed" tools:ignore="MissingTranslation">Fixed</string>
+    <string name="yukizygisk_policy_temporary" tools:ignore="MissingTranslation">Temporary</string>
+    <string name="yukizygisk_policy_unavailable" tools:ignore="MissingTranslation">Unavailable</string>
+    <string name="yukizygisk_policy_pending" tools:ignore="MissingTranslation">Initializing policy</string>
+    <string name="yukizygisk_policy_state" tools:ignore="MissingTranslation">Current %1$s · Saved preference %2$s</string>
+    <string name="yukizygisk_policy_error" tools:ignore="MissingTranslation">%1$s · Error %2$d</string>
+    <string name="yukizygisk_policy_denied" tools:ignore="MissingTranslation">%1$s · Denied %2$s → %3$s (%4$s %5$s)</string>
+    <string name="yukizygisk_policy_reboot_required" tools:ignore="MissingTranslation">%1$s · Fully reboot to remove previously loaded grants.</string>
 </resources>

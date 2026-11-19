@@ -683,6 +683,16 @@ int regenerate_preinit_rc(const std::filesystem::path& preinit_dir,
         LOGW("Failed to create %s: %s", preinit_dir.c_str(), ec.message().c_str());
         return 1;
     }
+    const int preinit_fd =
+        open(preinit_dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    if (preinit_fd >= 0) {
+        struct stat preinit_st{};
+        if (fstat(preinit_fd, &preinit_st) == 0 && preinit_st.st_uid == geteuid() &&
+            (preinit_st.st_mode & 0022) != 0) {
+            (void)fchmod(preinit_fd, (preinit_st.st_mode & 07777) & ~static_cast<mode_t>(0022));
+        }
+        close(preinit_fd);
+    }
 
     const std::filesystem::path tmp_path = preinit_dir / MODULES_RC_TMP_FILE;
     const std::filesystem::path out_path = preinit_dir / MODULES_RC_FILE;

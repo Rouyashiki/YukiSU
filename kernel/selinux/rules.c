@@ -12,6 +12,9 @@
 #include "linux/lsm_audit.h" // IWYU pragma: keep
 #include "objsec.h"
 #include "selinux.h"
+#include "feature/yukizygisk/fixed_policy.h"
+#include <linux/magic.h>
+#include "flask.h"
 #include "sepolicy.h"
 #include "ss/context.h"
 #include "ss/services.h"
@@ -739,6 +742,8 @@ out_unlock:
 int ksu_file_load_policy_allow_current(struct file *file,
 				       struct ksu_file_load_policy *state)
 {
+	if (IS_ENABLED(CONFIG_KSU_YUKIZYGISK) && yz_fixed_policy_active())
+		return yz_fixed_policy_check(file, current_cred(), false);
 	return ksu_file_load_policy_allow_sid(
 	    file, current_sid(), false, false, ksu_tmpfs_hook_perms,
 	    ARRAY_SIZE(ksu_tmpfs_hook_perms), state);
@@ -762,6 +767,9 @@ int ksu_file_load_policy_allow_cred(struct file *file, const struct cred *cred,
 				    struct ksu_file_load_policy *state)
 {
 	u32 sid = ksu_file_load_policy_cred_sid(cred);
+
+	if (IS_ENABLED(CONFIG_KSU_YUKIZYGISK) && yz_fixed_policy_active())
+		return yz_fixed_policy_check(file, cred, true);
 
 	if (!sid || !file)
 		return -EINVAL;
@@ -899,6 +907,8 @@ out_unlock:
 int ksu_file_load_policy_allow_execmem_current(
     struct ksu_file_load_policy *state)
 {
+	if (IS_ENABLED(CONFIG_KSU_YUKIZYGISK) && yz_fixed_policy_active())
+		return yz_fixed_policy_check_execmem(current_cred());
 	return ksu_file_load_policy_allow_execmem_sid(current_sid(), state);
 }
 
@@ -906,6 +916,9 @@ int ksu_file_load_policy_allow_execmem_cred(const struct cred *cred,
 					    struct ksu_file_load_policy *state)
 {
 	u32 sid = ksu_file_load_policy_cred_sid(cred);
+
+	if (IS_ENABLED(CONFIG_KSU_YUKIZYGISK) && yz_fixed_policy_active())
+		return yz_fixed_policy_check_execmem(cred);
 
 	if (!sid)
 		return -EINVAL;
@@ -1588,3 +1601,155 @@ out_free:
 	kvfree(payload);
 	return ret;
 }
+
+#ifdef CONFIG_KSU_YUKIZYGISK
+#define yz_fp_search symtab_search
+#define yz_fp_insert symtab_insert
+#define yz_fp_set_bit ebitmap_set_bit
+#define yz_fp_destroy_bitmap ebitmap_destroy
+#define yz_fp_state (&selinux_state)
+#define yz_fp_cred_sid ksu_file_load_policy_cred_sid
+#define yz_fp_sidtab_search sidtab_search
+#define yz_fp_inode ksu_selinux_inode
+
+static void yz_fp_compute(u32 source, u32 target, u16 cls,
+			  struct av_decision *decision)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	security_compute_av_user(source, target, cls, decision);
+#else
+	security_compute_av_user(&selinux_state, source, target, cls, decision);
+#endif
+}
+
+static int yz_fp_context_sid(const char *context, u32 len, u32 *sid,
+			     gfp_t flags)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	return security_context_to_sid(context, len, sid, flags);
+#else
+	return security_context_to_sid(&selinux_state, context, len, sid,
+				       flags);
+#endif
+}
+
+static int yz_fp_allow(struct policydb *db, const char *source,
+		       const char *target, const char *cls,
+		       const char *permission)
+{
+	struct class_datum *class = symtab_search(&db->p_classes, cls);
+
+	if (!class || !ksu_file_perm_mask(class, permission))
+		return -ENOENT;
+	return ksu_allow(db, source, target, cls, permission) ? 0 : -ENOMEM;
+}
+
+static int yz_fp_has_rule(struct policydb *db, const char *source,
+			  const char *target, const char *class_name,
+			  const char *permission)
+{
+	struct type_datum *src = yz_fp_search(&db->p_types, source);
+	struct type_datum *tgt = yz_fp_search(&db->p_types, target);
+	struct class_datum *cls = yz_fp_search(&db->p_classes, class_name);
+	u32 required;
+
+	if (!src || !tgt || !cls)
+		return -ENOENT;
+	required = ksu_file_perm_mask(cls, permission);
+	return required && (ksu_direct_allowed_av(db, src->value, tgt->value,
+						  cls->value) &
+			    required) == required
+		   ? 0
+		   : -EACCES;
+}
+
+#include "feature/yukizygisk/policy/database.h"
+
+/* The boot profile is immutable. Only policy_mutex owners use this cache. */
+static const struct yz_fixed_policy_config *yz_fixed_boot_config;
+static u32 yz_fixed_generation;
+static struct yz_fixed_policy_status yz_fixed_rules_status;
+
+static int yz_fixed_live_error(struct selinux_policy *policy,
+			       struct yz_fixed_policy_status *detail)
+{
+	lockdep_assert_held(&selinux_state.policy_mutex);
+	if (!policy || !yz_fixed_boot_config)
+		return -EAGAIN;
+	if (policy->latest_granting != yz_fixed_generation) {
+		yz_fixed_rules_status = (struct yz_fixed_policy_status){};
+		yz_fixed_rules_status.error = yz_fixed_apply_rules(
+		    &policy->policydb, yz_fixed_boot_config, KERNEL_SU_DOMAIN,
+		    false, &yz_fixed_rules_status);
+		yz_fixed_generation = policy->latest_granting;
+	}
+	if (detail && yz_fixed_rules_status.error)
+		*detail = yz_fixed_rules_status;
+	return yz_fixed_rules_status.error;
+}
+
+int yz_fixed_policy_live_error(struct yz_fixed_policy_status *detail)
+{
+	struct selinux_policy *policy;
+	int ret;
+
+	mutex_lock(&selinux_state.policy_mutex);
+	policy = rcu_dereference_protected(
+	    selinux_state.policy, lockdep_is_held(&selinux_state.policy_mutex));
+	ret = yz_fixed_live_error(policy, detail);
+	mutex_unlock(&selinux_state.policy_mutex);
+	return ret;
+}
+
+#include "feature/yukizygisk/policy/access.h"
+
+int yz_fixed_policy_apply(const struct yz_fixed_policy_config *config,
+			  struct yz_fixed_policy_status *detail)
+{
+	struct selinux_policy *policy, *old;
+	int ret;
+
+	if (!smp_load_acquire(&selinux_state.initialized))
+		return -EAGAIN;
+	ret = ksu_fixed_inode_layout();
+	if (ret)
+		return ret;
+	mutex_lock(&selinux_state.policy_mutex);
+	if (!smp_load_acquire(&selinux_state.initialized)) {
+		ret = -EAGAIN;
+		goto unlock;
+	}
+
+	old = rcu_dereference_protected(
+	    selinux_state.policy, lockdep_is_held(&selinux_state.policy_mutex));
+	if (!old) {
+		ret = -EAGAIN;
+		goto unlock;
+	}
+	if (!yz_fixed_apply_rules(&old->policydb, config, KERNEL_SU_DOMAIN,
+				  false, NULL)) {
+		ret = 0;
+		policy = old;
+		goto applied;
+	}
+	policy = ksu_dup_sepolicy(old);
+	if (IS_ERR(policy)) {
+		ret = PTR_ERR(policy);
+		goto unlock;
+	}
+	ret = yz_fixed_apply_rules(&policy->policydb, config, KERNEL_SU_DOMAIN,
+				   true, detail);
+	if (ret) {
+		ksu_destroy_sepolicy(policy);
+		goto unlock;
+	}
+	publish_policy(policy, old);
+applied:
+	yz_fixed_boot_config = config;
+	yz_fixed_generation = policy->latest_granting;
+	yz_fixed_rules_status = (struct yz_fixed_policy_status){};
+unlock:
+	mutex_unlock(&selinux_state.policy_mutex);
+	return ret;
+}
+#endif

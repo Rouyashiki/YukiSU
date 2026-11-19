@@ -201,7 +201,12 @@ inline bool matches(const Exit &exit, const Tombstone &tombstone,
          distance <= kWindowNs;
 }
 
-enum class FileSource { RootOwned, Tombstone };
+enum class FileSource {
+  RootOwned,
+  RootPrivate,
+  RootPrivateSingleLink,
+  Tombstone
+};
 
 inline bool read_bounded(const std::string &path, size_t limit,
                          std::string *text,
@@ -213,34 +218,55 @@ inline bool read_bounded(const std::string &path, size_t limit,
   struct stat before{};
   // Android tombstones belong to AID_TOMBSTONED; saved state stays root-only.
   constexpr uid_t kTombstonedUid = 1058;
-  bool ok =
-      fstat(fd, &before) == 0 && S_ISREG(before.st_mode) &&
-      (before.st_uid == 0 ||
-       (source == FileSource::Tombstone && before.st_uid == kTombstonedUid)) &&
-      before.st_size >= 0 && static_cast<uint64_t>(before.st_size) <= limit;
+  const bool single_link = source == FileSource::RootPrivateSingleLink;
+  const bool private_file = single_link || source == FileSource::RootPrivate;
+  int error = 0;
+  if (fstat(fd, &before) != 0)
+    error = errno;
+  else if (single_link && before.st_nlink != 1)
+    error = before.st_nlink == 0 ? EAGAIN : EMLINK;
+  else if (!S_ISREG(before.st_mode) ||
+           (before.st_uid != 0 && !(source == FileSource::Tombstone &&
+                                    before.st_uid == kTombstonedUid)) ||
+           (private_file && (before.st_mode & 0022)))
+    error = EPERM;
+  else if (before.st_size < 0 || static_cast<uint64_t>(before.st_size) > limit)
+    error = EFBIG;
   text->clear();
   char buffer[4096];
-  while (ok) {
+  while (!error) {
     const ssize_t count = read(fd, buffer, sizeof(buffer));
     if (count < 0 && errno == EINTR)
       continue;
     if (count == 0)
       break;
     if (count < 0 || text->size() + static_cast<size_t>(count) > limit) {
-      ok = false;
+      error = count < 0 ? errno : EAGAIN;
       break;
     }
     text->append(buffer, static_cast<size_t>(count));
   }
   struct stat after{};
-  ok = ok && fstat(fd, &after) == 0 && before.st_uid == after.st_uid &&
-       before.st_size == after.st_size &&
-       before.st_mtim.tv_sec == after.st_mtim.tv_sec &&
-       before.st_mtim.tv_nsec == after.st_mtim.tv_nsec;
+  if (!error) {
+    if (fstat(fd, &after) != 0)
+      error = errno;
+    else if (single_link && after.st_nlink != 1)
+      error = after.st_nlink == 0 ? EAGAIN : EMLINK;
+    else if (before.st_uid != after.st_uid || before.st_size != after.st_size ||
+             before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
+             before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
+             (private_file &&
+              (before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
+               before.st_ctim.tv_nsec != after.st_ctim.tv_nsec ||
+               (after.st_mode & 0022))))
+      error = EAGAIN;
+  }
   close(fd);
-  if (!ok)
+  if (error) {
     text->clear();
-  return ok;
+    errno = error;
+  }
+  return !error;
 }
 
 inline std::string boot_id() {

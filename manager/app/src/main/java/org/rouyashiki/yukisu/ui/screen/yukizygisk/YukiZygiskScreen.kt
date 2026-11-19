@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Adb
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.outlined.Cancel
@@ -51,6 +52,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -103,40 +105,52 @@ data class YzConfig(
     val yukilinker: Boolean = true,
     val anonymousMemory: Boolean = true,
     val earlyLoad: Boolean = false,
+    val fixedSepolicy: Boolean = false,
     val denylistMode: Int = 0,
     val dmesgLog: Boolean = false,
     val crashProtection: Boolean = true,
 )
 
-private suspend fun readYzConfig(): YzConfig = withContext(Dispatchers.IO) {
+private fun YzConfig.settings() = mapOf(
+    "yukilinker" to yukilinker.toString(),
+    "anonymous_memory" to anonymousMemory.toString(),
+    "early_load" to earlyLoad.toString(),
+    "fixed_sepolicy" to fixedSepolicy.toString(),
+    "denylist_mode" to denylistMode.toString(),
+    "dmesg_log" to dmesgLog.toString(),
+    "crash_protection" to crashProtection.toString(),
+)
+
+private suspend fun readYzConfig(): YzConfig? = withContext(Dispatchers.IO) {
     val raw = runCatching {
         ksudReadString("yzctl config get")
     }.getOrNull()
-    if (raw.isNullOrBlank()) return@withContext YzConfig()
+    if (raw.isNullOrBlank()) return@withContext null
     try {
         val o = JSONObject(raw)
         YzConfig(
             yukilinker = o.optBoolean("yukilinker", true),
             anonymousMemory = o.optBoolean("anonymous_memory", true),
             earlyLoad = o.optBoolean("early_load", false),
+            fixedSepolicy = o.optBoolean("fixed_sepolicy", false),
             denylistMode = o.optInt("denylist_mode", 0),
             dmesgLog = o.optBoolean("dmesg_log", false),
             crashProtection = o.optBoolean("crash_protection", true),
         )
     } catch (_: Exception) {
-        YzConfig()
+        null
     }
 }
 
-private suspend fun writeYzConfig(cfg: YzConfig): Boolean = yzConfigWriteMutex.withLock {
+private suspend fun writeYzConfig(before: YzConfig, after: YzConfig): Boolean = yzConfigWriteMutex.withLock {
     withContext(Dispatchers.IO) {
         runCatching {
-            check(execKsud(
-                "yzctl config set yukilinker ${cfg.yukilinker}" +
-                    " anonymous_memory ${cfg.anonymousMemory} early_load ${cfg.earlyLoad}" +
-                    " denylist_mode ${cfg.denylistMode} dmesg_log ${cfg.dmesgLog}" +
-                    " crash_protection ${cfg.crashProtection}"
-            ))
+            val previous = before.settings()
+            val changes = after.settings().filter { (key, value) -> value != previous[key] }
+            if (changes.isNotEmpty()) {
+                val args = changes.flatMap { (key, value) -> listOf(key, value) }
+                check(execKsud(listOf("yzctl", "config", "set") + args))
+            }
         }.onFailure { Log.e(TAG, "Failed to apply YukiZygisk configuration", it) }.isSuccess
     }
 }
@@ -368,6 +382,7 @@ private data class YzStatus(
     val nativeInjections: List<NativeInjection>,
     val crashEvidence: List<CrashEvidence>,
     val suspendedModules: Set<String>,
+    val policy: JSONObject?,
 )
 
 private data class ZygoteModuleEntry(
@@ -527,6 +542,7 @@ private fun parseYzStatus(json: String): YzStatus? = runCatching {
         o.optJSONArray("suspended_modules")?.let { a ->
             (0 until a.length()).map { a.getString(it) }.toSet()
         } ?: emptySet(),
+        o.optJSONObject("policy"),
     )
 }.getOrNull()
 
@@ -536,6 +552,7 @@ private data class YzSnapshot(
     val nativeModules: List<NativeModuleEntry>,
     val nativeInjections: List<NativeInjection>,
     val crashEvidence: List<CrashEvidence>,
+    val policy: JSONObject?,
 )
 
 private const val YZ_POLL_INTERVAL_MS = 2000L
@@ -610,6 +627,9 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
     val snackBarHost = rememberSnackbarController()
 
     var config by remember { mutableStateOf(YzConfig()) }
+    var confirmedFixedPolicy by remember { mutableStateOf<Boolean?>(null) }
+    var configRevision by remember { mutableIntStateOf(0) }
+    var policyStatus by remember { mutableStateOf<JSONObject?>(null) }
     var monitoredZygotes by remember { mutableStateOf<List<ZygoteMonitorEntry>>(emptyList()) }
     var zygiskModules by remember { mutableStateOf<List<ModuleDisplayEntry>>(emptyList()) }
     var nativeModules by remember { mutableStateOf<List<NativeModuleEntry>>(emptyList()) }
@@ -619,7 +639,11 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
     var monitorDialog by remember { mutableStateOf<MonitorDialogState?>(null) }
 
     LaunchedEffect(Unit) {
-        config = readYzConfig()
+        val initial = readYzConfig()
+        if (initial != null && configRevision == 0) {
+            config = initial
+            confirmedFixedPolicy = initial.fixedSepolicy
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -670,15 +694,18 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
                     },
                     nativeInjections = st.nativeInjections,
                     crashEvidence = st.crashEvidence,
+                    policy = st.policy,
                 )
             }
             if (snapshot != null) {
+                policyStatus = snapshot.policy
                 monitoredZygotes = snapshot.zygotes
                 zygiskModules = snapshot.modules
                 nativeModules = snapshot.nativeModules
                 nativeInjections = snapshot.nativeInjections
                 crashEvidence = snapshot.crashEvidence
             } else {
+                policyStatus = null
                 monitoredZygotes = emptyList()
                 zygiskModules = emptyList()
                 nativeModules = emptyList()
@@ -691,12 +718,17 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
 
     val saveFailedMessage = stringResource(R.string.yukizygisk_config_save_failed)
     fun save(newCfg: YzConfig) {
+        val before = config
         config = newCfg
+        val revision = ++configRevision
         scope.launch {
-            if (!writeYzConfig(newCfg)) {
-                config = readYzConfig()
-                snackBarHost.showSnackbar(saveFailedMessage)
+            val saved = writeYzConfig(before, newCfg)
+            val current = readYzConfig()
+            if (revision == configRevision) {
+                config = current ?: if (saved) newCfg else before
+                confirmedFixedPolicy = current?.fixedSepolicy
             }
+            if (!saved) snackBarHost.showSnackbar(saveFailedMessage)
         }
     }
 
@@ -866,6 +898,58 @@ fun YukiZygiskScreen(navigator: DestinationsNavigator) {
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) { save(config.copy(denylistMode = it)) }
+            }
+
+            SettingsCard(title = stringResource(R.string.yukizygisk_fixed_policy_title)) {
+                SwitchSettingItem(
+                    icon = Icons.Default.Security,
+                    title = stringResource(R.string.yukizygisk_fixed_policy_title),
+                    summary = stringResource(R.string.yukizygisk_fixed_policy_summary),
+                    checked = config.fixedSepolicy,
+                    groupPosition = MoreSettingsItemPosition.Only,
+                    onChange = { save(config.copy(fixedSepolicy = it)) },
+                )
+                val activeLabel = when {
+                    policyStatus?.optBoolean("supported") != true -> stringResource(R.string.yukizygisk_policy_unavailable)
+                    policyStatus?.optBoolean("initialized") != true -> stringResource(R.string.yukizygisk_policy_pending)
+                    policyStatus?.optBoolean("active") == true -> stringResource(R.string.yukizygisk_policy_fixed)
+                    else -> stringResource(R.string.yukizygisk_policy_temporary)
+                }
+                val modeState = stringResource(
+                    R.string.yukizygisk_policy_state, activeLabel,
+                    stringResource(when (confirmedFixedPolicy) {
+                        true -> R.string.yukizygisk_policy_fixed
+                        false -> R.string.yukizygisk_policy_temporary
+                        null -> R.string.selinux_status_unknown
+                    }),
+                )
+                val supportedPolicy = policyStatus?.takeIf { it.optBoolean("supported") }
+                val policyError = supportedPolicy?.optInt("error") ?: 0
+                val missingAv = supportedPolicy?.optLong("missing_av") ?: 0L
+                val policyBase = if (policyError == 0) {
+                    modeState
+                } else {
+                    stringResource(R.string.yukizygisk_policy_error, modeState, policyError)
+                }
+                val policySummary = if (missingAv != 0L) {
+                    stringResource(
+                        R.string.yukizygisk_policy_denied,
+                        policyBase,
+                        supportedPolicy?.optString("missing_source").orEmpty().ifBlank { "?" },
+                        supportedPolicy?.optString("missing_target").orEmpty().ifBlank { "?" },
+                        supportedPolicy?.optString("missing_class").orEmpty().ifBlank { "?" },
+                        "0x${missingAv.toString(16)}",
+                    )
+                } else {
+                    policyBase
+                }
+                Text(
+                    text = if (policyStatus?.optBoolean("reboot_required") == true) {
+                        stringResource(R.string.yukizygisk_policy_reboot_required, policySummary)
+                    } else policySummary,
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
 
             SettingsCard(title = stringResource(R.string.yukizygisk_logging_title)) {

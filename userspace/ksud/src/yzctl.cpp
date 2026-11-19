@@ -43,6 +43,8 @@ constexpr const char* kAbi32 = "armeabi-v7a";
 constexpr const char* kAbi64 = "arm64-v8a";
 
 struct RuntimeSnapshot {
+    yz_fixed_policy_status policy{};
+    bool policy_supported = false;
     uint32_t generation = 0;
     bool enabled = false;
     bool safe_mode = false;
@@ -205,6 +207,8 @@ bool query_runtime(RuntimeSnapshot* snapshot) {
     result.zygote_crashes = command.zygote_crashes;
     result.capabilities = command.capabilities;
     result.safe_mode_zygote = bounded_string(command.safe_mode_zygote);
+    result.policy_supported = ksuctl(KSU_IOCTL_YZ_GET_FIXED_POLICY, &result.policy) == 0 &&
+                              result.policy.version == YZ_FIXED_POLICY_VERSION;
     *snapshot = std::move(result);
     return true;
 }
@@ -452,6 +456,8 @@ json::Value build_status_json(const RuntimeSnapshot& snapshot, const ModuleInven
     const std::vector<NativeModuleView> native_modules =
         build_native_module_views(inventory, injections);
     json::Value root = json::Value::object();
+    root["policy"] =
+        yukizygisk::fixed_policy::status_json(snapshot.policy, snapshot.policy_supported);
     root["generation"] = number(snapshot.generation);
     root["enabled"] = json::Value(snapshot.enabled);
     root["count"] = json::Value(static_cast<double>(injected_target_count(snapshot)));
@@ -588,6 +594,14 @@ void print_usage(FILE* stream) {
 }
 
 void print_human_status(const RuntimeSnapshot& snapshot) {
+    if (snapshot.policy_supported) {
+        if (snapshot.policy.error)
+            yukizygisk::fixed_policy::print_error(snapshot.policy);
+        else if (snapshot.policy.missing_av)
+            yukizygisk::fixed_policy::print_denial(snapshot.policy);
+    }
+    if (yukizygisk::fixed_policy::reboot_required())
+        puts("Fully reboot to remove previously loaded SELinux grants.");
     printf("Generation: %u\n", snapshot.generation);
     printf("Enabled: %s\n", snapshot.enabled ? "yes" : "no");
     printf("Safe mode: %s\n", snapshot.safe_mode ? "yes" : "no");
@@ -626,13 +640,15 @@ int yzctl_run(const std::vector<std::string>& args) {
     }
 
     if (args[0] == "config") {
+        (void)prepare_yukizygisk_policy_dirs();
         if (args.size() == 2 && args[1] == "get") {
             json::Value config;
-            if (!yukizygisk::settings::read(YUKIZYGISK_CONFIG_PATH, &config)) {
+            std::string original;
+            if (!yukizygisk::settings::read(YUKIZYGISK_CONFIG_PATH, &config, &original)) {
                 (void)fprintf(stderr, "yzctl: configuration read failed: %s\n", strerror(errno));
                 return 1;
             }
-            printf("%s\n", json::dump(config).c_str());
+            printf("%s\n", json::dump_object_members(config, original).c_str());
             return 0;
         }
         if (args.size() < 4 || args[1] != "set" || args.size() % 2 != 0) {
@@ -640,21 +656,26 @@ int yzctl_run(const std::vector<std::string>& args) {
                           "yzctl: expected config get or config set KEY VALUE [KEY VALUE ...]\n");
             return 1;
         }
-        if (!yukizygisk::settings::update(YUKIZYGISK_CONFIG_PATH, {args.begin() + 2, args.end()})) {
-            (void)fprintf(stderr, "yzctl: configuration save failed: %s\n", strerror(errno));
+        const auto apply_runtime = [](bool pending) {
+            if (!pending) {
+                puts("YukiZygisk configuration saved; policy changes apply after a full reboot");
+                return true;
+            }
+            yz_event_channel_cmd channel{};
+            if (ksuctl(KSU_IOCTL_YZ_GET_EVENT_CHANNEL, &channel) != 0 && errno == ENOTCONN) {
+                if (refresh_yukizygisk_early_snapshot() != 0)
+                    return false;
+                puts("Configuration saved; it will be loaded when YukiZygisk starts");
+                return true;
+            }
+            return yzctl_run({"reload"}) == 0;
+        };
+        if (!yukizygisk::settings::update(YUKIZYGISK_CONFIG_PATH, {args.begin() + 2, args.end()},
+                                          stage_yukizygisk_policy_boot, apply_runtime)) {
+            (void)fprintf(stderr, "yzctl: configuration update failed: %s\n", strerror(errno));
             return 1;
         }
-        yz_event_channel_cmd channel{};
-        if (ksuctl(KSU_IOCTL_YZ_GET_EVENT_CHANNEL, &channel) != 0 && errno == ENOTCONN) {
-            if (refresh_yukizygisk_early_snapshot() != 0)
-                return 1;
-            puts("Configuration saved; it will be loaded when YukiZygisk starts");
-            return 0;
-        }
-        const int result = yzctl_run({"reload"});
-        if (result != 0)
-            (void)fprintf(stderr, "yzctl: configuration saved, but runtime reload failed\n");
-        return result;
+        return 0;
     }
 
     if (args[0] == "status") {

@@ -119,7 +119,8 @@ void yz_copy_name(char *dst, size_t dst_len, const char *src);
 bool yz_match_live_native_target(const char *filename, char *label,
 				 size_t label_len, u8 *target_type);
 
-/* A successful begin is consumed exactly once by publish or restore. */
+/* NULL carries no lease or admission reference.
+ * Owned states are consumed by publish or restore. */
 struct ksu_file_load_policy *yz_native_policy_begin(void);
 void yz_restore_native_policy_state(struct ksu_file_load_policy *state);
 void yz_publish_native_policy_state(struct ksu_file_load_policy *state);

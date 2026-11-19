@@ -1483,19 +1483,19 @@ static int constraint_expr_eval(struct policydb *policydb,
 				r2 = policydb->role_val_to_struct[val2 - 1];
 				switch (e->op) {
 				case CEXPR_DOM:
-					s[++sp] = ebitmap_get_bit(
+					s[++sp] = ksu_ebitmap_has_bit(
 					    &r1->dominates, val2 - 1);
 					continue;
 				case CEXPR_DOMBY:
-					s[++sp] = ebitmap_get_bit(
+					s[++sp] = ksu_ebitmap_has_bit(
 					    &r2->dominates, val1 - 1);
 					continue;
 				case CEXPR_INCOMP:
 					s[++sp] =
-					    (!ebitmap_get_bit(&r1->dominates,
-							      val2 - 1) &&
-					     !ebitmap_get_bit(&r2->dominates,
-							      val1 - 1));
+					    (!ksu_ebitmap_has_bit(
+						 &r1->dominates, val2 - 1) &&
+					     !ksu_ebitmap_has_bit(
+						 &r2->dominates, val1 - 1));
 					continue;
 				default:
 					break;
@@ -1590,10 +1590,12 @@ static int constraint_expr_eval(struct policydb *policydb,
 
 			switch (e->op) {
 			case CEXPR_EQ:
-				s[++sp] = ebitmap_get_bit(&e->names, val1 - 1);
+				s[++sp] =
+				    ksu_ebitmap_has_bit(&e->names, val1 - 1);
 				break;
 			case CEXPR_NEQ:
-				s[++sp] = !ebitmap_get_bit(&e->names, val1 - 1);
+				s[++sp] =
+				    !ksu_ebitmap_has_bit(&e->names, val1 - 1);
 				break;
 			default:
 				BUG();
@@ -1743,7 +1745,7 @@ static void __nocfi security_compute_av_user_with_policy(
 	}
 
 	/* permissive domain? */
-	if (ebitmap_get_bit(&policydb->permissive_map, scontext->type))
+	if (ksu_ebitmap_has_bit(&policydb->permissive_map, scontext->type))
 		avd->flags |= AVD_FLAGS_PERMISSIVE;
 
 	tcontext = sidtab_search(sidtab, tsid);

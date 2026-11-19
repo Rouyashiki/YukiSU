@@ -27,6 +27,9 @@
 #include "policy/allowlist.h"
 #include "arch.h"
 #include "feature/selinux_hide.h"
+#ifdef CONFIG_KSU_YUKIZYGISK
+#include "feature/yukizygisk/fixed_policy.h"
+#endif
 #include "hook/syscall_hook.h"
 #include "hook/syscall_event_bridge.h"
 #include "klog.h" // IWYU pragma: keep
@@ -77,6 +80,9 @@ static void ksu_initialize_selinux(void)
 	apply_kernelsu_rules();
 	cache_sid();
 	setup_ksu_cred();
+#ifdef CONFIG_KSU_YUKIZYGISK
+	yz_fixed_policy_latch();
+#endif
 	ksu_feature_apply_forced();
 }
 
@@ -675,6 +681,12 @@ static int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code,
 	}
 
 	return 0;
+}
+
+bool ksu_is_safe_mode_requested(void)
+{
+	return !ksu_late_loaded &&
+	       is_volumedown_enough(READ_ONCE(volumedown_pressed_count));
 }
 
 bool ksu_is_safe_mode(void)

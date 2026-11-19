@@ -5,6 +5,20 @@
 
 #include "ss/policydb.h"
 
+static inline bool ksu_ebitmap_has_bit(const struct ebitmap *map, u32 bit)
+{
+	struct ebitmap_node *node;
+
+	if (bit >= ebitmap_length(map))
+		return false;
+	for (node = map->node; node && node->startbit <= bit;
+	     node = node->next) {
+		if (bit - node->startbit < EBITMAP_SIZE)
+			return ebitmap_node_get_bit(node, bit);
+	}
+	return false;
+}
+
 /* Keep the source locked until the last read and kvfree(snapshot->data). */
 int ksu_write_sepolicy_snapshot(struct selinux_policy *old_pol,
 				struct policy_file *snapshot);

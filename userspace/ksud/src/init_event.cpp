@@ -420,6 +420,8 @@ int on_post_data_fs(std::string* error) {
         (void)prepare_yukizygisk_diagnostics(true);
     update_yukizygisk_boot_diagnostics(false, yz_supported, yz_enabled, "restored");
     ensure_yukizygisk_payload_if_enabled();
+    if (!save_yukizygisk_policy_boot())
+        LOGW("save YukiZygisk policy boot configuration failed: %s", strerror(errno));
     if (refresh_yukizygisk_early_snapshot() != 0) {
         LOGW("refresh YukiZygisk early snapshot failed");
     }

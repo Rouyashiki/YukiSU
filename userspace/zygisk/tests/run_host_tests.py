@@ -96,10 +96,20 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='yz-host-tests-') as temporary:
     build = Path(temporary)
+    status = build / 'fixed-policy-status'
+    run(compiler, *flags, '-ffunction-sections', '-fdata-sections', '-Wl,--gc-sections',
+        '-include', 'linux/types.h', '-I' + str(root / 'userspace/ksud/src'),
+        str(root / 'userspace/zygisk/tests/fixed_policy_status_test.cpp'), '-o', str(status))
+    report = subprocess.check_output([status], text=True)
+    assert 'error -13' in report and 'source=domain target=test_daemon class=fd missing_av=0x4' in report
+    denied = subprocess.check_output([status, 'denied'], text=True)
+    assert 'Fixed SELinux policy denied access' in denied
+    assert 'source=netd target=yukizygisk_file class=file missing_av=0x44412' in denied
+    assert 'Fixed SELinux policy' not in subprocess.check_output([status, 'legacy'], text=True)
     replay = build / 'crash_protection_test'
     run(compiler, *flags, str(root / 'userspace/zygisk/tests/crash_protection_test.cpp'),
         str(root / 'userspace/zygisk/daemon/crash_monitor.cpp'),
-        '-Wl,--wrap=flock', '-Wl,--wrap=fsync', '-o', str(replay))
+        '-Wl,--wrap=flock', '-Wl,--wrap=fsync', '-Wl,--wrap=unlinkat', '-o', str(replay))
     run(str(replay))
     fixture = os.environ.get('YZ_TOMBSTONE_FIXTURE')
     if fixture:

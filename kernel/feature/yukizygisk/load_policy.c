@@ -20,6 +20,7 @@
 
 #include "api.h"
 #include "internal.h"
+#include "fixed_policy.h"
 #include "selinux/selinux.h"
 #include "klog.h" // IWYU pragma: keep
 
@@ -470,6 +471,11 @@ struct ksu_file_load_policy *yz_native_policy_begin(void)
 		ret = -ESHUTDOWN;
 		goto fail;
 	}
+	if (yz_fixed_policy_active()) {
+		up_read(&yz_policy_admission);
+		return NULL;
+	}
+
 	ret = yz_policy_reserve();
 	if (ret)
 		goto fail;
@@ -492,6 +498,9 @@ fail:
 
 void yz_restore_native_policy_state(struct ksu_file_load_policy *state)
 {
+	if (!state)
+		return;
+
 	struct yz_policy_state *policy =
 	    container_of(state, struct yz_policy_state, state);
 
@@ -501,6 +510,9 @@ void yz_restore_native_policy_state(struct ksu_file_load_policy *state)
 
 void yz_publish_native_policy_state(struct ksu_file_load_policy *state)
 {
+	if (!state)
+		return;
+
 	struct yz_native_policy_pending *entry =
 	    container_of(state, struct yz_native_policy_pending, policy.state);
 	struct yz_native_policy_pending *cur;
@@ -708,6 +720,17 @@ int ksu_yukizygisk_allow_module_load_policy(struct task_struct *task,
 		ret = -ESRCH;
 		goto out;
 	}
+	if (yz_fixed_policy_active()) {
+		if (S_ISDIR(file_inode(dir)->i_mode)) {
+			ret = yz_fixed_policy_check(dir, cred, true);
+			if (!ret)
+				ret = yz_fixed_policy_check_execmem(cred);
+		} else {
+			ret = yz_fixed_policy_label(dir, cred);
+		}
+		goto out;
+	}
+
 	ret = yz_policy_reserve();
 	if (ret)
 		goto out;
@@ -864,6 +887,8 @@ int ksu_yukizygisk_restore_native_load_policy(pid_t tgid)
 
 	if (tgid <= 0)
 		return -EINVAL;
+	if (yz_fixed_policy_active())
+		return 0;
 	owner = yz_policy_get_owner(tgid);
 	if (owner) {
 		yz_restore_owner_policies(owner);

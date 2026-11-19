@@ -534,6 +534,9 @@ fun execKsud(args: String, newShell: Boolean = false): Boolean {
     }
 }
 
+internal fun execKsud(args: List<String>): Boolean =
+    execKsud(args.joinToString(" ", transform = ::shellArg))
+
 /** Run a ksud subcommand and return its trimmed stdout (single value). */
 internal fun ksudReadString(args: String, shell: Shell = getRootShell()): String =
     ShellUtils.fastCmd(shell, ksudCmd(args)).trim()

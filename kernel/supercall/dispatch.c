@@ -60,6 +60,7 @@
 #ifdef CONFIG_KSU_YUKIZYGISK
 #include "feature/yukizygisk/api.h"
 #include "uapi/yukizygisk.h"
+#include "feature/yukizygisk/fixed_policy.h"
 #include "feature/yukizygisk/patch_transaction.h"
 #endif // #ifdef CONFIG_KSU_YUKIZYGISK
 #include "hook/syscall_hook_manager.h"
@@ -1353,6 +1354,25 @@ static int do_yz_report_runtime(void __user *arg)
 	return ksu_yukizygisk_report_runtime(&cmd);
 }
 
+static int do_yz_fixed_policy_status(void __user *arg)
+{
+	struct yz_fixed_policy_status status;
+
+	yz_fixed_policy_status(&status);
+	return copy_to_user(arg, &status, sizeof(status)) ? -EFAULT : 0;
+}
+
+static bool yz_daemon_can_register(void)
+{
+	struct yz_fixed_policy_status policy;
+
+	if (!only_root())
+		return false;
+	yz_fixed_policy_status(&policy);
+	return policy.initialized &&
+	       (!policy.active || is_primary_ksu_domain(current_cred()));
+}
+
 static int do_yz_allow_module_load_policy(void __user *arg)
 {
 	struct yz_module_load_policy_cmd cmd;
@@ -1936,7 +1956,7 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
     {.cmd = KSU_IOCTL_YZ_REGISTER_ENDPOINT,
      .name = "YZ_REGISTER_ENDPOINT",
      .handler = yz_endpoint_register,
-     .perm_check = only_root},
+     .perm_check = yz_daemon_can_register},
     {.cmd = KSU_IOCTL_YZ_UNREGISTER_ENDPOINT,
      .name = "YZ_UNREGISTER_ENDPOINT",
      .handler = yz_endpoint_unregister,
@@ -1953,6 +1973,10 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
      .name = "YZ_REPORT_RUNTIME",
      .handler = do_yz_report_runtime,
      .perm_check = only_root},
+    {.cmd = KSU_IOCTL_YZ_GET_FIXED_POLICY,
+     .name = "YZ_GET_FIXED_POLICY",
+     .handler = do_yz_fixed_policy_status,
+     .perm_check = manager_or_root},
     {.cmd = KSU_IOCTL_YZ_ALLOW_MODULE_LOAD_POLICY,
      .name = "YZ_ALLOW_MODULE_LOAD_POLICY",
      .handler = do_yz_allow_module_load_policy,

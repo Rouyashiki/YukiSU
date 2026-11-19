@@ -744,7 +744,7 @@ static bool add_filename_trans(struct policydb *db, const char *s,
 	struct filename_trans_datum *trans =
 	    policydb_filenametr_search(db, &key);
 	while (trans) {
-		if (ebitmap_get_bit(&trans->stypes, src->value - 1)) {
+		if (ksu_ebitmap_has_bit(&trans->stypes, src->value - 1)) {
 			// Duplicate, overwrite existing data and return
 			trans->otype = def->value;
 			return true;
@@ -956,8 +956,8 @@ static void add_typeattribute_raw(struct policydb *db, struct type_datum *type,
 		for (n = cls->constraints; n; n = n->next) {
 			for (e = n->expr; e; e = e->next) {
 				if (e->expr_type == CEXPR_NAMES &&
-				    ebitmap_get_bit(&e->type_names->types,
-						    attr->value - 1)) {
+				    ksu_ebitmap_has_bit(&e->type_names->types,
+							attr->value - 1)) {
 					ebitmap_set_bit(&e->names,
 							type->value - 1, 1);
 				}

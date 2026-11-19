@@ -23,3 +23,5 @@ CLAUDE.md
 check_symbol
 preinit/runner.elf
 preinit/.runner.elf.cmd
+feature/yukizygisk/policy/rules.h
+feature/yukizygisk/policy/.rules.h.cmd

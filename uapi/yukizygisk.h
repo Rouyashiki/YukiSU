@@ -475,6 +475,9 @@ struct yz_runtime_report_cmd {
 #define KSU_IOCTL_YZ_GET_RUNTIME _IOC(_IOC_READ | _IOC_WRITE, 'K', 63, 0)
 #define KSU_IOCTL_YZ_REPORT_RUNTIME _IOC(_IOC_WRITE, 'K', 64, 0)
 
+#include "fixed_policy.h"
+#define KSU_IOCTL_YZ_GET_FIXED_POLICY _IOC(_IOC_READ, 'K', 95, 0)
+
 enum yz_memory_type {
   /* Zero preserves anonymous loading with older daemons. */
   YZ_MEMORY_ANONYMOUS = 0,
