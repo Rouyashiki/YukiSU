@@ -7,6 +7,8 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -74,12 +77,15 @@ fun MoreSettingsScreen(
 
     val scrollBehavior = rememberYukiTopAppBarScrollBehavior()
     val context = LocalContext.current
+    val activity = LocalActivity.current as ComponentActivity
     val coroutineScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     val systemIsDark = isSystemInDarkTheme()
 
     val settingsState = remember { MoreSettingsState(context, prefs, systemIsDark) }
-    val settingsHandlers = remember { MoreSettingsHandlers(context, prefs, settingsState) }
+    val settingsHandlers = remember(activity, settingsState) {
+        MoreSettingsHandlers(context, prefs, settingsState, activity.lifecycleScope)
+    }
     val cropToolbarColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val cropToolbarWidgetColor = MaterialTheme.colorScheme.onSurface
     val cropAccentColor = MaterialTheme.colorScheme.primary
@@ -222,7 +228,7 @@ private fun MoreSettingsTopBar(
 }
 
 @Composable
-private fun AppearanceSettings(
+internal fun AppearanceSettings(
     state: MoreSettingsState,
     handlers: MoreSettingsHandlers,
     pickImageLauncher: ActivityResultLauncher<String>,
@@ -265,13 +271,18 @@ private fun AppearanceSettings(
         SwitchSettingItem(
             icon = Icons.Filled.ColorLens,
             title = stringResource(R.string.dynamic_color_title),
-            summary = stringResource(R.string.dynamic_color_summary),
-            checked = state.useDynamicColor,
+            summary = stringResource(
+                if (ThemeConfig.useDynamicColor && ThemeConfig.wallpaperColorSeed != null) {
+                    R.string.settings_custom_background
+                } else {
+                    R.string.dynamic_color_summary
+                }
+            ),
+            checked = ThemeConfig.useDynamicColor,
             onChange = handlers::handleDynamicColorChange
         )
 
-
-        YukiExpandableContent(visible = !state.useDynamicColor) {
+        YukiExpandableContent(visible = !ThemeConfig.useDynamicColor) {
             ThemeColorSelection(state = state)
         }
 
@@ -677,7 +688,7 @@ private fun CustomBackgroundSettings(
         icon = Icons.Filled.Wallpaper,
         title = stringResource(id = R.string.settings_custom_background),
         summary = stringResource(id = R.string.settings_custom_background_summary),
-        checked = state.isCustomBackgroundEnabled,
+        checked = hasCustomBackground,
         groupPosition = if (hasCustomBackground) {
             MoreSettingsItemPosition.Middle
         } else {
@@ -700,6 +711,15 @@ private fun CustomBackgroundSettings(
                 subtitle = stringResource(R.string.settings_change_background_summary),
                 groupPosition = MoreSettingsItemPosition.Middle,
                 onClick = { pickImageLauncher.launch("image/*") }
+            )
+
+            SwitchSettingItem(
+                icon = Icons.Filled.ColorLens,
+                title = stringResource(R.string.wallpaper_colors_title),
+                summary = stringResource(R.string.wallpaper_colors_summary),
+                checked = ThemeConfig.useWallpaperColors,
+                enabled = ThemeConfig.useDynamicColor,
+                onChange = handlers::handleWallpaperColorsChange
             )
 
             BackgroundAdjustmentControls(

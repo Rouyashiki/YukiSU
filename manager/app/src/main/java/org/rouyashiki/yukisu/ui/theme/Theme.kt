@@ -1,5 +1,6 @@
 package org.rouyashiki.yukisu.ui.theme
 
+import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.paint
@@ -33,18 +33,29 @@ import org.rouyashiki.yukisu.ui.motion.LocalYukiMotion
 import org.rouyashiki.yukisu.ui.motion.rememberYukiMotion
 import org.rouyashiki.yukisu.ui.motion.MotionPreset
 import org.rouyashiki.yukisu.ui.motion.PageTransitionStyle
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
+import java.io.IOException
+
+private const val USE_WALLPAPER_COLORS = "use_wallpaper_colors"
+private const val WALLPAPER_SEED = "custom_background_seed"
+
+internal data class CustomBackground(val uri: Uri, val seed: Int?)
 
 @Stable
 object ThemeConfig {
-    // 主题状态
-    var customBackgroundUri by mutableStateOf<Uri?>(null)
+    internal var customBackground by mutableStateOf<CustomBackground?>(null)
+    val customBackgroundUri: Uri? get() = customBackground?.uri
     var forceDarkMode by mutableStateOf<Boolean?>(null)
     var currentTheme by mutableStateOf<ThemeColors>(ThemeColors.Default)
     var useDynamicColor by mutableStateOf(false)
+    var useWallpaperColors by mutableStateOf(false)
+        internal set
+    internal val wallpaperColorSeed: Int? get() = if (useWallpaperColors) customBackground?.seed else null
     var motionPreset by mutableStateOf(MotionPreset.QBouncy)
     var pageTransitionStyle by mutableStateOf(PageTransitionStyle.Reveal)
 
@@ -81,10 +92,11 @@ object ThemeConfig {
     }
 
     fun reset() {
-        customBackgroundUri = null
+        customBackground = null
         forceDarkMode = null
         currentTheme = ThemeColors.Default
         useDynamicColor = false
+        useWallpaperColors = false
         motionPreset = MotionPreset.QBouncy
         pageTransitionStyle = PageTransitionStyle.Reveal
         backgroundImageLoaded = false
@@ -96,6 +108,17 @@ object ThemeConfig {
 
 object ThemeManager {
     private const val PREFS_NAME = "theme_prefs"
+
+    fun loadColorSettings(context: Context) {
+        loadThemeMode(context)
+        loadThemeColors(context)
+        loadDynamicColorState(context)
+        if (!ThemeConfig.backgroundImageLoaded &&
+            (!ThemeConfig.preventBackgroundRefresh || ThemeConfig.customBackground == null)
+        ) {
+            BackgroundManager.loadCustomBackground(context)
+        }
+    }
 
     fun saveThemeMode(context: Context, forceDark: Boolean?) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
@@ -141,9 +164,9 @@ object ThemeManager {
 
 
     fun loadDynamicColorState(context: Context) {
-        val enabled = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean("use_dynamic_color", true)
-        ThemeConfig.useDynamicColor = enabled
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        ThemeConfig.useDynamicColor = prefs.getBoolean("use_dynamic_color", true)
+        ThemeConfig.useWallpaperColors = prefs.getBoolean(USE_WALLPAPER_COLORS, false)
     }
 
     fun saveMotionPreset(context: Context, preset: MotionPreset) {
@@ -188,84 +211,77 @@ object ThemeManager {
 
 object BackgroundManager {
     private const val TAG = "BackgroundManager"
+    private val changes = Mutex()
 
-    fun saveAndApplyCustomBackground(
-        context: Context,
-        uri: Uri,
-    ) {
+    suspend fun saveAndApplyCustomBackground(context: Context, uri: Uri): Boolean = changes.withLock {
+        val useWallpaperColors = ThemeConfig.useWallpaperColors
+        var pendingFile: File? = null
         try {
-            val finalUri = copyImageToInternalStorage(context, uri)
-
-            saveBackgroundUri(context, finalUri)
-            ThemeConfig.customBackgroundUri = finalUri
-            CardConfig.updateBackground(true)
-            resetBackgroundState(context)
-
+            val background = withContext(Dispatchers.IO) {
+                val file = File.createTempFile("custom_background_", ".jpg", context.filesDir)
+                pendingFile = file
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw IOException("No image stream")
+                val savedUri = file.toURI().toASCIIString().toUri()
+                CustomBackground(savedUri, if (useWallpaperColors) extractWallpaperSeed(context, savedUri) else null)
+            }
+            applyBackground(context, background)
+            pendingFile = null
+            true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "保存背景失败: ${e.message}", e)
+            Log.e(TAG, "Could not save the custom background", e)
+            false
+        } finally {
+            pendingFile?.delete()
         }
     }
 
-    fun clearCustomBackground(context: Context) {
-        saveBackgroundUri(context, null)
-        ThemeConfig.customBackgroundUri = null
-        CardConfig.updateBackground(false)
-        resetBackgroundState(context)
+    suspend fun clearCustomBackground(context: Context) = changes.withLock {
+        applyBackground(context, null)
+    }
+
+    suspend fun setWallpaperColorsEnabled(context: Context, enabled: Boolean) = changes.withLock {
+        val background = ThemeConfig.customBackground
+        val updated = if (enabled && background != null && background.seed == null) {
+            val seed = withContext(Dispatchers.IO) { extractWallpaperSeed(context, background.uri) }
+            if (seed != null && ThemeConfig.customBackground == background) background.copy(seed = seed) else null
+        } else null
+
+        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
+            putBoolean(USE_WALLPAPER_COLORS, enabled)
+            updated?.seed?.let { putInt(WALLPAPER_SEED, it) }
+        }
+        if (updated != null) ThemeConfig.customBackground = updated
+        ThemeConfig.useWallpaperColors = enabled
+    }
+
+    private fun applyBackground(context: Context, background: CustomBackground?) {
+        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
+            putString("custom_background", background?.uri?.toString())
+            if (background?.seed == null) remove(WALLPAPER_SEED) else putInt(WALLPAPER_SEED, background.seed)
+            putBoolean("prevent_background_refresh", false)
+        }
+        ThemeConfig.customBackground = background
+        ThemeConfig.backgroundImageLoaded = false
+        ThemeConfig.preventBackgroundRefresh = false
     }
 
     fun loadCustomBackground(context: Context) {
-        val uriString = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-            .getString("custom_background", null)
-
-        val newUri = uriString?.toUri()
-        val preventRefresh = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-            .getBoolean("prevent_background_refresh", false)
-
+        val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        val uri = prefs.getString("custom_background", null)?.toUri()
+        val background = uri?.takeIf {
+            it.scheme != ContentResolver.SCHEME_FILE || it.path?.let { path -> File(path).isFile } == true
+        }?.let {
+            CustomBackground(it, if (prefs.contains(WALLPAPER_SEED)) prefs.getInt(WALLPAPER_SEED, 0) else null)
+        }
+        val preventRefresh = prefs.getBoolean("prevent_background_refresh", false)
         ThemeConfig.preventBackgroundRefresh = preventRefresh
-
-        if (!preventRefresh || ThemeConfig.customBackgroundUri?.toString() != newUri?.toString()) {
-            Log.d(TAG, "加载自定义背景: $uriString")
-            ThemeConfig.customBackgroundUri = newUri
+        if (!preventRefresh || ThemeConfig.customBackground != background) {
+            ThemeConfig.customBackground = background
             ThemeConfig.backgroundImageLoaded = false
-            CardConfig.updateBackground(newUri != null)
-        }
-    }
-
-    private fun saveBackgroundUri(context: Context, uri: Uri?) {
-        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
-            putString("custom_background", uri?.toString())
-            putBoolean("prevent_background_refresh", false)
-        }
-    }
-
-    private fun resetBackgroundState(context: Context) {
-        ThemeConfig.backgroundImageLoaded = false
-        ThemeConfig.preventBackgroundRefresh = false
-        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
-            putBoolean("prevent_background_refresh", false)
-        }
-    }
-
-    private fun copyImageToInternalStorage(context: Context, uri: Uri): Uri? {
-        return try {
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val fileName = "custom_background_${System.currentTimeMillis()}.jpg"
-            val file = File(context.filesDir, fileName)
-
-            FileOutputStream(file).use { outputStream ->
-                val buffer = ByteArray(8 * 1024)
-                var read: Int
-                while (inputStream.read(buffer).also { read = it } != -1) {
-                    outputStream.write(buffer, 0, read)
-                }
-                outputStream.flush()
-            }
-            inputStream.close()
-
-            Uri.fromFile(file)
-        } catch (e: Exception) {
-            Log.e(TAG, "复制图片失败: ${e.message}", e)
-            null
         }
     }
 }
@@ -325,7 +341,6 @@ fun KernelSUTheme(
 @Composable
 private fun ThemeInitializer(context: Context, systemIsDark: Boolean) {
     val themeChanged = ThemeConfig.detectThemeChange(systemIsDark)
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(systemIsDark, themeChanged) {
         if (ThemeConfig.forceDarkMode == null && themeChanged) {
@@ -344,32 +359,17 @@ private fun ThemeInitializer(context: Context, systemIsDark: Boolean) {
         }
     }
 
-    // 初始加载配置
-    LaunchedEffect(Unit) {
-        scope.launch {
-            ThemeManager.loadThemeMode(context)
-            ThemeManager.loadThemeColors(context)
-            ThemeManager.loadDynamicColorState(context)
-            ThemeManager.loadMotionPreset(context)
-            ThemeManager.loadPageTransitionStyle(context)
-            ThemeManager.loadTransPrideState(context)
-            CardConfig.load(context)
-
-            if (!ThemeConfig.backgroundImageLoaded && !ThemeConfig.preventBackgroundRefresh) {
-                BackgroundManager.loadCustomBackground(context)
-            }
-        }
+    LaunchedEffect(context) {
+        CardConfig.load(context)
+        ThemeManager.loadColorSettings(context)
+        ThemeManager.loadMotionPreset(context)
+        ThemeManager.loadPageTransitionStyle(context)
+        ThemeManager.loadTransPrideState(context)
     }
 }
 
 @Composable
 internal fun BackgroundLayer(darkTheme: Boolean = ThemeConfig.forceDarkMode ?: isSystemInDarkTheme()) {
-    val backgroundUri = rememberSaveable { mutableStateOf(ThemeConfig.customBackgroundUri) }
-
-    LaunchedEffect(ThemeConfig.customBackgroundUri) {
-        backgroundUri.value = ThemeConfig.customBackgroundUri
-    }
-
     // 默认背景
     Box(
         modifier = Modifier
@@ -384,8 +384,7 @@ internal fun BackgroundLayer(darkTheme: Boolean = ThemeConfig.forceDarkMode ?: i
             )
     )
 
-    // 自定义背景
-    backgroundUri.value?.let { uri ->
+    ThemeConfig.customBackgroundUri?.let { uri ->
         CustomBackgroundLayer(uri = uri, darkTheme = darkTheme)
     }
 }
@@ -396,12 +395,16 @@ private fun CustomBackgroundLayer(uri: Uri, darkTheme: Boolean) {
         model = uri,
         onError = { error ->
             Log.e("ThemeSystem", "背景加载失败: ${error.result.throwable.message}")
-            ThemeConfig.customBackgroundUri = null
+            if (ThemeConfig.customBackgroundUri == uri) {
+                ThemeConfig.customBackground = null
+                ThemeConfig.backgroundImageLoaded = false
+            }
         },
         onSuccess = {
-            Log.d("ThemeSystem", "背景加载成功")
-            ThemeConfig.backgroundImageLoaded = true
-            ThemeConfig.isThemeChanging = false
+            if (ThemeConfig.customBackgroundUri == uri) {
+                ThemeConfig.backgroundImageLoaded = true
+                ThemeConfig.isThemeChanging = false
+            }
         }
     )
 
@@ -480,14 +483,18 @@ private fun createColorScheme(
     darkTheme: Boolean,
     dynamicColor: Boolean
 ): ColorScheme {
-    return when {
-        dynamicColor -> {
-            if (darkTheme) createDynamicDarkColorScheme(context)
-            else createDynamicLightColorScheme(context)
-        }
-        darkTheme -> createDarkColorScheme()
-        else -> createLightColorScheme()
+    if (!dynamicColor) {
+        return if (darkTheme) createDarkColorScheme() else createLightColorScheme()
     }
+    val seed = ThemeConfig.wallpaperColorSeed
+    val scheme = when {
+        seed != null -> rememberWallpaperColorScheme(context, seed, darkTheme)
+        darkTheme -> dynamicDarkColorScheme(context)
+        else -> dynamicLightColorScheme(context)
+    }
+    return if (CardConfig.isCustomBackgroundEnabled) {
+        scheme.copy(background = Color.Transparent, surface = Color.Transparent)
+    } else scheme
 }
 
 @Composable
@@ -511,28 +518,6 @@ private fun SystemBarController(darkMode: Boolean) {
             }
         )
     }
-}
-
-@Composable
-private fun createDynamicDarkColorScheme(context: Context): ColorScheme {
-    val scheme = dynamicDarkColorScheme(context)
-    return scheme.copy(
-        background = if (CardConfig.isCustomBackgroundEnabled) Color.Transparent else scheme.background,
-        surface = if (CardConfig.isCustomBackgroundEnabled) Color.Transparent else scheme.surface,
-        onBackground = scheme.onBackground,
-        onSurface = scheme.onSurface
-    )
-}
-
-@Composable
-private fun createDynamicLightColorScheme(context: Context): ColorScheme {
-    val scheme = dynamicLightColorScheme(context)
-    return scheme.copy(
-        background = if (CardConfig.isCustomBackgroundEnabled) Color.Transparent else scheme.background,
-        surface = if (CardConfig.isCustomBackgroundEnabled) Color.Transparent else scheme.surface,
-        onBackground = scheme.onBackground,
-        onSurface = scheme.onSurface
-    )
 }
 
 @Composable
@@ -612,21 +597,6 @@ private fun createLightColorScheme() = lightColorScheme(
     surfaceContainerHigh = ThemeConfig.currentTheme.surfaceContainerHighLight,
     surfaceContainerHighest = ThemeConfig.currentTheme.surfaceContainerHighestLight,
 )
-
-@OptIn(DelicateCoroutinesApi::class)
-fun Context.saveAndApplyCustomBackground(uri: Uri) {
-    kotlinx.coroutines.GlobalScope.launch {
-        BackgroundManager.saveAndApplyCustomBackground(this@saveAndApplyCustomBackground, uri)
-    }
-}
-
-fun Context.saveCustomBackground(uri: Uri?) {
-    if (uri != null) {
-        saveAndApplyCustomBackground(uri)
-    } else {
-        BackgroundManager.clearCustomBackground(this)
-    }
-}
 
 fun Context.saveThemeMode(forceDark: Boolean?) {
     ThemeManager.saveThemeMode(this, forceDark)

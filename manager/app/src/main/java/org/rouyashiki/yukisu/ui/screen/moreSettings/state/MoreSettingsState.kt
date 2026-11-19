@@ -29,8 +29,6 @@ class MoreSettingsState(
         }
     )
 
-    var useDynamicColor by mutableStateOf(ThemeConfig.useDynamicColor)
-
     var showLanguageDialog by mutableStateOf(false)
     var currentAppLocale by mutableStateOf(LocaleHelper.getCurrentAppLocale(context))
 
@@ -65,7 +63,6 @@ class MoreSettingsState(
 
     var cardAlpha by mutableFloatStateOf(CardConfig.cardAlpha)
     var cardDim by mutableFloatStateOf(CardConfig.cardDim)
-    var isCustomBackgroundEnabled by mutableStateOf(ThemeConfig.customBackgroundUri != null)
 
     val systemDpi = context.resources.displayMetrics.densityDpi
     var currentDpi by mutableIntStateOf(prefs.getInt("app_dpi", systemDpi))

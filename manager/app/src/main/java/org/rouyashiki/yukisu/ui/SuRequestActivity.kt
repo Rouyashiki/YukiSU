@@ -41,6 +41,7 @@ import androidx.core.graphics.drawable.toBitmap
 import org.rouyashiki.yukisu.Natives
 import org.rouyashiki.yukisu.R
 import org.rouyashiki.yukisu.ui.theme.KernelSUTheme
+import org.rouyashiki.yukisu.ui.theme.ThemeManager
 import kotlin.math.roundToInt
 import kotlin.concurrent.thread
 import kotlinx.coroutines.delay
@@ -105,6 +106,7 @@ class SuRequestActivity : ComponentActivity() {
             }.getOrNull()
         }
 
+        ThemeManager.loadColorSettings(this)
         setContent {
             KernelSUTheme(showBackground = false) {
                 Box(

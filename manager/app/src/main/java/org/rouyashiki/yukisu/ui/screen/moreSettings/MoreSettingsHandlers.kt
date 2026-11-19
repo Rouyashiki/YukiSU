@@ -41,14 +41,14 @@ import org.rouyashiki.yukisu.ui.screen.moreSettings.state.MoreSettingsState
 class MoreSettingsHandlers(
     val context: Context,
     private val prefs: SharedPreferences,
-    private val state: MoreSettingsState
+    private val state: MoreSettingsState,
+    private val activityScope: CoroutineScope,
 ) {
 
     fun initializeSettings() {
         CardConfig.load(context)
         state.cardAlpha = CardConfig.cardAlpha
         state.cardDim = CardConfig.cardDim
-        state.isCustomBackgroundEnabled = ThemeConfig.customBackgroundUri != null
 
         state.themeMode = when (ThemeConfig.forceDarkMode) {
             true -> 2
@@ -144,9 +144,13 @@ class MoreSettingsHandlers(
     }
 
     fun handleDynamicColorChange(enabled: Boolean) {
-        state.useDynamicColor = enabled
         context.saveDynamicColorState(enabled)
-        ThemeConfig.updateTheme(dynamicColor = enabled)
+    }
+
+    fun handleWallpaperColorsChange(enabled: Boolean) {
+        activityScope.launch {
+            BackgroundManager.setWallpaperColorsEnabled(context, enabled)
+        }
     }
 
     @Composable
@@ -182,39 +186,26 @@ class MoreSettingsHandlers(
     }
 
     fun handleCustomBackground(transformedUri: Uri) {
-        context.saveAndApplyCustomBackground(transformedUri)
-        state.isCustomBackgroundEnabled = true
-        CardConfig.updateBackground(true)
-        saveCardConfig(context)
-
-        Toast.makeText(
-            context,
-            context.getString(R.string.background_set_success),
-            Toast.LENGTH_SHORT
-        ).show()
+        activityScope.launch {
+            val saved = BackgroundManager.saveAndApplyCustomBackground(context, transformedUri)
+            if (saved) saveCardConfig(context)
+            val message = if (saved) R.string.background_set_success else R.string.operation_failed
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun handleRemoveCustomBackground() {
-        context.saveCustomBackground(null)
-        state.isCustomBackgroundEnabled = false
-        CardConfig.cardAlpha = 1f
-        CardConfig.cardDim = 0f
-        CardConfig.isCustomAlphaSet = false
-        CardConfig.isCustomDimSet = false
-        state.cardAlpha = CardConfig.cardAlpha
-        state.cardDim = CardConfig.cardDim
-        saveCardConfig(context)
-        ThemeConfig.preventBackgroundRefresh = false
-
-        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
-            putBoolean("prevent_background_refresh", false)
+        activityScope.launch {
+            BackgroundManager.clearCustomBackground(context)
+            CardConfig.cardAlpha = 1f
+            CardConfig.cardDim = 0f
+            CardConfig.isCustomAlphaSet = false
+            CardConfig.isCustomDimSet = false
+            state.cardAlpha = CardConfig.cardAlpha
+            state.cardDim = CardConfig.cardDim
+            saveCardConfig(context)
+            Toast.makeText(context, R.string.background_removed, Toast.LENGTH_SHORT).show()
         }
-
-        Toast.makeText(
-            context,
-            context.getString(R.string.background_removed),
-            Toast.LENGTH_SHORT
-        ).show()
     }
 
     fun handleCardAlphaChange(newValue: Float) {

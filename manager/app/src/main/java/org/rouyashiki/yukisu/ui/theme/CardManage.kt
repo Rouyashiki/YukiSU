@@ -27,8 +27,8 @@ object CardConfig {
     val isShadowEnabled: Boolean
         get() = !isCustomBackgroundEnabled
 
-    var isCustomBackgroundEnabled by mutableStateOf(false)
-        internal set
+    val isCustomBackgroundEnabled: Boolean
+        get() = ThemeConfig.customBackgroundUri != null
 
     var isCustomAlphaSet by mutableStateOf(false)
         internal set
@@ -60,10 +60,6 @@ object CardConfig {
         if (isCustom) isCustomDimSet = true
     }
 
-    fun updateBackground(enabled: Boolean) {
-        isCustomBackgroundEnabled = enabled
-    }
-
     fun updateThemePreference(darkMode: Boolean?, lightMode: Boolean?) {
         isUserDarkModeEnabled = darkMode ?: false
         isUserLightModeEnabled = lightMode ?: false
@@ -73,7 +69,6 @@ object CardConfig {
         cardAlpha = 1f
         cardDim = 0f
         defaultCardElevation = 0.dp
-        isCustomBackgroundEnabled = false
         isCustomAlphaSet = false
         isCustomDimSet = false
         isUserDarkModeEnabled = false
@@ -109,7 +104,6 @@ object CardConfig {
         val prefs = context.getSharedPreferences("card_settings", Context.MODE_PRIVATE)
         cardAlpha = prefs.getFloat(Keys.CARD_ALPHA, 1f).coerceIn(0f, 1f)
         cardDim = prefs.getFloat(Keys.CARD_DIM, 0f).coerceIn(0f, 1f)
-        isCustomBackgroundEnabled = prefs.getBoolean(Keys.CUSTOM_BACKGROUND_ENABLED, false)
         isCustomAlphaSet = prefs.getBoolean(Keys.IS_CUSTOM_ALPHA_SET, false)
         isCustomDimSet = prefs.getBoolean(Keys.IS_CUSTOM_DIM_SET, false)
         isUserDarkModeEnabled = prefs.getBoolean(Keys.IS_USER_DARK_MODE_ENABLED, false)

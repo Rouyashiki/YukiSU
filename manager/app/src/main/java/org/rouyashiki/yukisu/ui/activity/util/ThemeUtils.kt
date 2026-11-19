@@ -39,12 +39,10 @@ object ThemeUtils {
             prefs.edit { putBoolean("is_first_run", false) }
         }
 
-        loadThemeMode()
-        loadThemeColors()
-        loadDynamicColorState()
+        CardConfig.load(activity.applicationContext)
+        ThemeManager.loadColorSettings(activity)
         ThemeManager.loadMotionPreset(activity)
         ThemeManager.loadPageTransitionStyle(activity)
-        CardConfig.load(activity.applicationContext)
     }
 
     fun registerThemeChangeObserver(activity: MainActivity): ThemeChangeContentObserver {
@@ -82,15 +80,6 @@ object ThemeUtils {
         if (!ThemeConfig.backgroundImageLoaded && !ThemeConfig.preventBackgroundRefresh) {
             loadCustomBackground()
         }
-    }
-
-    private fun loadThemeMode() {
-    }
-
-    private fun loadThemeColors() {
-    }
-
-    private fun loadDynamicColorState() {
     }
 
     private fun loadCustomBackground() {

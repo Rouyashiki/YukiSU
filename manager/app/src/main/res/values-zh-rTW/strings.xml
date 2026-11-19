@@ -235,6 +235,8 @@
     <string name="theme_dark">深色</string>
     <string name="dynamic_color_title">動態顏色</string>
     <string name="dynamic_color_summary">使用系統主題的動態顏色</string>
+    <string name="wallpaper_colors_title">從自訂桌布取色</string>
+    <string name="wallpaper_colors_summary">開啟「動態顏色」後即可使用。</string>
     <string name="choose_theme_color">選擇主題顏色</string>
     <string name="color_default">藍色</string>
     <string name="color_green">綠色</string>

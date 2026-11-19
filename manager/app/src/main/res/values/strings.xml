@@ -437,6 +437,8 @@
     <string name="theme_dark">Dark</string>
     <string name="dynamic_color_title">Dynamic colours</string>
     <string name="dynamic_color_summary">Dynamic colours using system themes</string>
+    <string name="wallpaper_colors_title" tools:ignore="MissingTranslation">Use custom wallpaper colours</string>
+    <string name="wallpaper_colors_summary" tools:ignore="MissingTranslation">Available when dynamic colours are on.</string>
     <string name="choose_theme_color">Choose a theme colour</string>
     <string name="color_default">Blue</string>
     <string name="color_green">Green</string>

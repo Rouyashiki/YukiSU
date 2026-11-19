@@ -192,6 +192,33 @@
     "evidence": "Resolved runtime POM license (including Maven parent POMs); artifact LICENSE/NOTICE files are collected during every build."
   },
   {
+    "id": "material-color-utilities",
+    "name": "MaterialKolor Color Utilities",
+    "license": "MIT AND Apache-2.0",
+    "source": "https://github.com/jordond/MaterialKolor",
+    "texts": [
+      "MaterialKolor-MIT.txt",
+      "Apache-2.0.txt"
+    ],
+    "artifacts": [
+      "com.materialkolor:material-color-utilities-android"
+    ],
+    "evidence": "The published POM identifies the MaterialKolor MIT license and the upstream Material Color Utilities Apache license."
+  },
+  {
+    "id": "poko",
+    "name": "Poko Annotations",
+    "license": "Apache-2.0",
+    "source": "https://github.com/drewhamilton/Poko",
+    "texts": [
+      "Apache-2.0.txt"
+    ],
+    "artifacts": [
+      "dev.drewhamilton.poko:poko-annotations-jvm"
+    ],
+    "evidence": "Resolved runtime POM license; artifact notices are collected during each build."
+  },
+  {
     "id": "jsr305",
     "name": "JSR-305 annotations",
     "license": "Apache-2.0",

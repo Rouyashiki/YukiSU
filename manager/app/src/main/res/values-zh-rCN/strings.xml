@@ -429,6 +429,8 @@
     <string name="theme_dark">深色</string>
     <string name="dynamic_color_title">动态颜色</string>
     <string name="dynamic_color_summary">使用系统主题的动态颜色</string>
+    <string name="wallpaper_colors_title">从自定义壁纸取色</string>
+    <string name="wallpaper_colors_summary">开启「动态颜色」后可用。</string>
     <string name="choose_theme_color">选择主题色</string>
     <string name="color_default">蓝色</string>
     <string name="color_green">绿色</string>

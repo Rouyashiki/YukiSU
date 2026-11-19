@@ -43,9 +43,7 @@ class WebUIXActivity : WXActivity() {
     private val themeReady = CompletableDeferred<Pair<ColorScheme, Boolean>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        ThemeManager.loadThemeMode(this)
-        ThemeManager.loadThemeColors(this)
-        ThemeManager.loadDynamicColorState(this)
+        ThemeManager.loadColorSettings(this)
         ThemeManager.loadMotionPreset(this)
         ThemeManager.loadPageTransitionStyle(this)
         super.onCreate(savedInstanceState)

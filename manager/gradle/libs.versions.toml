@@ -22,6 +22,7 @@ parcelablelist = "2.0.1"
 libsu = "6.0.0"
 cmaker = "1.5"
 compose-material3 = "1.5.0-rc01"
+material-color-utilities = "6.0.0"
 compose-ui = "1.12.1"
 robolectric = "4.18.1"
 documentfile = "1.1.0"
@@ -64,6 +65,7 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "compose-material3" }
+material-color-utilities = { module = "com.materialkolor:material-color-utilities", version.ref = "material-color-utilities" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "compose-ui" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "compose-ui" }
