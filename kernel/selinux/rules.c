@@ -1148,6 +1148,7 @@ static void apply_root_domain_rules(struct policydb *db, const char *domain)
 	ksu_allow(db, "logd", domain, "file", "read");
 	ksu_allow(db, "logd", domain, "file", "open");
 	ksu_allow(db, "logd", domain, "file", "getattr");
+	ksu_allow(db, "logd", domain, "process", "getattr");
 
 	// dumpsys
 	ksu_allow(db, ALL, domain, "fd", "use");
