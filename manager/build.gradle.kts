@@ -37,6 +37,7 @@ cmaker {
 val androidMinSdkVersion = 31
 val androidTargetSdkVersion = 37
 val androidCompileSdkVersion = 37
+val androidCompileSdkMinorVersion = 2
 val androidBuildToolsVersion = "36.1.0"
 val androidCompileNdkVersion = libs.versions.ndk.get()
 val androidCmakeVersion = "3.22.1"
@@ -147,7 +148,11 @@ fun computeKsudBundledVersion(dirty: Boolean): String {
 subprojects {
     plugins.withType(AndroidBasePlugin::class.java) {
         extensions.configure(ApplicationExtension::class.java) {
-            compileSdk = androidCompileSdkVersion
+            compileSdk {
+                version = release(androidCompileSdkVersion) {
+                    minorApiLevel = androidCompileSdkMinorVersion
+                }
+            }
             ndkVersion = androidCompileNdkVersion
             buildToolsVersion = androidBuildToolsVersion
 
