@@ -383,7 +383,7 @@ abstract class CopyRenamedApkTask : DefaultTask() {
  * The patch returns early when the parent is not tracked. `rectInParentDirty` stays true, so the
  * node is recorded on the next placement pass once the parent is back in the list.
  *
- * Present in ui 1.12.0-alpha01 through 1.13.0-alpha01. Drop this once the guard is upstream.
+ * Present in ui 1.12.0-alpha01 through 1.14.0-alpha01. Drop this once the guard is upstream.
  */
 abstract class RectListParentGuard : AsmClassVisitorFactory<InstrumentationParameters.None> {
 
@@ -450,19 +450,27 @@ abstract class RectListParentGuard : AsmClassVisitorFactory<InstrumentationParam
             val untracked = Label()
             mv.visitCode()
 
-            // LayoutNode parent = node.getParent$ui()
+            // LayoutNode parent = node.getParent$androidx_compose_ui_ui()
             mv.visitVarInsn(Opcodes.ALOAD, 1)
             mv.visitMethodInsn(
-                Opcodes.INVOKEVIRTUAL, LAYOUT_NODE, "getParent\$ui", "()$LAYOUT_NODE_DESC", false
+                Opcodes.INVOKEVIRTUAL,
+                LAYOUT_NODE,
+                "getParent\$androidx_compose_ui_ui",
+                "()$LAYOUT_NODE_DESC",
+                false
             )
             mv.visitVarInsn(Opcodes.ASTORE, 2)
             mv.visitVarInsn(Opcodes.ALOAD, 2)
             mv.visitJumpInsn(Opcodes.IFNULL, tracked)
 
-            // int cached = parent.getRectListIndex$ui()
+            // int cached = parent.getRectListIndex$androidx_compose_ui_ui()
             mv.visitVarInsn(Opcodes.ALOAD, 2)
             mv.visitMethodInsn(
-                Opcodes.INVOKEVIRTUAL, LAYOUT_NODE, "getRectListIndex\$ui", "()I", false
+                Opcodes.INVOKEVIRTUAL,
+                LAYOUT_NODE,
+                "getRectListIndex\$androidx_compose_ui_ui",
+                "()I",
+                false
             )
             mv.visitVarInsn(Opcodes.ISTORE, 3)
             mv.visitVarInsn(Opcodes.ILOAD, 3)
@@ -680,8 +688,8 @@ abstract class VerifyRectListPatchTask : DefaultTask() {
                 "indexOf(I)I",
             ),
             LAYOUT_NODE to listOf(
-                "getParent\$ui()L$LAYOUT_NODE;",
-                "getRectListIndex\$ui()I",
+                "getParent\$androidx_compose_ui_ui()L$LAYOUT_NODE;",
+                "getRectListIndex\$androidx_compose_ui_ui()I",
                 "getSemanticsId()I",
             ),
         )
