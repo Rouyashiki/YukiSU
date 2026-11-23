@@ -44,8 +44,8 @@ inline bool write_boot(const std::string &path, const json::Value &root,
     return false;
   const auto separator = path.find_last_of('/');
   const std::string parent = separator == std::string::npos ? "."
-                             : separator == 0               ? "/"
-                                                            : path.substr(0, separator);
+                             : separator == 0 ? "/"
+                                              : path.substr(0, separator);
   const int directory =
       open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
   if (directory < 0)
