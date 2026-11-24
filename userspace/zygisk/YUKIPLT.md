@@ -62,7 +62,12 @@ NamedImage does not pin an image or prove reload history. Callers keep target
 
 images, replacement code and original storage alive through recovery and
 
-quiescence. Only unique, publicly enumerable JUMP_SLOT targets are supported.
+quiescence. Each request must match a unique JUMP_SLOT. System images must be
+publicly enumerable. For a leased private image, the core uses
+`find_function_imports()` to select multiple imports and keeps their metadata
+alive through installation. A scan-wide error, including an exhausted batch
+budget, stops the transaction. If a later selector fails, the core checks the
+earlier slots in request order before returning the error.
 
 The frozen dependency contains the documented non-null host extension; ART
 

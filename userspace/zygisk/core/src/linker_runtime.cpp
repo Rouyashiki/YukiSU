@@ -809,46 +809,45 @@ yukiplt::HookResult hook_batch(yukiplt::MapsCache &cache,
   failure.error = yukiplt::Error::Make(yukiplt::ErrorCode::kInvalidArgument);
   if (!requests || count == 0 || count > 64)
     return failure;
+  const auto selector_for = [&](size_t i) -> yukiplt::FunctionImportSelector {
+    return {
+        {requests[i].symbol}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot};
+  };
   std::vector<yukiplt::FunctionImport> imports;
-  std::vector<yukiplt::FunctionHookRequestEx> selected;
-  imports.reserve(count);
-  selected.reserve(count);
-  bool batch_selected = false;
-  if (count > 1) {
-    std::vector<yukiplt::FunctionHookTarget> targets;
-    targets.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-      const yukiplt::FunctionImportSelector selector{
-          {requests[i].symbol}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot};
-      targets.push_back(
-          {image.image,
-           {selector, requests[i].replacement, requests[i].out_original}});
-    }
-    auto plan =
-        yukiplt::build_function_hook_plan(targets.data(), targets.size());
-    if (!plan && plan.error().code == yukiplt::ErrorCode::kOutOfMemory) {
-      failure.error = plan.error();
+  yukiplt::Error selection_error{};
+  // The scalar lookup validates the first name before inspecting the image.
+  if (count == 1 || !requests[0].symbol || !*requests[0].symbol) {
+    auto found = yukiplt::find_function_import(image.image, selector_for(0));
+    if (!found) {
+      failure.error = found.error();
       return failure;
     }
-    if (plan) {
-      for (const auto &target : plan.value().targets())
-        imports.push_back(target.selected);
-      batch_selected = true;
+    imports.push_back(std::move(found.value()));
+  } else {
+    std::vector<yukiplt::FunctionImportSelector> selectors;
+    selectors.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+      selectors.push_back(selector_for(i));
+    size_t failed_index = SIZE_MAX;
+    auto batch = yukiplt::find_function_imports(image.image, selectors.data(),
+                                                count, &failed_index);
+    if (!batch && failed_index != SIZE_MAX && failed_index > 0) {
+      // A bad GOT value in the prefix takes precedence over the later lookup
+      // error.
+      selection_error = batch.error();
+      batch = yukiplt::find_function_imports(image.image, selectors.data(),
+                                             failed_index);
     }
+    if (!batch) {
+      failure.error = batch.error();
+      return failure;
+    }
+    imports = std::move(batch.value().imports);
   }
-  for (size_t i = 0; i < count; ++i) {
-    // Failed plans replay the original request order, including GOT
-    // preconditions.
-    if (!batch_selected) {
-      const yukiplt::FunctionImportSelector selector{
-          {requests[i].symbol}, yukiplt::kSourceJmprel, yukiplt::kTypeJumpSlot};
-      auto found = yukiplt::find_function_import(image.image, selector);
-      if (!found) {
-        failure.error = found.error();
-        return failure;
-      }
-      imports.push_back(std::move(found.value()));
-    }
+
+  std::vector<yukiplt::FunctionHookRequestEx> selected;
+  selected.reserve(imports.size());
+  for (size_t i = 0; i < imports.size(); ++i) {
     const uintptr_t slot = imports[i].base.import.slot_address;
     if (slot % alignof(uintptr_t))
       return failure;
@@ -861,6 +860,10 @@ yukiplt::HookResult hook_batch(yukiplt::MapsCache &cache,
     selected.push_back({yukiplt::exact_function_selector(imports[i]),
                         requests[i].replacement, requests[i].out_original, true,
                         original});
+  }
+  if (selection_error) {
+    failure.error = selection_error;
+    return failure;
   }
   return yukiplt::hook_function_imports_cached(cache, image.image,
                                                selected.data(), selected.size(),

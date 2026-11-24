@@ -391,6 +391,8 @@ int main(int argc, char **argv) {
                                                     nullptr, nullptr);
     CHECK(installed.ok() && fixture.call() == 42 && originals[0] &&
           originals[1]);
+    CHECK(reinterpret_cast<int (*)()>(originals[0])() == 17);
+    CHECK(reinterpret_cast<int (*)()>(originals[1])() == 23);
     CHECK(yukiplt::unhook_cached(cache, installed.handle).ok());
     const auto imported = yukiplt::find_function_import(
         custom.image,
@@ -406,12 +408,25 @@ int main(int argc, char **argv) {
     CHECK(failed.error.code == yukiplt::ErrorCode::kInvalidArgument &&
           !failed.handle.valid());
     write_fixture_slot(slot_address, originals[0]);
+    void *unpublished = nullptr;
+    requests[0].out_original = &unpublished;
+    failed = yukizygisk::linker::hook_batch(cache, custom, requests, 2, nullptr,
+                                            nullptr);
+    CHECK(failed.error.code == yukiplt::ErrorCode::kSymbolNotFound &&
+          !failed.handle.valid() && !unpublished && fixture.call() == 17);
+    requests[0].out_original = nullptr;
     requests[1] = requests[0];
     failed = yukizygisk::linker::hook_batch(cache, custom, requests, 2, nullptr,
                                             nullptr);
     CHECK(failed.error.code == yukiplt::ErrorCode::kInvalidArgument &&
           !failed.handle.valid());
     CHECK(fixture.call() == 17);
+    custom.image.phdr_table = nullptr;
+    requests[0].symbol = "";
+    failed = yukizygisk::linker::hook_batch(cache, custom, requests, 2, nullptr,
+                                            nullptr);
+    CHECK(failed.error.code == yukiplt::ErrorCode::kInvalidArgument &&
+          !failed.handle.valid());
   }
   const yukiplt::HookRequest request{"fixture_value",
                                      reinterpret_cast<void *>(replacement),
