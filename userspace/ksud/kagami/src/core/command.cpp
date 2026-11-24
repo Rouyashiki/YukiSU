@@ -749,6 +749,11 @@ int handle_module(const std::vector<std::string>& args) {
         const auto id = arg_or_default(args, 2, "");
         if (args.size() != 3 || !valid_module_id(id))
             return 1;
+        std::error_code ec;
+        if (fs::is_regular_file(fs::path(ksud::MODULE_UPDATE_DIR) / id / "module.prop", ec)) {
+            std::cout << "{\"applied\":false}\n";
+            return 0;
+        }
         Config config;
         std::string error;
         if (!read_config_file(config, error)) {
@@ -772,28 +777,38 @@ int handle_module(const std::vector<std::string>& args) {
     if (sub == "list") {
         const auto modes = mount::load_module_modes();
         const auto bypasses = mount::load_module_modes("module_bypass.json");
-        const bool include_disabled = args.size() == 3 && args[2] == "--all";
+        const bool all = args.size() == 3 && args[2] == "--all";
         const auto rule_map = mount::load_module_rules();
         const auto replayable = mount::kasumi::replayable_module_ids();
         const std::set<std::string> kasumi_boot_plan(replayable.begin(), replayable.end());
         const Config cfg = current_config();
         const fs::path module_root = modules_dir();
+        const fs::path update_root = ksud::MODULE_UPDATE_DIR;
+        std::set<std::string> staged_ids;
         std::cout << "{\"modules\":[";
         bool first = true;
-        if (fs::is_directory(module_root)) {
-            for (const auto& entry : fs::directory_iterator(module_root)) {
-                if (!entry.is_directory()) {
+        for (const auto& root : {update_root, module_root}) {
+            const bool staged = root == update_root;
+            if (staged && !all)
+                continue;
+            std::error_code mec;
+            for (const auto& entry : fs::directory_iterator(root, mec)) {
+                if (!entry.is_directory(mec) ||
+                    !fs::is_regular_file(entry.path() / "module.prop", mec)) {
                     continue;
                 }
-                // Skip modules that opt out of metamodule mounting.
-                std::error_code mec;
-                if ((!include_disabled && fs::exists(entry.path() / "disable", mec)) ||
+                const auto id = entry.path().filename().string();
+                const auto live = module_root / id;
+                // A staged copy also wins when it removes the previous version's mount tree.
+                if (staged)
+                    staged_ids.insert(id);
+                else if (staged_ids.count(id))
+                    continue;
+                if ((!all && fs::exists(entry.path() / "disable", mec)) ||
                     fs::exists(entry.path() / "remove", mec) ||
+                    (staged && fs::exists(live / "remove", mec)) ||
                     fs::exists(entry.path() / "skip_mount", mec) ||
-                    (!include_disabled &&
-                     fs::exists(data_dir() / "run" / "hot_unmounted" / entry.path().filename(),
-                                mec)) ||
-                    !fs::exists(entry.path() / "module.prop", mec)) {
+                    (!all && fs::exists(data_dir() / "run" / "hot_unmounted" / id, mec))) {
                     continue;
                 }
                 // Only list modules that contribute mounts (have a managed
@@ -811,7 +826,6 @@ int handle_module(const std::vector<std::string>& args) {
                 if (!has_mount_content) {
                     continue;
                 }
-                const std::string id = entry.path().filename().string();
                 const auto props = read_prop_file(entry.path() / "module.prop");
                 if (!first) {
                     std::cout << ",";
@@ -823,13 +837,17 @@ int handle_module(const std::vector<std::string>& args) {
                 // The same-boot plan is authoritative for Kasumi ownership.
                 // Without it, an explicit Kasumi choice may already be running
                 // through the boot-time Overlay/Magic fallback.
-                std::string strategy;
+                std::string strategy = "none";
                 if (kasumi_boot_plan.count(id) != 0) {
                     strategy = "kasumi";
-                } else {
+                } else if (!staged ||
+                           (fs::is_regular_file(live / "module.prop", mec) &&
+                            !fs::exists(live / "skip_mount", mec) &&
+                            !fs::exists(live / "disable", mec) &&
+                            !fs::exists(data_dir() / "run" / "hot_unmounted" / id, mec))) {
                     Config fallback_config = cfg;
                     fallback_config.kasumi_enabled = false;
-                    strategy = mount::resolve_module_backend(mount::ModuleEntry{id, entry.path()},
+                    strategy = mount::resolve_module_backend(mount::ModuleEntry{id, live},
                                                              fallback_config, modes);
                 }
                 std::cout << "{"

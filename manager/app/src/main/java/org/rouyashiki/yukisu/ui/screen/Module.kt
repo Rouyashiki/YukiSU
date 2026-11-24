@@ -1515,7 +1515,7 @@ fun ModuleItem(
             ) {
                 if (mountInfo != null && mountConfigEnabled && !module.metamodule) {
                     ModuleActionButton(
-                        enabled = !module.remove && localEnabled,
+                        enabled = !module.remove && (localEnabled || (module.update && !conflictDisabled)),
                         onClick = onMountConfig,
                         imageVector = Icons.Outlined.Folder,
                         contentDescription = stringResource(R.string.kasumi_mount_config),
