@@ -11,7 +11,6 @@
 #include <linux/spinlock.h>
 #include <linux/task_work.h>
 #include <linux/uaccess.h>
-#include <asm/cacheflush.h>
 
 #include "infra/hook_lifetime.h"
 #include "hook/lsm_hook.h"
@@ -432,11 +431,11 @@ static void yz_tango_inject(struct callback_head *cb)
 	yz_tango_bootstrap(bytes, got, original, stub,
 			   work->linker.bias + dlopen_off,
 			   work->linker.bias + dlsym_off, fd, core_fd, &packet);
+	/* Writing to the executable VMA also syncs its instruction cache. */
 	n = access_process_vm(current, stub, bytes, sizeof(bytes),
 			      FOLL_FORCE | FOLL_WRITE);
 	if (n != sizeof(bytes))
 		goto restore;
-	flush_icache_range(stub, stub + sizeof(bytes));
 	redirect = stub | 1;
 	n = access_process_vm(current, got, &redirect, sizeof(redirect),
 			      FOLL_FORCE | FOLL_WRITE);

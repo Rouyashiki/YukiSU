@@ -14,7 +14,6 @@
 #include <linux/string.h>
 #include <linux/task_work.h>
 #include <linux/uaccess.h>
-#include <asm/cacheflush.h>
 
 #include "infra/task_work.h"
 #include "internal.h"
@@ -235,6 +234,13 @@ static int yz_native_report_fd(u32 generation)
 	return fd;
 }
 
+static bool yz_write_user_code(unsigned long addr, const void *code, int len)
+{
+	/* copy_to_user_page() syncs code written to executable VMAs. */
+	return access_process_vm(current, addr, (void *)code, len,
+				 FOLL_WRITE) == len;
+}
+
 static int yz_stage_native_stub(unsigned long entry_slot, unsigned long entry,
 				unsigned long linker, bool compat,
 				u32 generation, int loader_fd, int core_fd,
@@ -294,15 +300,13 @@ static int yz_stage_native_stub(unsigned long entry_slot, unsigned long entry,
 	data.cleanup_fds[data.cleanup_count++] = packet->endpoint_fd;
 	for (i = 0; i < packet->module_fd_count; ++i)
 		data.cleanup_fds[data.cleanup_count++] = packet->module_fds[i];
-	if (copy_to_user((void __user *)parser, resolver, resolver_bytes) ||
-	    copy_to_user((void __user *)stub, launch, launch_bytes) ||
+	if (!yz_write_user_code(parser, resolver, resolver_bytes) ||
+	    !yz_write_user_code(stub, launch, launch_bytes) ||
 	    copy_to_user((void __user *)(stub + YZ_NATIVE_STUB_DATA), &data,
 			 sizeof(data))) {
 		error = -EFAULT;
 		goto fail;
 	}
-	flush_icache_range(parser, parser + resolver_bytes);
-	flush_icache_range(stub, stub + launch_bytes);
 	/* Both generated launchers start in ARM mode; the saved entry keeps its
 	 * original Thumb bit. The large resolver is unmapped before Core entry.
 	 */
@@ -757,24 +761,22 @@ static void yz_inject_tw_func(struct callback_head *cb)
 
 		if (compat) {
 			copy_failed =
-			    copy_to_user((void __user *)stub, compat_code,
-					 sizeof(compat_code)) ||
+			    !yz_write_user_code(stub, compat_code,
+						sizeof(compat_code)) ||
 			    copy_to_user(
 				(void __user *)(stub + YZ_STUB_EXTINFO_OFF),
 				&compat_extinfo, sizeof(compat_extinfo));
 		} else {
 			copy_failed =
-			    copy_to_user((void __user *)stub, code,
-					 sizeof(code)) ||
+			    !yz_write_user_code(stub, code, sizeof(code)) ||
 			    copy_to_user(
 				(void __user *)(stub + YZ_STUB_EXTINFO_OFF),
 				&extinfo, sizeof(extinfo));
 		}
 		if (copy_failed ||
-		    copy_to_user((void __user *)(stub + 0x100),
-				 compat ? cleanup32 : cleanup64,
-				 compat ? sizeof(cleanup32)
-					: sizeof(cleanup64)) ||
+		    !yz_write_user_code(
+			stub + 0x100, compat ? cleanup32 : cleanup64,
+			compat ? sizeof(cleanup32) : sizeof(cleanup64)) ||
 		    copy_to_user((void __user *)(stub + 0x500), cleanup_fds,
 				 (cleanup_count + 1) *
 				     sizeof(cleanup_fds[0])) ||
@@ -807,10 +809,6 @@ static void yz_inject_tw_func(struct callback_head *cb)
 				goto out;
 			}
 		}
-
-		flush_icache_range(
-		    stub, stub + 0x100 +
-			      (compat ? sizeof(cleanup32) : sizeof(cleanup64)));
 
 		redirected_entry = compat ? stub | 1UL : stub;
 		werr = yz_write_stack_at_entry(at_entry_uaddr, redirected_entry,
