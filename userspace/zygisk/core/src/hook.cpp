@@ -1529,8 +1529,9 @@ CoreCleanupResult zygisk_self_unhook(JNIEnv *env) {
 }
 
 bool zygisk_release_hook_storage() {
-  if (!g_jni_hooks.empty() || g_art_handle.valid() || g_fork_handle.valid() ||
-      g_strdup_handle.valid() ||
+  if (!g_jni_hooks.empty() || !yuki::ihook::pools_idle() ||
+      !yuki::ihook::quiesce_idle() || g_art_handle.valid() ||
+      g_fork_handle.valid() || g_strdup_handle.valid() ||
       g_plt_callbacks.load(std::memory_order_acquire) != 0)
     return false;
   std::vector<JniHookRecord>().swap(g_jni_hooks);

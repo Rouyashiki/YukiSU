@@ -12,7 +12,6 @@
 #include <dirent.h>
 #include <elf.h>
 #include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #endif
@@ -41,7 +40,7 @@ transition_range(const Mapping &mapping, uintptr_t address, size_t size,
   if (page_begin == nullptr || page == 0 || size == 0 ||
       address > UINTPTR_MAX - size || mapping.begin >= mapping.end)
     return false;
-  const uintptr_t begin = address - address % page;
+  const uintptr_t begin = address - (address % page);
   if ((mapping.protection & (PROT_READ | PROT_EXEC)) !=
           (PROT_READ | PROT_EXEC) ||
       begin < mapping.begin || begin > UINTPTR_MAX - page ||
@@ -68,7 +67,7 @@ transition_range(const Mapping &mapping, uintptr_t address, size_t size,
     Elf64_Phdr segment{};
     if (pread64(fd, &segment, sizeof(segment),
                 static_cast<off64_t>(header.e_phoff +
-                                     uint64_t{index} * sizeof(segment))) !=
+                                     (uint64_t{index} * sizeof(segment)))) !=
         sizeof(segment))
       return false;
     if (segment.p_type != PT_NOTE)
@@ -147,6 +146,9 @@ transition_range(const Mapping &mapping, uintptr_t address, size_t size,
   bool host_executable = false;
   bool ambiguous = false;
   bool found = false;
+  bool found_private = false;
+  Mapping coverage{};
+  bool have_coverage = false;
   char line[8192];
   while (fgets(line, sizeof(line), maps) != nullptr) {
     unsigned long long begin = 0, end = 0, offset = 0, inode = 0;
@@ -175,20 +177,43 @@ transition_range(const Mapping &mapping, uintptr_t address, size_t size,
       else if (permissions[2] == 'x')
         translated = true;
     }
-    if (address >= begin && address + size <= end && end <= UINTPTR_MAX) {
-      mapping->begin = static_cast<uintptr_t>(begin);
-      mapping->end = static_cast<uintptr_t>(end);
-      mapping->protection = (permissions[0] == 'r' ? PROT_READ : 0) |
-                            (permissions[1] == 'w' ? PROT_WRITE : 0) |
-                            (permissions[2] == 'x' ? PROT_EXEC : 0);
-      found = permissions[3] == 'p';
+    if (end <= UINTPTR_MAX &&
+        (permissions[3] == 'p' || permissions[3] == 's') &&
+        (permissions[2] == 'x' || permissions[0] == 'r')) {
+      const uintptr_t b = static_cast<uintptr_t>(begin);
+      const uintptr_t e = static_cast<uintptr_t>(end);
+      const int prot = (permissions[0] == 'r' ? PROT_READ : 0) |
+                       (permissions[1] == 'w' ? PROT_WRITE : 0) |
+                       (permissions[2] == 'x' ? PROT_EXEC : 0);
+      if (address >= b && address + size <= e) {
+        mapping->begin = b;
+        mapping->end = e;
+        mapping->protection = prot;
+        found = true;
+        found_private = permissions[3] == 'p';
+      }
+      if (!have_coverage) {
+        if (address >= b && address < e && (prot & PROT_EXEC) != 0) {
+          coverage = {b, e, prot};
+          have_coverage = true;
+        }
+      } else if (coverage.end == b && (prot & PROT_EXEC) != 0) {
+        coverage.end = e;
+      }
     }
   }
   const bool complete = !ferror(maps);
-  fclose(maps);
-  if (!complete || ambiguous || !found || (host_executable && !translated) ||
-      (translated && (!supported || !interpreter)) || (!translated && !native))
+  (void)fclose(maps);
+  const bool covered_native =
+      found || (!translated && have_coverage && address >= coverage.begin &&
+                address + size <= coverage.end);
+  if (!complete || ambiguous || !covered_native ||
+      (host_executable && !translated) ||
+      (translated && (!found_private || !supported || !interpreter)) ||
+      (!translated && !native))
     return Backend::Unknown;
+  if (!found && !translated)
+    *mapping = coverage;
   return translated ? Backend::Tango : Backend::Native;
 }
 
@@ -267,13 +292,11 @@ struct InstructionSyncPlan {
 
 [[nodiscard]] inline bool
 instruction_sync_still_supported(const InstructionSyncPlan &plan) {
-  if (!plan.valid)
-    return false;
 #if defined(__arm__) && defined(__ANDROID__)
-  return plan.backend != sync_detail::Backend::Tango ||
-         sync_detail::raw_one_thread();
+  return plan.valid && (plan.backend != sync_detail::Backend::Tango ||
+                        sync_detail::raw_one_thread());
 #else
-  return true;
+  return plan.valid;
 #endif
 }
 
