@@ -528,7 +528,7 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
     if ((!is_mov && (rn == 15U || rm == 15U)) || (is_mov && rm == 15U)) {
       if (s_bit && rd == 15U)
         return Error::Unsupported;
-      if (!is_mov && rn == 13U)
+      if (rd == 13U || rm == 13U || (!is_mov && rn == 13U))
         return Error::Unsupported;
       out->kind = Kind::ArmAluPc;
       out->target = pc;
@@ -544,12 +544,14 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
     if (writeback)
       return Error::Unsupported;
     const unsigned rt = (w >> 12U) & 0xfU;
+    if (rt == 13U || (w & 0xfU) == 13U)
+      return Error::Unsupported;
     const bool is_extra = (w & 0x0e000000U) == 0U;
     if (is_extra) {
       const unsigned op2 = (w >> 5U) & 3U;
       const bool l_bit = (w & 0x00100000U) != 0U;
       const bool valid_ldrd =
-          !l_bit && op2 == 2U && (rt & 1U) == 0U && rt < 14U;
+          !l_bit && op2 == 2U && (rt & 1U) == 0U && rt < 12U;
       const bool valid_half = l_bit && op2 >= 1U && rt != 15U;
       if (!valid_ldrd && !valid_half)
         return Error::Unsupported;
@@ -840,6 +842,8 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
       (insn & 0xfff0fff0U) == 0xe8d0f010U) {
     out->kind = Kind::ThumbTb32;
     out->target = pc;
+    if ((hw1 & 0xfU) == 15U)
+      out->access_width = (hw2 & 0x10U) != 0U ? 2U : 1U;
     out->is_terminal = true;
     return Error::None;
   }
@@ -1101,7 +1105,6 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
     if (out->count == kMaxInsns || copied + 2U > available)
       return out->error = Error::Capacity;
     Instruction insn{};
-    insn.offset = static_cast<uint8_t>(copied);
     const uint32_t cur_addr = base_addr + static_cast<uint32_t>(copied);
     if (!thumb) {
       if (copied + 4U > available)
@@ -1177,7 +1180,6 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
         } else if (it_count == 1U &&
                    detail::thumb_it_pc_rel_supported(sub[0], true)) {
           insn = sub[0];
-          insn.offset = static_cast<uint8_t>(copied);
           insn.width = static_cast<uint8_t>(span);
           insn.it_single_kind = sub[0].kind;
           insn.kind = Kind::ThumbItSingle;
@@ -1237,6 +1239,9 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
         if (err != Error::None)
           return out->error = err;
         if (insn.kind == Kind::ThumbTb32) {
+          if (insn.access_width != 0 &&
+              overlaps(insn.target, insn.access_width, base_addr, minimum))
+            return out->error = Error::Overlap;
           uint8_t rx = 0, ry = 0;
           if (!detail::tb32_pick_scratches(first, second, &rx, &ry))
             return out->error = Error::Unsupported;
@@ -1249,6 +1254,7 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
     }
     if (copied + insn.width > kMaxCoveredBytes)
       return out->error = Error::Capacity;
+    insn.offset = static_cast<uint8_t>(copied);
     out->instructions[out->count++] = insn;
     copied += insn.width;
   }
@@ -1298,7 +1304,32 @@ inline void write_t32(uint8_t *out, size_t offset, uint16_t hw1, uint16_t hw2) {
 
 [[nodiscard]] inline uint32_t mapped_target(const Plan &plan, uint32_t source,
                                             uint32_t destination,
-                                            uint32_t target) {
+                                            const Instruction &insn) {
+  const Kind kind =
+      insn.kind == Kind::ThumbItSingle ? insn.it_single_kind : insn.kind;
+  // PC values used as data retain their source address.
+  switch (kind) {
+  case Kind::ArmBranch:
+  case Kind::ArmCall:
+  case Kind::ArmBlxImm:
+  case Kind::ArmBxPc:
+  case Kind::ThumbBranch16Cond:
+  case Kind::ThumbBranch16:
+  case Kind::ThumbCbz:
+  case Kind::ThumbBxPc:
+  case Kind::ThumbBranch32Cond:
+  case Kind::ThumbBranch32:
+  case Kind::ThumbBl32:
+  case Kind::ThumbBlx32:
+    break;
+  case Kind::ThumbMovPc16:
+    if (((insn.raw & 7U) | ((insn.raw >> 4U) & 8U)) != 15U)
+      return insn.target;
+    break;
+  default:
+    return insn.target;
+  }
+  const uint32_t target = insn.target;
   const uint32_t untagged = target & ~uint32_t{1};
   for (size_t i = 0; i != plan.count; ++i) {
     if (untagged == source + plan.instructions[i].offset)
@@ -1317,8 +1348,7 @@ namespace detail {
   const uint32_t pad = plan.thumb && (at & 2U) != 0U ? 2U : 0U;
   const Kind k =
       insn.kind == Kind::ThumbItSingle ? insn.it_single_kind : insn.kind;
-  const uint32_t target =
-      mapped_target(plan, source_addr, dest_addr, insn.target);
+  const uint32_t target = mapped_target(plan, source_addr, dest_addr, insn);
 
   if (!plan.thumb) {
     switch (k) {
@@ -1433,23 +1463,20 @@ namespace detail {
     if (k == Kind::ThumbMovPc16 && (insn.raw & 7U) == 7U &&
         ((insn.raw >> 4U) & 8U) != 0U) {
       body = 8U;
-    } else if (insn.kind == Kind::ThumbItSingle && insn.it_cond != 0xeU) {
-      body = 16U;
     } else {
       body = 12U;
     }
+    if (insn.kind == Kind::ThumbItSingle && insn.it_cond != 0xeU)
+      body += 4U;
     break;
   case Kind::ThumbLdrLit16:
   case Kind::ThumbLiteral32: {
     const bool to_pc = k == Kind::ThumbLiteral32 &&
                        (insn.raw & 0xff7fU) != 0xe95fU &&
                        ((insn.raw_hi >> 12U) & 0xfU) == 15U;
-    if (to_pc)
-      body = 24U;
-    else if (insn.kind == Kind::ThumbItSingle && insn.it_cond != 0xeU)
-      body = 20U;
-    else
-      body = 16U;
+    body = to_pc ? 24U : 16U;
+    if (insn.kind == Kind::ThumbItSingle && insn.it_cond != 0xeU)
+      body += 4U;
     break;
   }
   case Kind::ThumbAddPc16:
@@ -1540,7 +1567,7 @@ namespace detail {
     const uint8_t len = plan.lengths[i];
     const Kind k =
         insn.kind == Kind::ThumbItSingle ? insn.it_single_kind : insn.kind;
-    const uint32_t target = mapped_target(plan, src, dst, insn.target);
+    const uint32_t target = mapped_target(plan, src, dst, insn);
 
     if (!plan.thumb) {
       const uint32_t w = insn.raw;
@@ -1713,7 +1740,7 @@ namespace detail {
     // Thumb mode
     size_t cur = off;
     const bool direct_short = (k == Kind::Copy) || (k == Kind::ThumbItGroup) ||
-                              (k == Kind::ThumbBranch16Cond && len == 2U) ||
+                              (k == Kind::ThumbBranch16Cond && len <= 4U) ||
                               (k == Kind::ThumbBranch16 && len <= 4U) ||
                               (k == Kind::ThumbCbz && len == 2U) ||
                               (k == Kind::ThumbBranch32Cond && len == 4U) ||
@@ -1844,17 +1871,19 @@ namespace detail {
                      ? static_cast<uint8_t>((insn.raw_hi >> 8U) & 0xfU)
                      : static_cast<uint8_t>((insn.raw & 7U) |
                                             ((insn.raw >> 4U) & 8U)));
+      if (need_guard) {
+        const size_t skip = (off + len - cur - 4U) / 2U;
+        detail::write_u16(
+            out, cur,
+            static_cast<uint16_t>(0xd000U | (uint32_t{single_cond ^ 1U} << 8U) |
+                                  skip));
+        detail::write_u16(out, cur + 2U, 0xbf00U);
+        cur += 4U;
+      }
       if (rd == 15U) {
         detail::write_t32(out, cur, 0xf8dfU, 0xf000U);
         detail::write_u32(out, cur + 4U, target);
         break;
-      }
-      if (need_guard) {
-        detail::write_u16(out, cur,
-                          static_cast<uint16_t>(
-                              0xd006U | (uint32_t{single_cond ^ 1U} << 8U)));
-        detail::write_u16(out, cur + 2U, 0xbf00U);
-        cur += 4U;
       }
       detail::write_t32(out, cur, 0xf8dfU,
                         static_cast<uint16_t>((uint32_t{rd} << 12U) | 4U));
@@ -1871,6 +1900,16 @@ namespace detail {
           k == Kind::ThumbLdrLit16
               ? static_cast<uint8_t>((insn.raw >> 8U) & 7U)
               : static_cast<uint8_t>((insn.raw_hi >> 12U) & 0xfU);
+      if (need_guard) {
+        const size_t end = off + len;
+        const size_t skip = (end - cur - 4U) / 2U;
+        detail::write_u16(
+            out, cur,
+            static_cast<uint16_t>(0xd000U | (uint32_t{single_cond ^ 1U} << 8U) |
+                                  skip));
+        detail::write_u16(out, cur + 2U, 0xbf00U);
+        cur += 4U;
+      }
       if (rt == 15U) {
         detail::write_u16(out, cur, 0xb403U);      // push {r0, r1}
         detail::write_u16(out, cur + 2U, 0xbf00U); // nop
@@ -1882,13 +1921,6 @@ namespace detail {
         detail::write_u16(out, cur + 20U, 0x9001U);          // str r0, [sp, #4]
         detail::write_u16(out, cur + 22U, 0xbd01U);          // pop {r0, pc}
         break;
-      }
-      if (need_guard) {
-        detail::write_u16(out, cur,
-                          static_cast<uint16_t>(
-                              0xd008U | (uint32_t{single_cond ^ 1U} << 8U)));
-        detail::write_u16(out, cur + 2U, 0xbf00U);
-        cur += 4U;
       }
       detail::write_t32(out, cur, 0xf8dfU,
                         static_cast<uint16_t>((uint32_t{rt} << 12U) | 4U));
@@ -1980,12 +2012,12 @@ namespace detail {
       detail::write_t32(
           out, cur + 16U, static_cast<uint16_t>(0xeb00U | rx),
           static_cast<uint16_t>((uint32_t{rx} << 8U) | 0x0040U | ry));
-      detail::write_u16(out, cur + 20U,
-                        static_cast<uint16_t>(0x3001U | (uint32_t{rx} << 8U)));
-      detail::write_u16(out, cur + 22U,
+      detail::write_t32(
+          out, cur + 20U, static_cast<uint16_t>(0xf200U | rx),
+          static_cast<uint16_t>((uint32_t{rx} << 8U) | 1U)); // addw
+      detail::write_u16(out, cur + 24U,
                         static_cast<uint16_t>(0x9002U | (uint32_t{rx} << 8U)));
-      detail::write_u16(out, cur + 24U, static_cast<uint16_t>(0xbd00U | mask));
-      detail::write_u16(out, cur + 26U, 0xbf00U);
+      detail::write_u16(out, cur + 26U, static_cast<uint16_t>(0xbd00U | mask));
       detail::write_u32(out, cur + 28U, target);
       break;
     }
@@ -2113,6 +2145,41 @@ namespace detail {
   return false;
 }
 
+[[nodiscard]] inline bool has_interior_call(const uint8_t *code, size_t size,
+                                            bool thumb) {
+  for (size_t offset = 0; offset < size;) {
+    if (!thumb) {
+      if (offset + 4U >= size)
+        return false;
+      uint32_t word = 0;
+      memcpy(&word, code + offset, sizeof(word));
+      if ((word & 0x0f000000U) == 0x0b000000U ||
+          (word & 0xfe000000U) == 0xfa000000U ||
+          (word & 0x0ffffff0U) == 0x012fff30U)
+        return true;
+      offset += 4U;
+      continue;
+    }
+    uint16_t first = 0;
+    memcpy(&first, code + offset, sizeof(first));
+    const size_t width = thumb_is_32bit(first) ? 4U : 2U;
+    if (offset + width >= size)
+      return false;
+    if (width == 2U) {
+      if ((first & 0xff80U) == 0x4780U)
+        return true;
+    } else {
+      uint16_t second = 0;
+      memcpy(&second, code + offset + 2U, sizeof(second));
+      if ((first & 0xf800U) == 0xf000U &&
+          ((second & 0xd000U) == 0xd000U || (second & 0xd000U) == 0xc000U))
+        return true;
+    }
+    offset += width;
+  }
+  return false;
+}
+
 [[nodiscard]] inline bool has_interior_branch(const uint8_t *code,
                                               size_t scan_bytes,
                                               uintptr_t base_addr,
@@ -2171,12 +2238,12 @@ namespace detail {
               raw_target < base + static_cast<uint32_t>(aligned))
             furthest = raw_target;
         }
-        if (offset >= covered_size && insn.is_terminal && pc + 4U >= furthest)
+        if (offset >= covered_size && insn.is_terminal && pc >= furthest)
           return false;
       } else if (offset >= covered_size &&
                  ((w & 0x0ff000f0U) == 0x01200070U ||
                   (w & 0x0ff000f0U) == 0x07f000f0U) &&
-                 pc + 4U >= furthest) {
+                 pc >= furthest) {
         return false;
       }
     }
@@ -2283,11 +2350,11 @@ namespace detail {
             raw_target < base + static_cast<uint32_t>(limit))
           furthest = raw_target;
       }
-      if (offset >= covered_size && insn.is_terminal && pc + width >= furthest)
+      if (offset >= covered_size && insn.is_terminal && pc >= furthest)
         return false;
     } else if (offset >= covered_size &&
                ((hw1 & 0xff00U) == 0xbe00U || (hw1 & 0xff00U) == 0xde00U) &&
-               pc + width >= furthest) {
+               pc >= furthest) {
       return false;
     }
     offset += width;

@@ -396,8 +396,12 @@ int child_control_session() { return g_child_control_session; }
 
 bool in_specialized_child() { return g_in_specialized_child; }
 
+bool try_lock_child_control_session() {
+  return !g_child_control_lock.test_and_set(std::memory_order_acquire);
+}
+
 void lock_child_control_session() {
-  while (g_child_control_lock.test_and_set(std::memory_order_acquire)) {
+  while (!try_lock_child_control_session()) {
   }
 }
 

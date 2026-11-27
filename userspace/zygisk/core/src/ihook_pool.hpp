@@ -8,7 +8,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
+#include <iterator>
+#include <new>
 #include <pthread.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -229,14 +230,6 @@ alloc_near_gap_raw(uintptr_t min_addr, uintptr_t max_addr, uintptr_t preferred,
   return nullptr;
 }
 
-[[nodiscard]] inline uint64_t monotonic_ns() {
-  timespec ts{};
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
-    return 0;
-  return (static_cast<uint64_t>(ts.tv_sec) * 1000000000ULL) +
-         static_cast<uint64_t>(ts.tv_nsec);
-}
-
 [[nodiscard]] inline bool raw_mprotect(void *addr, size_t size, int prot) {
 #if defined(__linux__) &&                                                      \
     (defined(__arm__) || defined(__aarch64__) || defined(__x86_64__))
@@ -267,14 +260,14 @@ public:
            bool fresh_page)
       : pool_(pool), addr_(addr), page_base_(page_base),
         write_base_(write_base), page_size_(page_size), exec_prot_(exec_prot),
-        pooled_(pooled), fresh_page_(fresh_page) {}
+        pooled_(pooled), fresh_page_(fresh_page), creator_(getpid()) {}
   ExecSlot(const ExecSlot &) = delete;
   ExecSlot &operator=(const ExecSlot &) = delete;
   ExecSlot(ExecSlot &&other) noexcept
       : pool_(other.pool_), addr_(other.addr_), page_base_(other.page_base_),
         write_base_(other.write_base_), page_size_(other.page_size_),
         exec_prot_(other.exec_prot_), pooled_(other.pooled_),
-        fresh_page_(other.fresh_page_) {
+        fresh_page_(other.fresh_page_), creator_(other.creator_) {
     other.clear_fields();
   }
   ExecSlot &operator=(ExecSlot &&other) noexcept {
@@ -288,6 +281,7 @@ public:
       exec_prot_ = other.exec_prot_;
       pooled_ = other.pooled_;
       fresh_page_ = other.fresh_page_;
+      creator_ = other.creator_;
       other.clear_fields();
     }
     return *this;
@@ -302,6 +296,7 @@ public:
   [[nodiscard]] int exec_prot() const { return exec_prot_; }
   [[nodiscard]] bool is_pooled() const { return pooled_; }
   [[nodiscard]] bool is_fresh_page() const { return fresh_page_; }
+  [[nodiscard]] bool created_here() const { return creator_ == getpid(); }
 
   [[nodiscard]] void *release(bool *pooled_out = nullptr) {
     if (pooled_out != nullptr)
@@ -323,6 +318,7 @@ private:
     exec_prot_ = 0;
     pooled_ = false;
     fresh_page_ = false;
+    creator_ = 0;
   }
 
   SlotPool<SlotSize, MaxPages> *pool_ = nullptr;
@@ -333,28 +329,27 @@ private:
   int exec_prot_ = 0;
   bool pooled_ = false;
   bool fresh_page_ = false;
+  pid_t creator_ = 0;
 };
 
 template <size_t SlotSize, size_t MaxPages> class SlotPool {
 public:
   static constexpr size_t kMaxSlotsPerPage = 256;
-  static constexpr size_t kMaxRetired = 256;
-  static constexpr uint64_t kDefaultGraceNs = 5000000000ULL;
 
   template <typename AcceptFn>
   [[nodiscard]] ExecSlot<SlotSize, MaxPages>
   alloc_near(uintptr_t min_addr, uintptr_t max_addr, uintptr_t preferred,
              int exec_prot, AcceptFn accept, bool allow_mprotect_reuse = true) {
     const size_t page_size = static_cast<size_t>(getpagesize());
+    const pid_t process = getpid();
     {
       pthread_mutex_lock(&mutex_);
-      drain_retired_locked(false);
       size_t best_page = MaxPages;
       size_t best_slot = kMaxSlotsPerPage;
       uintptr_t best_dist = UINTPTR_MAX;
       for (size_t p = 0; p != MaxPages; ++p) {
         const PoolPage &page = pages_[p];
-        if (page.base == nullptr || page.exec_prot != exec_prot)
+        if (page.creator != process || page.exec_prot != exec_prot)
           continue;
         if (!allow_mprotect_reuse && page.write_base == nullptr && page.is_rx)
           continue;
@@ -379,13 +374,16 @@ public:
       }
       if (best_page != MaxPages) {
         PoolPage &page = pages_[best_page];
-        mark_slot(page, best_slot, true);
         void *addr = static_cast<uint8_t *>(page.base) + (best_slot * SlotSize);
-        void *write_base = page.write_base;
-        pthread_mutex_unlock(&mutex_);
-        return ExecSlot<SlotSize, MaxPages>(this, addr, page.base, write_base,
-                                            page.page_size, exec_prot, true,
-                                            false);
+        // Later probes can overwrite the caller's relocation plan.
+        if (accept(reinterpret_cast<uintptr_t>(addr))) {
+          mark_slot(page, best_slot, true);
+          void *write_base = page.write_base;
+          pthread_mutex_unlock(&mutex_);
+          return ExecSlot<SlotSize, MaxPages>(this, addr, page.base, write_base,
+                                              page.page_size, exec_prot, true,
+                                              false);
+        }
       }
       pthread_mutex_unlock(&mutex_);
     }
@@ -425,12 +423,12 @@ public:
   [[nodiscard]] ExecSlot<SlotSize, MaxPages>
   alloc_any(int exec_prot, AcceptFn accept, bool allow_mprotect_reuse = true) {
     const size_t page_size = static_cast<size_t>(getpagesize());
+    const pid_t process = getpid();
     {
       pthread_mutex_lock(&mutex_);
-      drain_retired_locked(false);
       for (size_t p = 0; p != MaxPages; ++p) {
         PoolPage &page = pages_[p];
-        if (page.base == nullptr || page.exec_prot != exec_prot)
+        if (page.creator != process || page.exec_prot != exec_prot)
           continue;
         if (!allow_mprotect_reuse && page.write_base == nullptr && page.is_rx)
           continue;
@@ -489,7 +487,8 @@ public:
 
   [[nodiscard]] bool commit_slot(const ExecSlot<SlotSize, MaxPages> &slot,
                                  const uint8_t *staging, size_t size) {
-    if (!slot || staging == nullptr || size == 0 || size > SlotSize)
+    if (!slot || !slot.created_here() || staging == nullptr || size == 0 ||
+        size > SlotSize)
       return false;
     pthread_mutex_lock(&mutex_);
     PoolPage *pooled_page = nullptr;
@@ -547,20 +546,37 @@ public:
     return true;
   }
 
-  void retire_slot(void *addr, bool pooled, bool defer,
-                   uint64_t grace_ns = kDefaultGraceNs) {
+  void retire_slot(void *addr, bool pooled, bool published) {
     if (addr == nullptr)
       return;
     pthread_mutex_lock(&mutex_);
-    drain_retired_locked(false);
-    if (!defer) {
-      release_slot_locked(addr, pooled);
-      pthread_mutex_unlock(&mutex_);
-      return;
-    }
-    if (retired_count_ < kMaxRetired) {
-      retired_[retired_count_++] = {addr, pooled,
-                                    alloc_detail::monotonic_ns() + grace_ns};
+    if (pooled) {
+      const uintptr_t raw = reinterpret_cast<uintptr_t>(addr);
+      for (auto &page : pages_) {
+        const uintptr_t base = reinterpret_cast<uintptr_t>(page.base);
+        if (page.base == nullptr || raw < base || raw - base >= page.page_size)
+          continue;
+        const size_t slot = (raw - base) / SlotSize;
+        if (published) {
+          page.retired_words[slot >> 6U] |= uint64_t{1} << (slot & 63U);
+        } else {
+          mark_slot(page, slot, false);
+          if (page_empty(page))
+            unmap_page(page);
+        }
+        break;
+      }
+    } else {
+      for (auto **link = &extra_pages_; *link != nullptr;
+           link = &(*link)->next) {
+        if ((*link)->base != addr)
+          continue;
+        if (published)
+          (*link)->retired = true;
+        else
+          unmap_extra(*link);
+        break;
+      }
     }
     pthread_mutex_unlock(&mutex_);
   }
@@ -569,24 +585,30 @@ public:
     retire_slot(addr, pooled, false);
   }
 
-  void drain_retired(bool force = false) {
+  // Only the Core retirement boundary can exclude outstanding return addresses.
+  void reclaim_quiescent() {
     pthread_mutex_lock(&mutex_);
-    drain_retired_locked(force);
+    for (auto &page : pages_) {
+      if (page.base != nullptr &&
+          std::equal(std::begin(page.used_words), std::end(page.used_words),
+                     std::begin(page.retired_words)))
+        unmap_page(page);
+    }
+    for (auto **link = &extra_pages_; *link != nullptr;) {
+      if ((*link)->retired)
+        unmap_extra(*link);
+      else
+        link = &(*link)->next;
+    }
     pthread_mutex_unlock(&mutex_);
   }
 
   [[nodiscard]] bool idle() {
     pthread_mutex_lock(&mutex_);
-    drain_retired_locked(false);
-    bool empty = retired_count_ == 0;
-    if (empty) {
-      for (size_t p = 0; p != MaxPages; ++p) {
-        if (pages_[p].base != nullptr) {
-          empty = false;
-          break;
-        }
-      }
-    }
+    const bool empty =
+        extra_pages_ == nullptr &&
+        std::none_of(std::begin(pages_), std::end(pages_),
+                     [](const auto &page) { return page.base != nullptr; });
     pthread_mutex_unlock(&mutex_);
     return empty;
   }
@@ -620,16 +642,20 @@ private:
     void *base = nullptr;
     void *write_base = nullptr;
     size_t page_size = 0;
+    // Published slots stay immutable until the entire page can be unmapped.
     uint64_t used_words[4] = {};
+    uint64_t retired_words[4] = {};
+    pid_t creator = 0;
     int exec_prot = 0;
     size_t slot_count = 0;
     bool is_rx = false;
   };
 
-  struct RetiredSlot {
-    void *addr = nullptr;
-    bool pooled = false;
-    uint64_t ready_ns = 0;
+  struct ExtraPage {
+    void *base;
+    size_t size;
+    ExtraPage *next;
+    bool retired = false;
   };
 
   [[nodiscard]] static bool slot_used(const PoolPage &page, size_t index) {
@@ -649,49 +675,18 @@ private:
             page.used_words[3]) == 0;
   }
 
-  void release_slot_locked(void *addr, bool pooled) {
-    if (addr == nullptr)
-      return;
-    const size_t page_size = static_cast<size_t>(getpagesize());
-    if (!pooled) {
-      munmap(addr, page_size);
-      return;
-    }
-    const uintptr_t raw = reinterpret_cast<uintptr_t>(addr);
-    for (size_t p = 0; p != MaxPages; ++p) {
-      PoolPage &page = pages_[p];
-      if (page.base == nullptr)
-        continue;
-      const uintptr_t base = reinterpret_cast<uintptr_t>(page.base);
-      if (raw < base || raw >= base + page.page_size)
-        continue;
-      const size_t slot = static_cast<size_t>(raw - base) / SlotSize;
-      if (slot < page.slot_count)
-        mark_slot(page, slot, false);
-      if (page_empty(page)) {
-        munmap(page.base, page.page_size);
-        if (page.write_base != nullptr)
-          munmap(page.write_base, page.page_size);
-        page = PoolPage{};
-      }
-      return;
-    }
+  static void unmap_page(PoolPage &page) {
+    munmap(page.base, page.page_size);
+    if (page.write_base != nullptr)
+      munmap(page.write_base, page.page_size);
+    page = {};
   }
 
-  void drain_retired_locked(bool force) {
-    if (retired_count_ == 0)
-      return;
-    const uint64_t now = force ? UINT64_MAX : alloc_detail::monotonic_ns();
-    size_t write_idx = 0;
-    for (size_t i = 0; i != retired_count_; ++i) {
-      const RetiredSlot item = retired_[i];
-      if (force || now >= item.ready_ns) {
-        release_slot_locked(item.addr, item.pooled);
-      } else {
-        retired_[write_idx++] = item;
-      }
-    }
-    retired_count_ = write_idx;
+  static void unmap_extra(ExtraPage *&link) {
+    ExtraPage *page = link;
+    link = page->next;
+    munmap(page->base, page->size);
+    delete page;
   }
 
   [[nodiscard]] ExecSlot<SlotSize, MaxPages>
@@ -708,6 +703,7 @@ private:
     for (size_t p = 0; p != MaxPages; ++p) {
       if (pages_[p].base == nullptr) {
         PoolPage &page = pages_[p];
+        page.creator = getpid();
         page.base = fresh_exec;
         page.write_base = fresh_write;
         page.page_size = page_size;
@@ -721,21 +717,28 @@ private:
                                             true, true);
       }
     }
-    pthread_mutex_unlock(&mutex_);
-    if (fresh_write != nullptr) {
+    auto *page =
+        new (std::nothrow) ExtraPage{fresh_exec, page_size, extra_pages_};
+    if (fresh_write != nullptr)
       munmap(fresh_write, page_size);
-      fresh_write = nullptr;
-      (void)alloc_detail::raw_mprotect(fresh_exec, page_size,
-                                       PROT_READ | PROT_WRITE);
+    if (page == nullptr ||
+        (fresh_write != nullptr &&
+         !alloc_detail::raw_mprotect(fresh_exec, page_size,
+                                     PROT_READ | PROT_WRITE))) {
+      delete page;
+      munmap(fresh_exec, page_size);
+      pthread_mutex_unlock(&mutex_);
+      return {};
     }
+    extra_pages_ = page;
+    pthread_mutex_unlock(&mutex_);
     return ExecSlot<SlotSize, MaxPages>(this, fresh_exec, fresh_exec, nullptr,
                                         page_size, exec_prot, false, true);
   }
 
   pthread_mutex_t mutex_ = PTHREAD_MUTEX_INITIALIZER;
   PoolPage pages_[MaxPages]{};
-  RetiredSlot retired_[kMaxRetired]{};
-  size_t retired_count_ = 0;
+  ExtraPage *extra_pages_ = nullptr;
 };
 
 template <size_t SlotSize, size_t MaxPages>
@@ -776,9 +779,9 @@ static_assert(std::is_trivially_destructible_v<IslandPool>,
   return trampoline_pool().idle() && island_pool().idle();
 }
 
-inline void drain_all_retired(bool force = false) {
-  trampoline_pool().drain_retired(force);
-  island_pool().drain_retired(force);
+inline void reclaim_quiescent_pools() {
+  trampoline_pool().reclaim_quiescent();
+  island_pool().reclaim_quiescent();
 }
 
 } // namespace yuki::ihook

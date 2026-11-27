@@ -1133,6 +1133,12 @@ bool reflected_is_native(JNIEnv *env, jobject method) {
 void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
                       int count, yuki::ihook::UnhookMode mode, int owner,
                       size_t first_entry = 0) {
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation) {
+    for (int i = 0; i < count; ++i)
+      methods[i].fnPtr = nullptr;
+    return;
+  }
   jclass clazz = env->FindClass(clz);
   if (clazz == nullptr) {
     env->ExceptionClear();
@@ -1240,6 +1246,10 @@ void hook_jni_methods(JNIEnv *env, const char *clz, JNINativeMethod *methods,
 }
 
 bool restore_jni_hooks(JNIEnv *env, int owner) {
+  yukizygisk::plt_lifecycle::Operation operation(
+      yukizygisk::plt_lifecycle::Access::Recover);
+  if (!operation)
+    return false;
   bool restored = true;
   for (size_t i = g_jni_hooks.size(); i > 0; --i) {
     auto &record = g_jni_hooks[i - 1];
@@ -1529,10 +1539,14 @@ CoreCleanupResult zygisk_self_unhook(JNIEnv *env) {
 }
 
 bool zygisk_release_hook_storage() {
-  if (!g_jni_hooks.empty() || !yuki::ihook::pools_idle() ||
-      !yuki::ihook::quiesce_idle() || g_art_handle.valid() ||
-      g_fork_handle.valid() || g_strdup_handle.valid() ||
+  if (!g_jni_hooks.empty() || !yuki::ihook::quiesce_idle() ||
+      g_art_handle.valid() || g_fork_handle.valid() ||
+      g_strdup_handle.valid() ||
       g_plt_callbacks.load(std::memory_order_acquire) != 0)
+    return false;
+  if (yuki::ihook::single_threaded_process())
+    yuki::ihook::reclaim_quiescent_pools();
+  if (!yuki::ihook::pools_idle())
     return false;
   std::vector<JniHookRecord>().swap(g_jni_hooks);
   std::string().swap(g_runtime_image.path);

@@ -129,17 +129,28 @@ inline bool single_threaded_process() {
   return count == 1;
 }
 
-[[nodiscard]] inline PatchResult
-patch_bytes_checked(uintptr_t addr, const void *expected,
-                    const void *replacement, size_t len,
-                    bool single_word_atomic, uintptr_t guard_start,
-                    uintptr_t guard_end, bool *concurrent_rejected) {
+[[nodiscard]] inline PatchResult patch_bytes_checked(
+    uintptr_t addr, const void *expected, const void *replacement, size_t len,
+    bool single_word_atomic, uintptr_t guard_start, uintptr_t guard_end,
+    bool *concurrent_rejected, bool interior_return = false) {
   if (concurrent_rejected != nullptr)
     *concurrent_rejected = false;
   if (len == 0 || expected == nullptr || replacement == nullptr)
     return PatchResult::Rejected;
   const bool single_page = within_page(addr, len);
+  const uintptr_t page_size = static_cast<uintptr_t>(getpagesize());
+  const uintptr_t boundary = addr - (addr % page_size) + page_size;
+  if (!single_page && (boundary <= addr || boundary - addr >= len ||
+                       !page_range_executable(addr, len)))
+    return PatchResult::Rejected;
   const bool single_thread = single_threaded_process();
+  // A parked callee can retain an LR or stack return into the overwritten
+  // bytes.
+  if (!single_thread && interior_return) {
+    if (concurrent_rejected != nullptr)
+      *concurrent_rejected = true;
+    return PatchResult::Rejected;
+  }
   QuiesceGuard quiesce;
   if (!single_thread) {
     if (!quiesce.acquire(guard_start, guard_end)) {
@@ -153,11 +164,6 @@ patch_bytes_checked(uintptr_t addr, const void *expected,
   if (single_page)
     return checked_patch_result(addr, expected, replacement, len);
 
-  const uintptr_t page_size = static_cast<uintptr_t>(getpagesize());
-  const uintptr_t boundary = addr - (addr % page_size) + page_size;
-  if (boundary <= addr || boundary - addr >= len ||
-      !page_range_executable(addr, len))
-    return PatchResult::Rejected;
   const size_t first_len = static_cast<size_t>(boundary - addr);
   const size_t second_len = len - first_len;
   const auto *exp_bytes = static_cast<const uint8_t *>(expected);
@@ -1200,7 +1206,9 @@ inline void *install(void *target, void *replacement, Hook *out,
   const auto *rep_bytes = reinterpret_cast<const uint8_t *>(patch) + write_off;
   const PatchResult committed = patch_bytes_checked(
       write_addr, exp_bytes, rep_bytes, write_len, single_word_atomic,
-      target_addr, target_addr + patch_size, &concurrent_rejected);
+      target_addr, target_addr + patch_size, &concurrent_rejected,
+      a64::has_interior_call(reinterpret_cast<const uint8_t *>(target),
+                             patch_size));
   if (committed == PatchResult::Rejected) {
     out->phase = HookPhase::Released;
     out->patched_size = 0;
@@ -1230,7 +1238,6 @@ inline bool uninstall(Hook *h, UnhookMode mode = UnhookMode::RestoreBytes) {
   if (h->phase != HookPhase::Installed &&
       h->phase != HookPhase::RestoredPendingReclaim)
     fail_indeterminate(&h->phase);
-  const bool defer_reclaim = !single_threaded_process();
   if (h->phase == HookPhase::Installed) {
     if (!instruction_sync_still_supported(h->sync_plan))
       return false;
@@ -1269,13 +1276,11 @@ inline bool uninstall(Hook *h, UnhookMode mode = UnhookMode::RestoreBytes) {
       fail_indeterminate(&h->phase);
     h->phase = HookPhase::RestoredPendingReclaim;
   }
-  trampoline_pool().retire_slot(h->trampoline, h->trampoline_pooled,
-                                defer_reclaim);
+  trampoline_pool().retire_slot(h->trampoline, h->trampoline_pooled, true);
   h->trampoline = nullptr;
   h->trampoline_pooled = false;
   for (uint8_t k = 0; k != h->island_count; ++k) {
-    island_pool().retire_slot(h->islands[k], h->island_pooled[k],
-                              defer_reclaim);
+    island_pool().retire_slot(h->islands[k], h->island_pooled[k], true);
     h->islands[k] = nullptr;
     h->island_pooled[k] = false;
   }
@@ -1674,7 +1679,8 @@ inline void *install(void *target, void *replacement, Hook *out,
   bool concurrent_rejected = false;
   const PatchResult committed = patch_bytes_checked(
       target_address, out->saved, patch, patch_size, single_word_atomic,
-      target_address, target_address + patch_size, &concurrent_rejected);
+      target_address, target_address + patch_size, &concurrent_rejected,
+      arm32::has_interior_call(target_bytes, patch_size, thumb));
   if (committed == PatchResult::Rejected) {
     out->phase = HookPhase::Released;
     out->patched_size = 0;
@@ -1705,7 +1711,6 @@ inline bool uninstall(Hook *hook, UnhookMode mode = UnhookMode::RestoreBytes) {
   if (hook->phase != HookPhase::Installed &&
       hook->phase != HookPhase::RestoredPendingReclaim)
     fail_indeterminate(&hook->phase);
-  const bool defer_reclaim = !single_threaded_process();
   if (hook->phase == HookPhase::Installed) {
     if (!instruction_sync_still_supported(hook->sync_plan))
       return false;
@@ -1735,10 +1740,10 @@ inline bool uninstall(Hook *hook, UnhookMode mode = UnhookMode::RestoreBytes) {
     hook->phase = HookPhase::RestoredPendingReclaim;
   }
   trampoline_pool().retire_slot(hook->trampoline, hook->trampoline_pooled,
-                                defer_reclaim);
+                                true);
   hook->trampoline = nullptr;
   hook->trampoline_pooled = false;
-  island_pool().retire_slot(hook->island, hook->island_pooled, defer_reclaim);
+  island_pool().retire_slot(hook->island, hook->island_pooled, true);
   hook->island = nullptr;
   hook->island_pooled = false;
   hook->patched_size = 0;

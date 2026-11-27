@@ -4,10 +4,12 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
-#include <dirent.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <sys/syscall.h>
@@ -32,6 +34,15 @@ namespace yuki::ihook {
 namespace quiesce_detail {
 
 inline constexpr size_t kMaxPeerThreads = 256;
+inline constexpr size_t kTaskBufferSize = 4096;
+
+struct KernelDirent64 {
+  uint64_t inode;
+  int64_t offset;
+  uint16_t record_size;
+  uint8_t type;
+  char name[1];
+};
 
 struct QuiesceState {
   pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -196,25 +207,72 @@ inline void quiesce_handler(int, siginfo_t *info, void *uctx) {
 }
 
 [[nodiscard]] inline bool list_peer_tids(pid_t self_tid, pid_t *out,
-                                         size_t capacity, size_t *count_out) {
-  DIR *tasks = opendir("/proc/self/task");
-  if (tasks == nullptr)
+                                         size_t capacity, size_t *count_out,
+                                         uint8_t (&buffer)[kTaskBufferSize]) {
+  *count_out = 0;
+#if defined(__linux__) &&                                                      \
+    (defined(__arm__) || defined(__aarch64__) || defined(__x86_64__))
+  using lifecycle_detail::raw_call;
+  const long fd = raw_call(__NR_openat, static_cast<uintptr_t>(AT_FDCWD),
+                           reinterpret_cast<uintptr_t>("/proc/self/task"),
+                           O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (fd < 0)
     return false;
+
+  constexpr size_t name_offset = offsetof(KernelDirent64, name);
   size_t count = 0;
-  bool overflow = false;
-  while (const dirent *entry = readdir(tasks)) {
-    pid_t tid = 0;
-    if (!parse_tid(entry->d_name, &tid) || tid == self_tid)
+  bool complete = true;
+  while (complete) {
+    const long read =
+        raw_call(__NR_getdents64, static_cast<uintptr_t>(fd),
+                 reinterpret_cast<uintptr_t>(buffer), sizeof(buffer));
+    if (read == -EINTR)
       continue;
-    if (count >= capacity) {
-      overflow = true;
+    if (read <= 0 || static_cast<size_t>(read) > sizeof(buffer)) {
+      complete = read == 0;
       break;
     }
-    out[count++] = tid;
+    const size_t bytes = static_cast<size_t>(read);
+    for (size_t offset = 0; offset < bytes;) {
+      if (bytes - offset <= name_offset) {
+        complete = false;
+        break;
+      }
+      uint16_t record_size = 0;
+      memcpy(&record_size,
+             buffer + offset + offsetof(KernelDirent64, record_size),
+             sizeof(record_size));
+      if (record_size <= name_offset || record_size > bytes - offset) {
+        complete = false;
+        break;
+      }
+      const auto *name =
+          reinterpret_cast<const char *>(buffer + offset + name_offset);
+      if (memchr(name, '\0', record_size - name_offset) == nullptr) {
+        complete = false;
+        break;
+      }
+      offset += record_size;
+      pid_t tid = 0;
+      if (!parse_tid(name, &tid) || tid == self_tid)
+        continue;
+      if (count >= capacity) {
+        complete = false;
+        break;
+      }
+      out[count++] = tid;
+    }
   }
-  closedir(tasks);
+  const long closed = raw_call(__NR_close, static_cast<uintptr_t>(fd));
   *count_out = count;
-  return !overflow;
+  return complete && closed == 0;
+#else
+  (void)self_tid;
+  (void)out;
+  (void)capacity;
+  (void)buffer;
+  return false;
+#endif
 }
 
 } // namespace quiesce_detail
@@ -247,11 +305,12 @@ public:
 #endif
     );
 
+    alignas(uint64_t) uint8_t task_buffer[quiesce_detail::kTaskBufferSize];
     pid_t initial_peers[quiesce_detail::kMaxPeerThreads]{};
     size_t initial_count = 0;
     if (!quiesce_detail::list_peer_tids(self_tid, initial_peers,
                                         quiesce_detail::kMaxPeerThreads,
-                                        &initial_count)) {
+                                        &initial_count, task_buffer)) {
       release();
       return false;
     }
@@ -305,13 +364,14 @@ public:
       size_t sent_count = 0;
       uint32_t expected = 0;
       bool dispatch_ok = true;
+      bool peers_stable = false;
 
       for (unsigned round = 0; round != 3U; ++round) {
         pid_t peers[quiesce_detail::kMaxPeerThreads]{};
         size_t peer_count = 0;
         if (!quiesce_detail::list_peer_tids(self_tid, peers,
                                             quiesce_detail::kMaxPeerThreads,
-                                            &peer_count)) {
+                                            &peer_count, task_buffer)) {
           dispatch_ok = false;
           break;
         }
@@ -347,8 +407,10 @@ public:
             break;
           }
         }
-        if (!dispatch_ok || !added_any)
+        if (!dispatch_ok || !added_any) {
+          peers_stable = dispatch_ok && !added_any;
           break;
+        }
         const uint64_t wait_deadline = quiesce_detail::monotonic_ms() + 50ULL;
         while (st.entered.load(std::memory_order_acquire) < expected) {
           for (size_t j = 0; j != sent_count; ++j) {
@@ -374,6 +436,7 @@ public:
           break;
       }
 
+      dispatch_ok = dispatch_ok && peers_stable;
       if (dispatch_ok) {
         const uint64_t settle_deadline = quiesce_detail::monotonic_ms() + 50ULL;
         while (st.entered.load(std::memory_order_acquire) < expected) {

@@ -24,6 +24,7 @@ bool release_idle_storage();
 bool original_output_allowed(void **output);
 int child_control_session();
 bool in_specialized_child();
+bool try_lock_child_control_session();
 void lock_child_control_session();
 void unlock_child_control_session();
 void invalidate_child_control_session();

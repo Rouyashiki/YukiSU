@@ -1,5 +1,6 @@
 #include "core_bindings.hpp"
 #include "hyos_runtime.hpp"
+#include "ihook_chain.hpp"
 #include "inline_hook.hpp"
 #include "linker_runtime.hpp"
 #include "load_config.hpp"
@@ -107,9 +108,6 @@ struct InlineHookRecord {
   void *target = nullptr;
   yuki::ihook::Hook hook{};
 };
-
-std::vector<InlineHookRecord> g_inline_hooks;
-pthread_mutex_t g_inline_hooks_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 std::vector<ModuleHandle *> g_loaded_modules;
 yz_config g_yz_config = yukizygisk::config::defaults;
@@ -947,82 +945,55 @@ void recover_native_plt() {
 }
 
 int api_inline_hook(void *target, void *addr, void **original) {
-  if (target == nullptr || addr == nullptr ||
-      !yuki::ihook::single_threaded_process()) {
+  yukizygisk::plt_lifecycle::Operation operation;
+  if (!operation || target == nullptr || addr == nullptr ||
+      (original != nullptr &&
+       reinterpret_cast<uintptr_t>(original) % alignof(void *) != 0)) {
     LOGE("inline hook: invalid args target=%p handler=%p", target, addr);
     return kFailed;
   }
-  pthread_mutex_lock(&g_inline_hooks_mutex);
-  const uintptr_t requested =
-      reinterpret_cast<uintptr_t>(target) & ~uintptr_t{1};
-#if defined(__aarch64__)
-  constexpr size_t requested_size = 8;
-#else
-  constexpr size_t requested_size = 10;
-#endif
-  for (const auto &rec : g_inline_hooks) {
-    const uintptr_t existing =
-        reinterpret_cast<uintptr_t>(rec.target) & ~uintptr_t{1};
-#if defined(__aarch64__)
-    constexpr size_t existing_size = 8;
-#else
-    const size_t existing_size = rec.hook.patched_size;
-#endif
-    if (yuki::ihook::hook_ranges_overlap(requested, requested_size, existing,
-                                         existing_size)) {
-      LOGE("inline hook: overlapping target=%p existing=%p", target,
-           rec.target);
-      pthread_mutex_unlock(&g_inline_hooks_mutex);
+  try {
+    std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
+    auto image = native_plt_image(__builtin_return_address(0), pin);
+    if (!image || image.value().image.load_bias == 0)
+      return kFailed;
+    const void *owner =
+        reinterpret_cast<const void *>(image.value().image.load_bias);
+    const char *reason = nullptr;
+    if (!yuki::ihook::chain_manager().hook(target, addr, original, true, {},
+                                           &reason, owner)) {
+      LOGE("inline hook: install failed target=%p handler=%p reason=%s", target,
+           addr, reason != nullptr ? reason : "unknown");
       return kFailed;
     }
+    LOGI("inline hook: installed target=%p handler=%p original=%p", target,
+         addr,
+         original != nullptr ? yukiplt::load_original(original) : nullptr);
+    return kSuccess;
+  } catch (...) {
+    LOGE("inline hook: caller discovery failed");
   }
-
-  g_inline_hooks.emplace_back();
-  InlineHookRecord &rec = g_inline_hooks.back();
-  rec.target = target;
-#if defined(__aarch64__)
-  yuki::ihook::a64::Error reason = yuki::ihook::a64::Error::None;
-  void *orig =
-      yuki::ihook::install(target, addr, &rec.hook, true, false, &reason);
-#else
-  void *orig = yuki::ihook::install(target, addr, &rec.hook, true);
-#endif
-  if (orig == nullptr) {
-#if defined(__aarch64__)
-    LOGE("inline hook: install failed target=%p handler=%p reason=%s", target,
-         addr, yuki::ihook::a64::error_name(reason));
-#else
-    LOGE("inline hook: install failed target=%p handler=%p", target, addr);
-#endif
-    g_inline_hooks.pop_back();
-    pthread_mutex_unlock(&g_inline_hooks_mutex);
-    return kFailed;
-  }
-  if (original != nullptr)
-    *original = orig;
-  pthread_mutex_unlock(&g_inline_hooks_mutex);
-  LOGI("inline hook: installed target=%p handler=%p original=%p", target, addr,
-       orig);
-  return kSuccess;
+  return kFailed;
 }
 
 int api_inline_unhook(void *target) {
-  if (target == nullptr || !yuki::ihook::single_threaded_process())
+  yukizygisk::plt_lifecycle::Operation operation(
+      yukizygisk::plt_lifecycle::Access::Recover);
+  if (!operation || target == nullptr)
     return kFailed;
-  pthread_mutex_lock(&g_inline_hooks_mutex);
-  for (auto it = g_inline_hooks.begin(); it != g_inline_hooks.end(); ++it) {
-    if (it->target != target)
-      continue;
-    if (!yuki::ihook::uninstall(&it->hook)) {
-      pthread_mutex_unlock(&g_inline_hooks_mutex);
+  try {
+    std::shared_ptr<yukizygisk::linker::PrivateImage> pin;
+    auto image = native_plt_image(__builtin_return_address(0), pin);
+    if (!image || image.value().image.load_bias == 0)
       return kFailed;
-    }
-    g_inline_hooks.erase(it);
-    pthread_mutex_unlock(&g_inline_hooks_mutex);
-    return kSuccess;
+    const void *owner =
+        reinterpret_cast<const void *>(image.value().image.load_bias);
+    return yuki::ihook::chain_manager().unhook(target, owner) ? kSuccess
+                                                              : kFailed;
+  } catch (...) {
+    LOGE("inline unhook: caller discovery failed");
+    return kFailed;
   }
-  pthread_mutex_unlock(&g_inline_hooks_mutex);
-  return kFailed;
 }
 
 ZnSymbolResolver *api_new_symbol_resolver(const char *path, void *base_addr) {
@@ -1517,15 +1488,6 @@ void core_start() {
     restore_native_load_policy();
     return;
   }
-  try {
-    g_inline_hooks.reserve(YZ_NATIVE_TARGET_MAX);
-  } catch (...) {
-    LOGE("native Core hook ownership allocation failed");
-    yukizygisk::endpoint::close_packet(g_early_packet_fd, false);
-    g_early_packet_fd = -1;
-    restore_native_load_policy();
-    return;
-  }
   g_runtime_generation = request_runtime_generation();
   load_config();
   (void)yukizygisk::hyos::initialize(open_hyos_control_session,
@@ -1615,7 +1577,9 @@ extern "C" uint8_t yz_patch_text_checked(uintptr_t addr, const void *expected,
     memcpy(frame + offset, replacement, len);
     offset += len;
     uint8_t result = 2;
-    yukizygisk::hyos::lock_child_control_session();
+    // The session owner may be parked by the caller's patch guard.
+    if (!yukizygisk::hyos::try_lock_child_control_session())
+      return 0;
     const int session = yukizygisk::hyos::child_control_session();
     if (session < 0) {
       yukizygisk::hyos::unlock_child_control_session();
@@ -1732,8 +1696,15 @@ void retire_idle_native_core() {
   if (!core_runtime_closed()) {
     yukizygisk::plt_lifecycle::Operation operation(
         yukizygisk::plt_lifecycle::Access::Retire);
-    if (!operation || !g_loaded_modules.empty() || !g_native_plt.empty() ||
-        !g_inline_hooks.empty() || !yukizygisk::hyos::release_idle_storage() ||
+    if (!operation || !g_loaded_modules.empty() || !g_native_plt.empty())
+      return;
+    if (yuki::ihook::single_threaded_process()) {
+      yuki::ihook::chain_manager().reclaim_quiescent();
+      yuki::ihook::reclaim_quiescent_pools();
+    }
+    if (!yuki::ihook::chain_manager().idle() || !yuki::ihook::pools_idle() ||
+        !yuki::ihook::quiesce_idle() ||
+        !yukizygisk::hyos::release_idle_storage() ||
         !yukizygisk::plt_lifecycle::shutdown())
       return;
     operation.seal();
@@ -1745,7 +1716,6 @@ void retire_idle_native_core() {
       return;
     }
     std::vector<ModuleHandle *>().swap(g_loaded_modules);
-    std::vector<InlineHookRecord>().swap(g_inline_hooks);
     std::vector<std::unique_ptr<NativePltBinding>>().swap(g_native_plt);
     if (yukiplt_c_trim_idle_storage().code != YUKIPLT_C_SUCCESS)
       return;

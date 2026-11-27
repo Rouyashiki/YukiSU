@@ -627,14 +627,26 @@ inline void emit_address(uint8_t *out, size_t offset, uint8_t rd,
             insn.target < base_addr + limit)
           furthest = insn.target;
       }
-      if (offset >= covered_size && insn.is_terminal && pc + 4U >= furthest)
+      if (offset >= covered_size && insn.is_terminal && pc >= furthest)
         return false;
     } else if (offset >= covered_size &&
                (bits == 0x00000000U || (bits & 0xffe0001fU) == 0xd4200000U ||
                 (bits & 0xffe0001fU) == 0xd4400000U) &&
-               pc + 4U >= furthest) {
+               pc >= furthest) {
       return false;
     }
+  }
+  return false;
+}
+
+[[nodiscard]] inline bool has_interior_call(const uint8_t *code, size_t size) {
+  for (size_t offset = 0; offset + 4U < size; offset += 4U) {
+    uint32_t bits = 0;
+    memcpy(&bits, code + offset, sizeof(bits));
+    if ((bits & 0xfc000000U) == 0x94000000U ||
+        (bits & 0xfffffc1fU) == 0xd63f0000U ||
+        (bits & 0xfefff800U) == 0xd63f0800U)
+      return true;
   }
   return false;
 }
