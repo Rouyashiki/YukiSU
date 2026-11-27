@@ -7,6 +7,7 @@
 #include "userspace/zygisk/daemon_health_client.hpp"
 #include "userspace/zygisk/daemon_state.hpp"
 #include "utils.hpp"
+#include "yukizygisk_diagnostics.hpp"
 #include "yukizygisk_snapshot.hpp"
 
 #include <fcntl.h>
@@ -444,7 +445,12 @@ int ensure_yukizygisk_daemons(uint32_t abi) {
         (void)fprintf(stderr, "yzctl: daemon start unavailable while disabled or in safe mode\n");
         return 2;
     }
-    const FileDescriptor directory(health::open_recovery_directory());
+    int recovery_directory = health::open_recovery_directory();
+    if (recovery_directory < 0 && errno == ENOENT) {
+        (void)prepare_yukizygisk_recovery_diagnostics();
+        recovery_directory = health::open_recovery_directory();
+    }
+    const FileDescriptor directory(recovery_directory);
     if (directory.get() < 0) {
         (void)fprintf(stderr, "yzctl: recovery directory unavailable: %s\n", strerror(errno));
         return 2;
@@ -508,6 +514,13 @@ int ensure_yukizygisk_daemons(uint32_t abi) {
             continue;
         }
         close(lifetime);
+        if (!prepare_yukizygisk_recovery_diagnostics())
+            LOGW("YukiZygisk diagnostics: could not prepare state for daemon recovery");
+        if (remaining_ms(deadline) == 0) {
+            (void)fprintf(stderr, "yzctl: daemon%u launch deadline expired\n",
+                          selected == 2 ? 64U : 32U);
+            return std::max(result, 2);
+        }
         pid_t spawned = -1;
         const int launched = spawn_daemon(path, deadline, operation.get(), &spawned);
         if (launched != 0) {

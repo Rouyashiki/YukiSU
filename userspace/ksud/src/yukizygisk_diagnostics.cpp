@@ -32,6 +32,8 @@ namespace {
 
 namespace fs = std::filesystem;
 
+enum class PreparationMode : uint8_t { Boot, Recovery };
+
 constexpr char kBootIdPath[] = "/proc/sys/kernel/random/boot_id";
 constexpr char kTombstonesPath[] = "/data/tombstones";
 constexpr char kPstorePath[] = "/sys/fs/pstore";
@@ -736,7 +738,8 @@ void capture_previous_boot(const fs::path& current) {
     (void)write_atomic_file(current / kCaptureStateName, output);
 }
 
-bool initialize_current_generation(const fs::path& current, const std::string& boot_id) {
+bool initialize_current_generation(const fs::path& current, const std::string& boot_id,
+                                   PreparationMode mode) {
     if (!ensure_secure_directory(current) || !ensure_secure_directory(current / kLogsName))
         return false;
     std::string state = "{\n  \"boot_id\": \"";
@@ -748,16 +751,19 @@ bool initialize_current_generation(const fs::path& current, const std::string& b
     if (!write_atomic_file(current / kBootStateName, state))
         return false;
 
-    (void)write_inventory(current / kTombstonesBaselineName, scan_regular_files(kTombstonesPath));
-    (void)write_inventory(current / kPstoreBaselineName, scan_regular_files(kPstorePath, true));
-    copy_current_config(current);
+    if (mode == PreparationMode::Boot) {
+        (void)write_inventory(current / kTombstonesBaselineName,
+                              scan_regular_files(kTombstonesPath));
+        (void)write_inventory(current / kPstoreBaselineName, scan_regular_files(kPstorePath, true));
+        copy_current_config(current);
+    }
     return write_atomic_file(current / kBootIdName, boot_id + "\n");
 }
 
 bool create_current_generation(const fs::path& diagnostics, const fs::path& current,
-                               const std::string& boot_id) {
+                               const std::string& boot_id, PreparationMode mode) {
     const fs::path staging = diagnostics / kCurrentStagingName;
-    if (!remove_generation(staging) || !initialize_current_generation(staging, boot_id))
+    if (!remove_generation(staging) || !initialize_current_generation(staging, boot_id, mode))
         return false;
     if (rename(staging.c_str(), current.c_str()) == 0) {
         (void)sync_directory(diagnostics);
@@ -800,14 +806,14 @@ bool import_legacy_generation(const fs::path& diagnostics, const fs::path& old) 
     return false;
 }
 
-int lock_diagnostics(const fs::path& diagnostics) {
+int lock_diagnostics(const fs::path& diagnostics, int operation) {
     const fs::path path = diagnostics / kLockName;
     const int fd = open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd < 0)
         return -1;
     struct stat status{};
     if (fstat(fd, &status) != 0 || !S_ISREG(status.st_mode) || status.st_uid != 0 ||
-        fchmod(fd, 0600) != 0 || flock(fd, LOCK_EX) != 0) {
+        fchmod(fd, 0600) != 0 || flock(fd, operation) != 0) {
         close(fd);
         return -1;
     }
@@ -825,9 +831,7 @@ std::optional<std::string> matching_current_boot_id() {
     return boot_id;
 }
 
-}  // namespace
-
-bool prepare_yukizygisk_diagnostics(bool create_if_missing) {
+bool prepare_diagnostics(bool create_if_missing, PreparationMode mode) {
     const std::string boot_id = current_boot_id();
     if (boot_id.empty()) {
         LOGW("YukiZygisk diagnostics: boot ID unavailable");
@@ -856,7 +860,8 @@ bool prepare_yukizygisk_diagnostics(bool create_if_missing) {
         return false;
     }
 
-    const int lock_fd = lock_diagnostics(diagnostics);
+    const bool recovery = mode == PreparationMode::Recovery;
+    const int lock_fd = lock_diagnostics(diagnostics, recovery ? LOCK_EX | LOCK_NB : LOCK_EX);
     if (lock_fd < 0) {
         LOGW("YukiZygisk diagnostics: failed to lock diagnostics directory");
         return false;
@@ -900,11 +905,11 @@ bool prepare_yukizygisk_diagnostics(bool create_if_missing) {
             LOGW("YukiZygisk diagnostics: refusing unsafe old generation");
             return finish(false);
         }
-        if (old_result != 0 && !import_legacy_generation(diagnostics, old)) {
+        if (!recovery && old_result != 0 && !import_legacy_generation(diagnostics, old)) {
             LOGW("YukiZygisk diagnostics: failed to import legacy evidence");
             return finish(false);
         }
-        if (!create_current_generation(diagnostics, current, boot_id)) {
+        if (!create_current_generation(diagnostics, current, boot_id, mode)) {
             LOGW("YukiZygisk diagnostics: failed to initialize current generation");
             return finish(false);
         }
@@ -912,7 +917,8 @@ bool prepare_yukizygisk_diagnostics(bool create_if_missing) {
         return finish(true);
     }
 
-    capture_previous_boot(current);
+    if (!recovery)
+        capture_previous_boot(current);
     if (!remove_generation(old)) {
         LOGW("YukiZygisk diagnostics: failed to remove old generation");
         return finish(false);
@@ -923,12 +929,23 @@ bool prepare_yukizygisk_diagnostics(bool create_if_missing) {
     }
     (void)sync_directory(diagnostics);
 
-    if (!create_current_generation(diagnostics, current, boot_id)) {
+    if (!create_current_generation(diagnostics, current, boot_id, mode)) {
         LOGW("YukiZygisk diagnostics: failed to initialize current generation");
         return finish(false);
     }
     LOGI("YukiZygisk diagnostics: boot generation rotated");
     return finish(true);
+}
+
+}  // namespace
+
+bool prepare_yukizygisk_diagnostics(bool create_if_missing) {
+    return prepare_diagnostics(create_if_missing, PreparationMode::Boot);
+}
+
+bool prepare_yukizygisk_recovery_diagnostics() {
+    return matching_current_boot_id().has_value() ||
+           prepare_diagnostics(true, PreparationMode::Recovery);
 }
 
 void update_yukizygisk_boot_diagnostics(bool safe_mode, bool feature_supported,
