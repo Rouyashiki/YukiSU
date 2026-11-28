@@ -43,10 +43,6 @@
 
 #define KSU_DRIVER_PERMISSION_SU_SESSION (1UL << 0)
 
-struct ksu_driver_context {
-	unsigned long permissions;
-};
-
 struct ksu_install_fd_tw {
 	struct callback_head cb;
 	int __user *outp;
@@ -501,8 +497,10 @@ static long anon_ksu_compat_ioctl(struct file *filp, unsigned int cmd,
 // File release handler
 static int anon_ksu_release(struct inode *inode, struct file *filp)
 {
-	kasumi_transaction_release(filp);
-	kfree(filp->private_data);
+	struct ksu_driver_context *context = filp->private_data;
+
+	kasumi_transaction_release(context->transaction);
+	kfree(context);
 	pr_info("ksu fd released\n");
 	return 0;
 }

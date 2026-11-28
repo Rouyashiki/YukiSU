@@ -415,20 +415,6 @@ static KASUMI_NOCFI int kasumi_dispatch_cmd(unsigned int cmd, void __user *arg)
 		return 0;
 	}
 
-	if (cmd == KSM_IOC_GET_VERSION) {
-		int ver = KSM_PROTOCOL_VERSION;
-		if (copy_to_user(arg, &ver, sizeof(ver)))
-			return -EFAULT;
-		return 0;
-	}
-
-	if (cmd == KSM_IOC_GET_ENABLED) {
-		int enabled = smp_load_acquire(&kasumi_enabled);
-
-		return copy_to_user(arg, &enabled, sizeof(enabled)) ? -EFAULT
-								    : 0;
-	}
-
 	if (cmd == KSM_IOC_SET_DEBUG) {
 		int val;
 		if (copy_from_user(&val, arg, sizeof(val)))
@@ -1340,8 +1326,8 @@ int kasumi_apply_path_rule(unsigned int command, const char *visible,
  * concurrent CLEAR_ALL cannot return while an older update is still applying
  * those side effects or re-enable the module afterwards.
  */
-long kasumi_handle_ioctl(const struct file *file, unsigned int cmd,
-			 void __user *arg)
+long kasumi_handle_ioctl(struct kasumi_transaction_state **slot,
+			 unsigned int cmd, void __user *arg)
 {
 	long ret;
 	u64 generation;
@@ -1354,15 +1340,22 @@ long kasumi_handle_ioctl(const struct file *file, unsigned int cmd,
 		return kasumi_conflict_ioctl(cmd, arg);
 
 	ret = kasumi_control_begin();
-
 	if (ret)
 		return ret;
+	if (cmd == KSM_IOC_GET_VERSION || cmd == KSM_IOC_GET_ENABLED) {
+		int value = cmd == KSM_IOC_GET_VERSION
+				? KSM_PROTOCOL_VERSION
+				: kasumi_config_enabled();
+
+		kasumi_control_end();
+		return put_user(value, (int __user *)arg);
+	}
 
 	mutex_lock(&kasumi_mutation_mutex);
 	atomic_long_set(&kasumi_ioctl_tgid, (long)task_tgid_vnr(current));
 	generation = kasumi_rules_generation();
 	if (kasumi_transaction_command(cmd)) {
-		ret = kasumi_transaction_ioctl(file, cmd, arg);
+		ret = kasumi_transaction_ioctl(slot, cmd, arg);
 		goto out;
 	}
 	switch (cmd) {
@@ -1373,8 +1366,6 @@ long kasumi_handle_ioctl(const struct file *file, unsigned int cmd,
 	case KSM_IOC_USER_HIDE_CLEAR:
 		ret = kasumi_hide_rules_ioctl(cmd, arg);
 		break;
-	case KSM_IOC_GET_VERSION:
-	case KSM_IOC_GET_ENABLED:
 	case KSM_IOC_SET_ENABLED:
 	case KSM_IOC_ADD_RULE:
 	case KSM_IOC_DEL_RULE:

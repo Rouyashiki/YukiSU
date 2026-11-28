@@ -2031,13 +2031,15 @@ long ksu_supercall_handle_ioctl(const struct file *filp, unsigned int cmd,
 #endif // #ifdef CONFIG_KSU_DEBUG
 
 	if (_IOC_TYPE(cmd) == KSM_IOC_MAGIC) {
+		struct ksu_driver_context *context = filp->private_data;
+
 		if (!manager_or_root())
 			return -EPERM;
 #ifdef CONFIG_COMPAT
 		if (in_compat_syscall())
 			return -EOPNOTSUPP;
 #endif
-		return kasumi_handle_ioctl(filp, cmd, argp);
+		return kasumi_handle_ioctl(&context->transaction, cmd, argp);
 	}
 
 	for (i = 0; ksu_ioctl_handlers[i].handler; i++) {

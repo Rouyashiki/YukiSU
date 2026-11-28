@@ -6,6 +6,13 @@
 
 #include "supercall/supercall.h"
 
+struct kasumi_transaction_state;
+
+struct ksu_driver_context {
+	unsigned long permissions;
+	struct kasumi_transaction_state *transaction;
+};
+
 bool only_manager(void);
 bool only_root(void);
 bool manager_or_root(void);
