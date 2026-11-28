@@ -37,7 +37,7 @@
 #include <ss/services.h>
 #include <ss/mls.h>
 #include <ss/conditional.h>
-#include "avc.h"
+#include "selinux/avc_compat.h"
 #include "linux/kallsyms.h"
 #include "objsec.h"
 
@@ -100,13 +100,11 @@ static write_op_fn *context_write, *access_write;
 static write_op_fn orig_context_write, orig_access_write;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-#define ksu_avc_has_perm_compat(...) avc_has_perm(__VA_ARGS__)
 #define ksu_security_bounded_transition_compat(...)                            \
 	security_bounded_transition(__VA_ARGS__)
 #define ksu_security_validate_transition_compat(...)                           \
 	security_validate_transition_fn(__VA_ARGS__)
 #else
-#define ksu_avc_has_perm_compat(...) avc_has_perm(&selinux_state, __VA_ARGS__)
 #define ksu_security_bounded_transition_compat(...)                            \
 	security_bounded_transition(&selinux_state, __VA_ARGS__)
 #define ksu_security_validate_transition_compat(...)                           \

@@ -2,6 +2,8 @@
 
 #include "manager/manager_identity.h"
 #include "policy/allowlist.h"
+#include "selinux/avc_compat.h"
+#include "objsec.h"
 #include "supercall/internal.h"
 
 bool only_manager(void)
@@ -12,6 +14,11 @@ bool only_manager(void)
 bool only_root(void)
 {
 	return current_uid().val == 0;
+}
+
+bool require_load_policy_perm(void)
+{
+	return ksu_avc_has_perm_compat(current_sid(), SECINITSID_SECURITY, SECCLASS_SECURITY, SECURITY__LOAD_POLICY, NULL) == 0;
 }
 
 bool manager_or_root(void)
