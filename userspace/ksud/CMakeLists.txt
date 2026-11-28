@@ -224,6 +224,8 @@ set(MAGISKBOOT_SOURCES
     ${MAGISKBOOT_ALONE_DIR}/src/base_host.cpp
     ${MAGISKBOOT_ALONE_DIR}/src/boot_ramdisk.cpp
     ${MAGISKBOOT_ALONE_DIR}/src/bootimg.cpp
+    ${MAGISKBOOT_ALONE_DIR}/src/chromeos.cpp
+    ${MAGISKBOOT_ALONE_DIR}/src/zimage.cpp
     ${MAGISKBOOT_ALONE_DIR}/src/boot_crypto.cpp
     ${MAGISKBOOT_ALONE_DIR}/src/cpio.cpp
     ${MAGISKBOOT_ALONE_DIR}/src/magiskboot_main.cpp
@@ -460,6 +462,8 @@ if(KSUD_EXCEPTION_FREE_THIRDPARTY_SOURCES)
 endif()
 if(MAGISKBOOT_ALONE_AVAILABLE)
     target_compile_features(ksud_thirdparty_objs PUBLIC cxx_std_17)
+    target_compile_definitions(ksud_thirdparty_objs PRIVATE USE_LIBLZMA=1)
+    target_link_libraries(ksud_thirdparty_objs PRIVATE liblzma)
 endif()
 
 # Executable: link object libs
