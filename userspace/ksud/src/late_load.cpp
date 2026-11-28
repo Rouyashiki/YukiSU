@@ -141,6 +141,10 @@ int run(const std::string& package_name, bool post_magica, bool allow_shell,
             LOGE("late-load: failed to reset stdio after loading the LKM");
             return 1;
         }
+        if (!switch_mnt_ns(1)) {
+            LOGE("late-load: failed to switch to init mount namespace");
+            return 1;
+        }
 
         (void)prepare_yukizygisk_diagnostics(false);
 

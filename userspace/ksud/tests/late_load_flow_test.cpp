@@ -24,6 +24,8 @@ ksud::ProcessDaemonizeResult daemon_result;
 bool driver_ready = false;
 bool load_ok = true;
 bool stdio_ok = true;
+bool namespace_ok = true;
+bool in_init_namespace = false;
 int install_result = 0;
 int mount_result = 0;
 int cleanup = 0;
@@ -51,6 +53,11 @@ bool has_kernelsu() {
 }
 bool reset_stdio_to_devnull() {
     return stdio_ok;
+}
+bool switch_mnt_ns(pid_t pid) {
+    assert(pid == 1 && driver_ready && stdio_ok);
+    in_init_namespace = namespace_ok;
+    return namespace_ok;
 }
 std::string get_bootstrap_kmi() {
     return "android15-6.6";
@@ -113,6 +120,7 @@ std::pair<uint64_t, bool> get_feature(uint32_t) {
     return {0, true};
 }
 bool prepare_yukizygisk_diagnostics(bool) {
+    assert(in_init_namespace);
     return true;
 }
 void update_yukizygisk_boot_diagnostics(bool, bool, bool, const char*) {}
@@ -156,6 +164,7 @@ int main() {
                         const std::string& package_name = "org.rouyashiki.yukisu") {
         stages.clear();
         commands.clear();
+        in_init_namespace = false;
         return late_load::run(package_name, magica, true);
     };
     daemon_result = ProcessDaemonizeResult::Parent;
@@ -188,4 +197,9 @@ int main() {
     driver_ready = false;
     load_ok = false;
     assert(run() == 1 && cleanup == 6 && loads == 2 && stages.empty());
+    driver_ready = true;
+    stdio_ok = true;
+    install_result = 0;
+    namespace_ok = false;
+    assert(run() == 1 && cleanup == 7 && stages.empty() && commands.empty());
 }
