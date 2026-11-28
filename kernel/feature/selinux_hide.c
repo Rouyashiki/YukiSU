@@ -92,6 +92,9 @@ static void (*context_struct_compute_av_fn)(
     struct policydb *policydb, struct context *scontext,
     struct context *tcontext, u16 tclass, struct av_decision *avd,
     struct extended_perms *xperms) = NULL;
+static typeof(&cap_capable) cap_capable_fn;
+static typeof(&audit_log_n_untrustedstring) audit_log_n_untrustedstring_fn;
+static typeof(&security_validate_transition) security_validate_transition_fn;
 
 static write_op_fn *context_write, *access_write;
 static write_op_fn orig_context_write, orig_access_write;
@@ -101,13 +104,13 @@ static write_op_fn orig_context_write, orig_access_write;
 #define ksu_security_bounded_transition_compat(...)                            \
 	security_bounded_transition(__VA_ARGS__)
 #define ksu_security_validate_transition_compat(...)                           \
-	security_validate_transition(__VA_ARGS__)
+	security_validate_transition_fn(__VA_ARGS__)
 #else
 #define ksu_avc_has_perm_compat(...) avc_has_perm(&selinux_state, __VA_ARGS__)
 #define ksu_security_bounded_transition_compat(...)                            \
 	security_bounded_transition(&selinux_state, __VA_ARGS__)
 #define ksu_security_validate_transition_compat(...)                           \
-	security_validate_transition(&selinux_state, __VA_ARGS__)
+	security_validate_transition_fn(&selinux_state, __VA_ARGS__)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
@@ -404,8 +407,8 @@ static int __nocfi my_inode_setxattr_impl(struct dentry *dentry,
 		goto call_orig;
 
 	// Keep native force parsing for callers with CAP_MAC_ADMIN
-	if (!cap_capable(current_cred(), &init_user_ns, CAP_MAC_ADMIN,
-			 CAP_OPT_NOAUDIT))
+	if (!cap_capable_fn || !cap_capable_fn(current_cred(), &init_user_ns,
+					       CAP_MAC_ADMIN, CAP_OPT_NOAUDIT))
 		goto call_orig;
 
 	sbsec = ksu_selinux_superblock(inode->i_sb);
@@ -448,6 +451,9 @@ static int __nocfi my_inode_setxattr_impl(struct dentry *dentry,
 		struct audit_buffer *ab;
 		size_t audit_size = value ? size : 0;
 
+		if (!audit_log_n_untrustedstring_fn)
+			goto call_orig;
+
 		// Strip only final NUL so embedded NUL bytes remain in audit
 		// log
 		if (audit_size && ((const char *)value)[audit_size - 1] == '\0')
@@ -456,7 +462,7 @@ static int __nocfi my_inode_setxattr_impl(struct dentry *dentry,
 				     AUDIT_SELINUX_ERR);
 		if (ab) {
 			audit_log_format(ab, "op=setxattr invalid_context=");
-			audit_log_n_untrustedstring(ab, value, audit_size);
+			audit_log_n_untrustedstring_fn(ab, value, audit_size);
 			audit_log_end(ab);
 		}
 	}
@@ -467,6 +473,8 @@ static int __nocfi my_inode_setxattr_impl(struct dentry *dentry,
 				     &ad);
 	if (rc)
 		return rc;
+	if (!security_validate_transition_fn)
+		goto call_orig;
 	rc = ksu_security_validate_transition_compat(isec->sid, newsid, sid,
 						     isec->sclass);
 	if (rc)
@@ -525,6 +533,15 @@ static int selinux_hide_init_setxattr(void)
 	ret = ksu_selinux_superblock_init();
 	if (ret)
 		return ret;
+
+	cap_capable_fn = (void *)find_kernel_symbol_exact("cap_capable");
+	audit_log_n_untrustedstring_fn =
+	    (void *)find_kernel_symbol_exact("audit_log_n_untrustedstring");
+	security_validate_transition_fn =
+	    (void *)find_kernel_symbol_exact("security_validate_transition");
+	if (!cap_capable_fn || !audit_log_n_untrustedstring_fn ||
+	    !security_validate_transition_fn)
+		pr_warn("selinux_hide: some setxattr helpers unavailable\n");
 
 	inode_doinit_with_dentry_fn =
 	    ksu_resolve_symbol_for_functable_hook("inode_doinit_with_dentry");
