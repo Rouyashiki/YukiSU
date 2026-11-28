@@ -30,11 +30,26 @@ set_tests_properties(ksucalls_sigsys PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect
 
 add_executable(ksucalls_probe_test
     ../ksucalls_probe_test.cpp
-    ${KSUD_ROOT}/src/core/ksucalls.cpp)
+    ${KSUD_ROOT}/src/core/ksucalls.cpp
+    ${KSUD_ROOT}/src/core/feature.cpp
+    ${KSUD_ROOT}/src/utils.cpp)
 target_include_directories(ksucalls_probe_test PRIVATE "${KSUD_ROOT}/../..")
 target_link_options(ksucalls_probe_test PRIVATE
     "-Wl,--wrap=prctl" "-Wl,--wrap=syscall" "-Wl,--wrap=ioctl" "-Wl,--wrap=readlink")
 add_test(NAME ksucalls_probe COMMAND ksucalls_probe_test)
+function(check_magisk_status name magisk_flags classic_flags status exit_code)
+    add_test(NAME feature_check_${name} COMMAND ksucalls_probe_test ${magisk_flags} ${classic_flags} ${ARGN})
+    set_tests_properties(feature_check_${name} PROPERTIES TIMEOUT 20
+        PASS_REGULAR_EXPRESSION "^${status}\nexit=${exit_code}\n$")
+endfunction()
+check_magisk_status(query_error -1 1 unknown 1)
+check_magisk_status(classic_query_error 1 -1 unknown 1)
+check_magisk_status(unsupported 0 1 unsupported 1)
+check_magisk_status(supported 1 1 supported 0)
+check_magisk_status(forced 3 -1 forced 0)
+check_magisk_status(classic_forced 1 3 forced 0)
+check_magisk_status(classic_forced_with_query_error -1 3 forced 0)
+check_magisk_status(managed_with_query_error -1 1 managed 0 managed)
 set_tests_properties(late_load_cli kernelsu_loader ksucalls_sigsys ksucalls_probe
     PROPERTIES TIMEOUT 20)
 

@@ -5,6 +5,8 @@
 #include <android/log.h>
 #include <dirent.h>
 #include <limits.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +18,10 @@
 #include "prelude.h"
 #include <errno.h>
 
-static int fd = -1;
+static _Atomic int cached_fd = -1;
+static pthread_mutex_t fd_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t info_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct ksu_get_info_cmd g_version;
 
 static inline int scan_driver_fd() {
   const char *kName = "[ksu_driver]";
@@ -84,14 +89,26 @@ static inline int request_driver_fd_via_prctl() {
   return -1;
 }
 
-static int ksuctl(unsigned long op, void *arg) {
-  if (fd < 0) {
-    fd = scan_driver_fd();
-    if (fd < 0) {
-      fd = request_driver_fd_via_prctl();
-    }
+static int get_driver_fd(bool request) {
+  int current = atomic_load(&cached_fd);
+  if (current >= 0)
+    return current;
+
+  pthread_mutex_lock(&fd_lock);
+  current = atomic_load(&cached_fd);
+  if (current < 0) {
+    current = scan_driver_fd();
+    if (current < 0 && request)
+      current = request_driver_fd_via_prctl();
+    if (current >= 0)
+      atomic_store(&cached_fd, current);
   }
-  return ioctl(fd, op, arg);
+  pthread_mutex_unlock(&fd_lock);
+  return current;
+}
+
+static int ksuctl(unsigned long op, void *arg) {
+  return ioctl(get_driver_fd(true), op, arg);
 }
 
 int ksu_kasumi_ioctl(unsigned long op, void *arg) { return ksuctl(op, arg); }
@@ -105,10 +122,20 @@ int ksu_kasumi_open_fd(void) {
 
 int ksu_grant_root(void) { return ksuctl(KSU_IOCTL_GRANT_ROOT, NULL); }
 
-static struct ksu_get_info_cmd g_version = {0};
+static void reset_cached_info(void) {
+  pthread_mutex_lock(&info_lock);
+  g_version = (struct ksu_get_info_cmd){0};
+  pthread_mutex_unlock(&info_lock);
+}
 
-// Reset cached info (call after SuperKey authentication)
-void reset_cached_info() { memset(&g_version, 0, sizeof(g_version)); }
+static void cache_authenticated_fd(int authenticated_fd) {
+  pthread_mutex_lock(&info_lock);
+  pthread_mutex_lock(&fd_lock);
+  atomic_store(&cached_fd, authenticated_fd);
+  pthread_mutex_unlock(&fd_lock);
+  g_version = (struct ksu_get_info_cmd){0};
+  pthread_mutex_unlock(&info_lock);
+}
 
 static int query_info(struct ksu_get_info_cmd *info) {
   int result = ksuctl(KSU_IOCTL_GET_INFO, info);
@@ -120,14 +147,22 @@ static int query_info(struct ksu_get_info_cmd *info) {
   return result;
 }
 
-struct ksu_get_info_cmd get_info() {
-  if (!g_version.version)
-    query_info(&g_version);
-  return g_version;
+static struct ksu_get_info_cmd get_info(bool refresh) {
+  pthread_mutex_lock(&info_lock);
+  struct ksu_get_info_cmd info = g_version;
+  if (refresh || !info.version) {
+    info = (struct ksu_get_info_cmd){0};
+    if (query_info(&info) == 0 && info.version)
+      g_version = info;
+    else
+      info = (struct ksu_get_info_cmd){0};
+  }
+  pthread_mutex_unlock(&info_lock);
+  return info;
 }
 
 uint32_t get_version() {
-  auto info = get_info();
+  auto info = get_info(false);
   return info.version;
 }
 
@@ -169,23 +204,17 @@ bool is_safe_mode() {
 }
 
 bool is_manager() {
-  // Do a fresh query to avoid stale cached flags after kernel crowns manager.
-  struct ksu_get_info_cmd info = {};
-  if (query_info(&info) == 0 && info.version > 0) {
-    g_version = info;
-    return (info.flags & KSU_GET_INFO_FLAG_MANAGER) != 0;
-  }
-  return false;
+  return (get_info(true).flags & KSU_GET_INFO_FLAG_MANAGER) != 0;
 }
 
 bool is_lkm_bundled() {
-  auto info = get_info();
+  auto info = get_info(false);
   return (info.flags & KSU_GET_INFO_FLAG_LKM) != 0 &&
          (info.flags & KSU_GET_INFO_FLAG_BUNDLED) != 0;
 }
 
 bool is_late_load_mode() {
-  auto info = get_info();
+  auto info = get_info(false);
   if (info.version > 0) {
     return (info.flags & KSU_GET_INFO_FLAG_LATE_LOAD) != 0;
   }
@@ -488,10 +517,8 @@ bool authenticate_superkey(const char *superkey) {
            ret, prctl_cmd.result, prctl_cmd.fd);
 
   if (prctl_cmd.result == 0 && prctl_cmd.fd >= 0) {
-    // Authentication successful via prctl
-    fd = prctl_cmd.fd;
-    reset_cached_info(); // Clear cached version/flags so next is_manager()
-                         // check is fresh
+    const int fd = prctl_cmd.fd;
+    cache_authenticated_fd(fd);
 
     // Verify the fd is working AND that we are now manager
     // Retry up to 5 times with increasing delays to ensure kernel state is
@@ -528,7 +555,7 @@ bool authenticate_superkey(const char *superkey) {
 
   // Method 2: Fallback to reboot syscall (only if we already have fd)
   // Reboot syscall is blocked by SECCOMP for non-manager apps, so skip if no fd
-  if (fd >= 0) {
+  if (atomic_load(&cached_fd) >= 0) {
     LogDebug("authenticate_superkey: prctl failed, trying reboot method (have "
              "fd)...");
     struct ksu_superkey_reboot_cmd reboot_cmd = {};
@@ -550,10 +577,8 @@ bool authenticate_superkey(const char *superkey) {
              ret, reboot_cmd.result, reboot_cmd.fd);
 
     if (reboot_cmd.result == 0 && reboot_cmd.fd >= 0) {
-      // Authentication successful via reboot
-      fd = reboot_cmd.fd;
-      reset_cached_info(); // Clear cached version/flags so next is_manager()
-                           // check is fresh
+      const int fd = reboot_cmd.fd;
+      cache_authenticated_fd(fd);
       // Verify is_manager flag with retries
       for (int retry = 0; retry < 5; retry++) {
         struct ksu_get_info_legacy_cmd verify_cmd = {};
@@ -573,17 +598,18 @@ bool authenticate_superkey(const char *superkey) {
   }
 
   // Method 3: Fallback - try ioctl if we already have an fd
+  const int fd = atomic_load(&cached_fd);
   if (fd >= 0) {
     struct ksu_superkey_auth_cmd ioctl_cmd = {};
     strncpy(ioctl_cmd.superkey, superkey, sizeof(ioctl_cmd.superkey) - 1);
     ioctl_cmd.superkey[sizeof(ioctl_cmd.superkey) - 1] = '\0';
     ioctl_cmd.result = 0xFFFFFFFF;
 
-    if (ksuctl(KSU_IOCTL_SUPERKEY_AUTH, &ioctl_cmd) == 0) {
+    if (ioctl(fd, KSU_IOCTL_SUPERKEY_AUTH, &ioctl_cmd) == 0) {
       LogDebug("authenticate_superkey: ioctl success, result=%u",
                ioctl_cmd.result);
       if (ioctl_cmd.result == 0) {
-        reset_cached_info(); // Clear cached info on success
+        reset_cached_info();
         // Verify is_manager flag with retries
         for (int retry = 0; retry < 5; retry++) {
           struct ksu_get_info_legacy_cmd verify_cmd = {};
@@ -605,15 +631,7 @@ bool authenticate_superkey(const char *superkey) {
   return false;
 }
 
-// Check if KSU driver is present (without authentication)
-// This checks if the driver fd can be found
-bool ksu_driver_present(void) {
-  if (fd >= 0) {
-    return true;
-  }
-  fd = scan_driver_fd();
-  return fd >= 0;
-}
+bool ksu_driver_present(void) { return get_driver_fd(false) >= 0; }
 
 // Check if SuperKey is configured in kernel
 bool is_superkey_configured(void) {

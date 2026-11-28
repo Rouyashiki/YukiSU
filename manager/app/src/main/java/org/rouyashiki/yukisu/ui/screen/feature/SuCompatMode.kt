@@ -6,66 +6,80 @@ import kotlinx.coroutines.sync.withLock
 internal enum class SuCompatMode { OFF, TRADITIONAL, KSM }
 
 internal data class SuCompatSnapshot(
-    val traditional: Boolean = true,
-    val ksm: Boolean = false,
-    val magisk: Boolean = false,
+    val traditional: Boolean?,
+    val ksm: Boolean?,
+    val magisk: Boolean?,
 ) {
-    val mode: SuCompatMode
+    val mode: SuCompatMode?
         get() = when {
+            traditional == null || ksm == null -> null
             ksm -> SuCompatMode.KSM
             traditional -> SuCompatMode.TRADITIONAL
             else -> SuCompatMode.OFF
         }
 
-    fun matches(mode: SuCompatMode): Boolean =
-        traditional == (mode == SuCompatMode.TRADITIONAL) &&
-            ksm == (mode == SuCompatMode.KSM) &&
-            (mode == SuCompatMode.KSM || !magisk)
+    fun matches(target: SuCompatMode, expectedMagisk: Boolean? = null): Boolean? {
+        val wantMagisk = expectedMagisk ?: false.takeIf { target != SuCompatMode.KSM }
+        if (traditional != null && traditional != (target == SuCompatMode.TRADITIONAL)) return false
+        if (ksm != null && ksm != (target == SuCompatMode.KSM)) return false
+        if (wantMagisk != null && magisk != null && magisk != wantMagisk) return false
+        if (traditional == null || ksm == null || (wantMagisk != null && magisk == null)) return null
+        return true
+    }
 }
 
 internal class SuCompatController(
-    val read: () -> SuCompatSnapshot,
     private val write: suspend (String, Boolean) -> Boolean,
 ) {
     private val mutex = Mutex()
 
-    suspend fun select(mode: SuCompatMode): Boolean = mutex.withLock {
-        transaction { applyMode(mode) && read().matches(mode) }
+    suspend fun change(
+        mode: SuCompatMode,
+        magisk: Boolean?,
+        read: () -> SuCompatSnapshot,
+    ): Pair<Boolean, SuCompatSnapshot> = mutex.withLock {
+        val previous = read()
+        val previousMode = previous.mode ?: return@withLock false to previous
+        val previousMagisk = previous.magisk ?: return@withLock false to previous
+        if (magisk != null && previous.matches(SuCompatMode.KSM) != true) return@withLock false to previous
+
+        val saved = runCatching {
+            if (magisk != null) write("magisk_compat", magisk) else applyMode(mode, previous, read)
+        }.getOrDefault(false)
+        val current = read()
+        // A missing readback cannot disprove an acknowledged write.
+        if (saved && current.matches(mode, magisk) != false) return@withLock true to current
+
+        // set-save persists both mutually exclusive features, including rollback.
+        runCatching {
+            if (applyMode(previousMode, current, read) && read().magisk != previousMagisk) {
+                write("magisk_compat", previousMagisk)
+            }
+        }
+        false to read()
     }
 
-    suspend fun setMagisk(enabled: Boolean): Boolean = mutex.withLock {
-        if (!read().matches(SuCompatMode.KSM)) return@withLock false
-        transaction {
-            write("magisk_compat", enabled) &&
-                read().let { it.matches(SuCompatMode.KSM) && it.magisk == enabled }
+    private suspend fun applyMode(
+        mode: SuCompatMode,
+        initial: SuCompatSnapshot,
+        read: () -> SuCompatSnapshot,
+    ): Boolean {
+        var current = initial
+        if (mode != SuCompatMode.KSM && current.magisk != false) {
+            if (!write("magisk_compat", false)) return false
+            current = read()
         }
-    }
-
-    private suspend fun applyMode(mode: SuCompatMode): Boolean {
-        if (mode != SuCompatMode.KSM && read().magisk && !write("magisk_compat", false)) {
-            return false
-        }
-        if (read().matches(mode)) return true
+        if (current.matches(mode) == true) return true
         return when (mode) {
             SuCompatMode.TRADITIONAL -> write("su_compat", true)
             SuCompatMode.KSM -> write("kasumi_sucompat", true)
             SuCompatMode.OFF -> {
-                if (read().ksm && !write("kasumi_sucompat", false)) return false
-                !read().traditional || write("su_compat", false)
+                if (current.ksm != false) {
+                    if (!write("kasumi_sucompat", false)) return false
+                    current = read()
+                }
+                current.traditional == false || write("su_compat", false)
             }
         }
-    }
-
-    private suspend fun transaction(update: suspend () -> Boolean): Boolean {
-        val previous = read()
-        if (runCatching { update() }.getOrDefault(false)) return true
-        // set-save persists both mutually exclusive features, including rollback.
-        runCatching {
-            if (read().magisk && !previous.magisk) write("magisk_compat", false)
-            if (applyMode(previous.mode) && read().magisk != previous.magisk) {
-                write("magisk_compat", previous.magisk)
-            }
-        }
-        return false
     }
 }

@@ -291,6 +291,19 @@ NativeBridge(getAppProfile, jobject, jstring pkg, jint uid) {
   return app_profile_to_java(env, profile, useDefaultProfile);
 }
 
+NativeBridge(getDefaultUmountState, jint, jint uid) {
+  struct app_profile profile = {.curr_uid = uid};
+  if (get_app_profile(&profile) != 0)
+    return errno == ENOENT ? 0 : -1;
+
+  // v4 appended root-only flags; the non-root fields retain their v3 layout.
+  if ((profile.version != 3 && profile.version != KSU_APP_PROFILE_VER) ||
+      profile.curr_uid != uid || profile.allow_su ||
+      strncmp(profile.key, "$", sizeof(profile.key)) != 0)
+    return -1;
+  return profile.nrp_config.profile.umount_modules ? 1 : 0;
+}
+
 static void profile_read_error(JNIEnv *env, const char *message) {
   jclass type = GetEnvironment()->FindClass(env, "java/io/IOException");
   if (type)

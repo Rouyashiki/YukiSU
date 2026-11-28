@@ -817,7 +817,13 @@ int feature_check(const std::string& id) {
         return 1;
     }
 
-    if (feature_forced(feature_id)) {
+    const auto flags = get_feature_flags(feature_id);
+    auto force_flags = flags;
+    if (is_sucompat_feature_id(feature_id) && feature_id != KSU_FEATURE_SU_COMPAT &&
+        (flags.value_or(0) & KSU_FEATURE_FLAG_FORCED) == 0) {
+        force_flags = get_feature_flags(KSU_FEATURE_SU_COMPAT);
+    }
+    if ((force_flags.value_or(0) & KSU_FEATURE_FLAG_FORCED) != 0) {
         printf("forced\n");
         return 0;
     }
@@ -827,8 +833,11 @@ int feature_check(const std::string& id) {
         return 0;
     }
 
-    auto [value, supported] = get_feature(feature_id);
-    if (supported) {
+    if (!flags || !force_flags) {
+        printf("unknown\n");
+        return 1;
+    }
+    if ((*flags & KSU_FEATURE_FLAG_SUPPORTED) != 0) {
         printf("supported\n");
         return 0;
     } else {

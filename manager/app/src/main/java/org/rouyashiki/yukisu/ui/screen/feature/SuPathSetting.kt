@@ -23,7 +23,6 @@ import org.rouyashiki.yukisu.R
 import org.rouyashiki.yukisu.ui.component.YukiAlertDialog
 import org.rouyashiki.yukisu.ui.screen.SettingItem
 import org.rouyashiki.yukisu.ui.util.getKsud
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
@@ -51,14 +50,46 @@ internal fun suPathErrorResource(code: String): Int = when (code) {
     else -> R.string.setting_change_failed
 }
 
+private val suPathQuery = FeatureQuery(blocksWrites = false) {
+    runCatching { Natives.getSuPath()?.toString(Charsets.UTF_8) }.getOrNull()
+}
+
+private fun saveSuPath(requested: String): ByteArray =
+    Natives.saveSuPath(getKsud().toByteArray(Charsets.UTF_8), requested.toByteArray(Charsets.UTF_8))
+
+private suspend fun changeSuPath(
+    requested: String,
+    save: (String) -> ByteArray,
+    read: suspend () -> String?,
+): Pair<Int?, String?> {
+    val error = runCatching {
+        val reply = JSONObject(save(requested).toString(Charsets.UTF_8))
+        check(reply.getInt("version") == 1)
+        val code = reply.getString("error")
+        if (code == "none") null else {
+            Log.w("SuPathSetting", "su path error: $code (${reply.optInt("errno")})")
+            suPathErrorResource(code)
+        }
+    }.getOrElse {
+        Log.w("SuPathSetting", "Failed to save su path", it)
+        R.string.setting_change_failed
+    }
+    val current = read() ?: if (error == null) read() else null
+    if (error == null && current != null && current != requested) return R.string.setting_change_failed to current
+    return error to current
+}
+
 @Composable
 internal fun SuPathSetting(
     enabled: Boolean,
     refreshKey: Int,
     onSavingChange: (Boolean) -> Unit,
+    pathQuery: FeatureQuery<String?> = suPathQuery,
+    save: (String) -> ByteArray = ::saveSuPath,
 ) {
     val scope = rememberCoroutineScope()
     var path by remember { mutableStateOf<String?>(null) }
+    var hasReportedPath by remember { mutableStateOf(false) }
     var input by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -66,19 +97,18 @@ internal fun SuPathSetting(
     val title = stringResource(R.string.su_compat_path_title)
 
     LaunchedEffect(refreshKey) {
-        path = withContext(Dispatchers.IO) {
-            runCatching { Natives.getSuPath()?.toString(Charsets.UTF_8) }.getOrNull()
-        }
+        path = featureReads.read(pathQuery)
+        if (path != null) hasReportedPath = true
     }
-    val current = path ?: return
+    if (!hasReportedPath) return
 
     SettingItem(
         icon = Icons.Rounded.Folder,
         title = title,
-        summary = current,
-        enabled = enabled && !saving,
+        summary = path ?: stringResource(R.string.feature_state_unavailable),
+        enabled = enabled && !saving && path != null,
         onClick = {
-            input = current
+            input = path.orEmpty()
             error = null
             showDialog = true
         },
@@ -135,32 +165,11 @@ internal fun SuPathSetting(
                         scope.launch(start = CoroutineStart.UNDISPATCHED) {
                             withContext(NonCancellable) {
                                 try {
-                                    val result = withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            val response = Natives.saveSuPath(
-                                                getKsud().toByteArray(Charsets.UTF_8),
-                                                requested.toByteArray(Charsets.UTF_8),
-                                            )
-                                            val reply = JSONObject(response.toString(Charsets.UTF_8))
-                                            check(reply.getInt("version") == 1)
-                                            val code = reply.getString("error")
-                                            if (code == "none") {
-                                                check(Natives.getSuPath()?.toString(Charsets.UTF_8) == requested)
-                                                null
-                                            } else {
-                                                Log.w("SuPathSetting", "su path error: $code (${reply.optInt("errno")})")
-                                                suPathErrorResource(code)
-                                            }
-                                        }
+                                    val (saveError, currentPath) = featureReads.change {
+                                        changeSuPath(requested, save, pathQuery.load)
                                     }
-                                    path = withContext(Dispatchers.IO) {
-                                        runCatching { Natives.getSuPath()?.toString(Charsets.UTF_8) }
-                                            .getOrNull()
-                                    } ?: path
-                                    error = result.getOrElse {
-                                        Log.w("SuPathSetting", "Failed to save su path", it)
-                                        R.string.setting_change_failed
-                                    }
+                                    if (currentPath != null || saveError == null) path = currentPath
+                                    error = saveError
                                     if (error == null) {
                                         showDialog = false
                                     }

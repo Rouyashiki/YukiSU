@@ -421,10 +421,15 @@ std::pair<uint64_t, bool> get_feature(uint32_t feature_id) {
     return {cmd.value, (cmd.supported & KSU_FEATURE_FLAG_SUPPORTED) != 0};
 }
 
-bool is_feature_forced(uint32_t feature_id) {
+std::optional<uint8_t> get_feature_flags(uint32_t feature_id) {
     GetFeatureCmd cmd = {feature_id, 0, 0};
-    return ksuctl(KSU_IOCTL_GET_FEATURE, &cmd) == 0 &&
-           (cmd.supported & KSU_FEATURE_FLAG_FORCED) != 0;
+    if (ksuctl(KSU_IOCTL_GET_FEATURE, &cmd) != 0)
+        return std::nullopt;
+    return cmd.supported;
+}
+
+bool is_feature_forced(uint32_t feature_id) {
+    return (get_feature_flags(feature_id).value_or(0) & KSU_FEATURE_FLAG_FORCED) != 0;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)

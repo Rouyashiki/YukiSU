@@ -20,9 +20,10 @@ import org.rouyashiki.yukisu.ui.screen.SettingItem
 
 @Composable
 internal fun SuCompatSelector(
-    selected: SuCompatMode,
+    selected: SuCompatMode?,
     enabled: Boolean,
     ksmSupported: Boolean,
+    loading: Boolean = false,
     forced: Boolean = false,
     managed: Boolean = false,
     onSelect: (SuCompatMode) -> Unit,
@@ -41,6 +42,8 @@ internal fun SuCompatSelector(
         summary = when {
             forced -> stringResource(R.string.feature_status_forced_summary)
             managed -> stringResource(R.string.feature_status_managed_summary)
+            loading -> null
+            selected == null -> stringResource(R.string.feature_state_unavailable)
             else -> labels[selected.ordinal]
         },
         enabled = enabled,

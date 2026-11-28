@@ -401,6 +401,7 @@
     <string name="settings_selinux_hide">启用 SELinux 隐藏</string>
     <string name="settings_selinux_hide_summary">对应用侧 SELinux 探测隐藏 KernelSU 策略改动。</string>
     <string name="feature_status_unsupported_summary">内核不支持此功能。</string>
+    <string name="feature_state_unavailable">暂时无法读取当前功能状态。</string>
     <string name="feature_status_managed_summary">此功能由模块管理。</string>
     <string name="module_install_multiple_confirm_with_names">确定要安装以下 %1$d 个模块吗？\n\n%2$s</string>
     <string name="more_settings">更多设置</string>

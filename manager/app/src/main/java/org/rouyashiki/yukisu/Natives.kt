@@ -7,6 +7,17 @@ import kotlinx.parcelize.Parcelize
 import org.rouyashiki.yukisu.ui.util.rootAvailable
 import org.rouyashiki.yukisu.ui.util.KasumiConflict
 
+private const val NON_ROOT_DEFAULT_PROFILE_KEY = "$"
+private const val NOBODY_UID = 9999
+
+internal fun readDefaultUmountModules(
+    read: () -> Int = { Natives.getDefaultUmountState(NOBODY_UID) },
+): Boolean? = when (read()) {
+    0 -> false
+    1 -> true
+    else -> null
+}
+
 /**
  * @author weishu
  * @date 2022/12/8.
@@ -106,6 +117,7 @@ object Natives {
      * @return return null if failed.
      */
     external fun getAppProfile(key: String?, uid: Int): Profile
+    external fun getDefaultUmountState(uid: Int): Int
     external fun setAppProfile(profile: Profile?): Boolean
     external fun getProfileUids(allow: Boolean): IntArray
     external fun readAppProfile(uid: Int): Profile?
@@ -247,9 +259,6 @@ object Natives {
      */
     external fun isSignatureOk(): Boolean
 
-    private const val NON_ROOT_DEFAULT_PROFILE_KEY = "$"
-    private const val NOBODY_UID = 9999
-
     fun setDefaultUmountModules(umountModules: Boolean): Boolean {
         Profile(
             NON_ROOT_DEFAULT_PROFILE_KEY,
@@ -262,11 +271,7 @@ object Natives {
         }
     }
 
-    fun isDefaultUmountModules(): Boolean {
-        getAppProfile(NON_ROOT_DEFAULT_PROFILE_KEY, NOBODY_UID).let {
-            return it.umountModules
-        }
-    }
+    fun isDefaultUmountModules(): Boolean = readDefaultUmountModules() == true
 
     fun isFullFeatured(): Boolean = isManager && !checkUapiMismatch() && rootAvailable()
 

@@ -2,6 +2,7 @@ package org.rouyashiki.yukisu.ui.screen.feature
 
 import org.rouyashiki.yukisu.ui.component.rememberYukiTopAppBarScrollBehavior
 import org.rouyashiki.yukisu.ui.component.YukiLargeTopAppBar
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +15,8 @@ import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -24,76 +27,116 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.rouyashiki.yukisu.Natives
 import org.rouyashiki.yukisu.R
-import org.rouyashiki.yukisu.ui.component.KsuIsValid
 import org.rouyashiki.yukisu.ui.component.YukiAlertDialog
 import org.rouyashiki.yukisu.ui.component.YukiIcon
 import org.rouyashiki.yukisu.ui.theme.CardStyleProvider.getTopAppBarColors
 import org.rouyashiki.yukisu.ui.util.rememberSnackbarController
 import org.rouyashiki.yukisu.ui.util.getFeatureStatus
-import org.rouyashiki.yukisu.ui.util.getFeatureValue
+import org.rouyashiki.yukisu.ui.util.featureStatusReader
 import org.rouyashiki.yukisu.ui.util.getFeatureValueOrNull
-import org.rouyashiki.yukisu.ui.util.getRootShell
 import org.rouyashiki.yukisu.ui.util.migrateFeatureDefaults
 import org.rouyashiki.yukisu.ui.util.restartAdbd
 import org.rouyashiki.yukisu.ui.util.setFeatureValue
+import org.rouyashiki.yukisu.ui.util.withNewRootShell
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.rouyashiki.yukisu.ui.screen.moreSettings.component.MoreSettingsItemPosition
+import org.rouyashiki.yukisu.ui.screen.SettingsItemPosition
+import org.rouyashiki.yukisu.ui.screen.SwitchItem
 import org.rouyashiki.yukisu.ui.screen.moreSettings.component.SettingsCard
-import org.rouyashiki.yukisu.ui.screen.moreSettings.component.SwitchSettingItem
 
-internal object FeatureControlState {
-    var suLogEnabled by mutableStateOf<Boolean?>(null)
-        private set
+internal data class FeatureReading(val value: Boolean?, val status: String)
 
-    fun refreshSuLog() {
-        suLogEnabled = getFeatureValue(Natives.FEATURE_SULOG)
-    }
-
-    fun updateSuLog(enabled: Boolean) {
-        suLogEnabled = enabled
-    }
-}
-
-private class FeatureToggleState(initialChecked: Boolean) {
-    var checked by mutableStateOf(initialChecked)
-    var saving by mutableStateOf(false)
-}
-
-private val suCompatController = SuCompatController(
-    read = {
-        SuCompatSnapshot(
-            traditional = getFeatureValueOrNull(Natives.FEATURE_SU_COMPAT) ?: true,
-            ksm = getFeatureValue(Natives.FEATURE_KASUMI_SUCOMPAT),
-            magisk = getFeatureValue(Natives.FEATURE_MAGISK_COMPAT),
-        )
+internal fun featureQuery(
+    id: Int,
+    migrateDefaults: suspend () -> Boolean = { withNewRootShell { migrateFeatureDefaults(this) } },
+    readStatus: suspend (Int) -> String = ::getFeatureStatus,
+    readValue: (Int) -> Boolean? = ::getFeatureValueOrNull,
+) = FeatureQuery(
+    blocksWrites = false,
+    onQueued = featureStatusReader::keepSessionFor,
+    prepare = {
+        if (id == Natives.FEATURE_DEFAULT_NO_NEW_PRIVS) {
+            try {
+                migrateDefaults()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w("FeatureControl", "Failed to migrate feature defaults", error)
+            }
+        }
     },
-    write = ::setFeatureValue,
-)
-
-@Composable
-private fun rememberFeatureToggleState(
-    featureId: Int,
-    displayInverted: Boolean = false
-): FeatureToggleState = remember(featureId, displayInverted) {
-    val enabled = getFeatureValue(featureId)
-    FeatureToggleState(if (displayInverted) !enabled else enabled)
+) {
+    val status = readStatus(id)
+    FeatureReading(readValue(id), status)
 }
 
-@Composable
-private fun rememberFeatureStatus(featureId: Int): State<String> =
-    produceState(initialValue = "loading", featureId) {
-        value = getFeatureStatus(featureId)
-    }
+private val featureQueries = listOf(
+    Natives.FEATURE_SU_COMPAT, Natives.FEATURE_KASUMI_SUCOMPAT, Natives.FEATURE_MAGISK_COMPAT,
+    Natives.FEATURE_KASUMI, Natives.FEATURE_SELINUX_HIDE, Natives.FEATURE_KERNEL_UMOUNT,
+    Natives.FEATURE_UNSHARE_MNT, Natives.FEATURE_SULOG, Natives.FEATURE_ADB_ROOT,
+    Natives.FEATURE_SHELL_SU_ADB_ONLY, Natives.FEATURE_DEFAULT_NO_NEW_PRIVS,
+    Natives.FEATURE_YUKIZYGISK, Natives.FEATURE_HIDE_BOOTLOADER,
+).associateWith { featureQuery(it) }
 
-private fun CoroutineScope.persistFeature(
+private val kasumiInitialization = FeatureQuery(blocksWrites = false) { Natives.kasumiIsInitialized() }
+
+private fun readSuCompat(unsupported: Set<Int>, read: (Int) -> Boolean?): SuCompatSnapshot {
+    fun readOnce(id: Int) = try {
+        read(id)
+    } catch (error: Exception) {
+        Log.w("FeatureControl", "Failed to read su compatibility feature $id", error)
+        null
+    }
+    fun value(id: Int) = readOnce(id) ?: if (id in unsupported) false else readOnce(id)
+    return SuCompatSnapshot(
+        value(Natives.FEATURE_SU_COMPAT),
+        value(Natives.FEATURE_KASUMI_SUCOMPAT),
+        value(Natives.FEATURE_MAGISK_COMPAT),
+    )
+}
+
+internal class FeatureToggleState(initialChecked: Boolean?, initialStatus: String) {
+    var checked by mutableStateOf(initialChecked)
+    var status by mutableStateOf(initialStatus)
+    var saving by mutableStateOf(false)
+    val displayStatus get() = if (status == "supported" && checked == null) "unknown" else status
+    val value get() = checked ?: false.takeIf { status == "unsupported" }
+}
+
+private val defaultSuCompatController = SuCompatController(::setFeatureValue)
+
+@Composable
+internal fun rememberFeatureToggleState(
+    featureId: Int,
+    read: suspend (Int) -> FeatureReading,
+    displayInverted: Boolean = false,
+): FeatureToggleState {
+    val state = remember(featureId, displayInverted) { FeatureToggleState(null, "loading") }
+    LaunchedEffect(state) {
+        val reading = try {
+            read(featureId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w("FeatureControl", "Failed to read feature $featureId", error)
+            FeatureReading(null, "unknown")
+        }
+        state.checked = reading.value?.let { if (displayInverted) !it else it }
+        state.status = reading.status
+    }
+    return state
+}
+
+internal fun CoroutineScope.persistFeature(
     state: FeatureToggleState,
     featureId: Int,
     featureName: String,
@@ -102,37 +145,60 @@ private fun CoroutineScope.persistFeature(
     relatedStates: List<FeatureToggleState> = emptyList(),
     optimistic: Boolean = false,
     afterPersist: suspend () -> Boolean = { true },
-    afterPersistenceFailure: suspend () -> Unit = {},
     afterPostRollback: suspend () -> Unit = {},
-    onRuntimeSettled: (Boolean) -> Unit = {},
+    onRuntimeSettled: suspend () -> Unit = {},
     onSuccess: suspend () -> Unit = {},
-    onFailure: suspend () -> Unit = {}
+    onFailure: suspend () -> Unit = {},
+    readValue: suspend () -> Boolean? = { getFeatureValueOrNull(featureId) },
+    writeValue: suspend (Boolean) -> Boolean = { setFeatureValue(featureName, it) },
 ) {
     val savingStates = relatedStates + state
     if (savingStates.any { it.saving }) return
 
-    val previousKernelEnabled = getFeatureValue(featureId)
     if (optimistic) {
         state.checked = if (displayInverted) !kernelEnabled else kernelEnabled
     }
     savingStates.forEach { it.saving = true }
-    launch {
-        // Persistence and required runtime follow-ups must survive leaving this screen.
-        val (success, runtimeEnabled) = withContext(NonCancellable) {
-            var persisted = setFeatureValue(featureName, kernelEnabled)
-            if (persisted && !afterPersist()) {
-                setFeatureValue(featureName, previousKernelEnabled)
-                afterPostRollback()
-                persisted = false
-            } else if (!persisted) {
-                afterPersistenceFailure()
+    launch(start = CoroutineStart.UNDISPATCHED) {
+        val success = withContext(NonCancellable) {
+            suspend fun persist(): Boolean {
+                try {
+                    val previous = readValue() ?: return false
+                    if (!writeValue(kernelEnabled)) return false
+                    if (afterPersist()) return true
+                    writeValue(previous)
+                    afterPostRollback()
+                } catch (error: Exception) {
+                    Log.w("FeatureControl", "Failed to update $featureName", error)
+                }
+                return false
             }
-            val current = getFeatureValue(featureId)
-            onRuntimeSettled(current)
-            persisted to current
+            suspend fun readChecked(): Boolean? = try {
+                readValue()?.let { if (displayInverted) !it else it }
+            } catch (error: Exception) {
+                Log.w("FeatureControl", "Failed to read $featureName", error)
+                null
+            }
+            try {
+                val (saved, checked) = featureReads.change {
+                    val saved = persist()
+                    val checked = readChecked() ?: run {
+                        Snapshot.withMutableSnapshot { state.checked = null }
+                        readChecked()
+                    }
+                    saved to checked
+                }
+                state.checked = checked
+                try {
+                    onRuntimeSettled()
+                } catch (error: Exception) {
+                    Log.w("FeatureControl", "Failed to refresh $featureName", error)
+                }
+                saved
+            } finally {
+                savingStates.forEach { it.saving = false }
+            }
         }
-        state.checked = if (displayInverted) !runtimeEnabled else runtimeEnabled
-        savingStates.forEach { it.saving = false }
         if (success) onSuccess() else onFailure()
     }
 }
@@ -141,109 +207,40 @@ private fun CoroutineScope.persistFeature(
 @Destination<RootGraph>
 @Composable
 fun FeatureControlScreen(navigator: DestinationsNavigator) {
+    LaunchedEffect(Unit) { featureStatusReader.withSession { awaitCancellation() } }
+    FeatureControlPage(onBack = { navigator.popBackStack() }, load = featureReads::isManager)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun FeatureControlPage(
+    onBack: () -> Unit,
+    load: suspend () -> Boolean,
+    readFeature: suspend (Int) -> FeatureReading = { featureReads.read(featureQueries.getValue(it)) },
+    initialization: FeatureQuery<Boolean> = kasumiInitialization,
+    suCompatController: SuCompatController = defaultSuCompatController,
+    readSuCompatValue: (Int) -> Boolean? = ::getFeatureValueOrNull,
+) {
     val scrollBehavior = rememberYukiTopAppBarScrollBehavior()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHost = rememberSnackbarController()
 
-    val selinuxHide = rememberFeatureToggleState(Natives.FEATURE_SELINUX_HIDE)
-    var suCompat by remember { mutableStateOf(suCompatController.read()) }
-    var requestedSuCompat by remember { mutableStateOf<SuCompatMode?>(null) }
-    var suPathSaving by remember { mutableStateOf(false) }
-    var suPathRevision by remember { mutableIntStateOf(0) }
-    val suCompatStatus by rememberFeatureStatus(Natives.FEATURE_SU_COMPAT)
-    val ksmStatus by rememberFeatureStatus(Natives.FEATURE_KASUMI_SUCOMPAT)
-    val suCompatForced = suCompatStatus == "forced"
-    val suCompatSupported = suCompatStatus == "supported"
-    val ksmSupported = ksmStatus == "supported"
-    val kasumi = rememberFeatureToggleState(Natives.FEATURE_KASUMI)
-    val kasumiSupported = remember { getFeatureValueOrNull(Natives.FEATURE_KASUMI) != null }
-    var kasumiInitialized by remember { mutableStateOf(Natives.kasumiIsInitialized()) }
-    val kasumiAvailable = !kasumiSupported || (kasumi.checked && kasumiInitialized)
-    val kernelUmountDisabled = rememberFeatureToggleState(
-        Natives.FEATURE_KERNEL_UMOUNT,
-        displayInverted = true
-    )
-    val unshareMnt = rememberFeatureToggleState(Natives.FEATURE_UNSHARE_MNT)
-    val suLog = rememberFeatureToggleState(Natives.FEATURE_SULOG)
-    val adbRoot = rememberFeatureToggleState(Natives.FEATURE_ADB_ROOT)
-    val shellSuAdbOnly = rememberFeatureToggleState(Natives.FEATURE_SHELL_SU_ADB_ONLY)
-    val magiskCompat = rememberFeatureToggleState(Natives.FEATURE_MAGISK_COMPAT)
-    var showMagiskUmountWarning by rememberSaveable { mutableStateOf(false) }
-    val defaultNoNewPrivs = rememberFeatureToggleState(Natives.FEATURE_DEFAULT_NO_NEW_PRIVS)
-    LaunchedEffect(Unit) {
-        defaultNoNewPrivs.saving = true
-        try {
-            withContext(Dispatchers.IO) {
-                migrateFeatureDefaults(getRootShell())
-            }
-            defaultNoNewPrivs.checked = getFeatureValue(Natives.FEATURE_DEFAULT_NO_NEW_PRIVS)
-        } finally {
-            defaultNoNewPrivs.saving = false
+    val loaded by produceState<Result<Boolean>?>(initialValue = null) {
+        value = try {
+            Result.success(load())
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w("FeatureControl", "Failed to query features", error)
+            Result.failure(error)
         }
     }
-    val yukiZygisk = rememberFeatureToggleState(Natives.FEATURE_YUKIZYGISK)
-    val hideBootloader = rememberFeatureToggleState(Natives.FEATURE_HIDE_BOOTLOADER)
-
-    val savedRebootMessage = stringResource(R.string.setting_change_saved_reboot)
-    val failedMessage = stringResource(R.string.setting_change_failed)
-    val yukiZygiskEnabledMessage = stringResource(R.string.settings_yukizygisk_toast_on)
-    val yukiZygiskDisabledMessage = stringResource(R.string.settings_yukizygisk_toast_off)
-    val yukiZygiskFailedMessage = stringResource(R.string.settings_yukizygisk_toast_failed)
-
-    fun updateSuCompat(mode: SuCompatMode? = null, magisk: Boolean? = null) {
-        if (magiskCompat.saving || kasumi.saving || suPathSaving) return
-        magiskCompat.saving = true
-        requestedSuCompat = mode
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            val success = withContext(NonCancellable) {
-                try {
-                    withContext(Dispatchers.IO) {
-                        if (mode != null) suCompatController.select(mode)
-                        else suCompatController.setMagisk(magisk ?: false)
-                    }
-                } finally {
-                    suCompat = suCompatController.read()
-                    magiskCompat.checked = suCompat.magisk
-                    magiskCompat.saving = false
-                    requestedSuCompat = null
-                }
-            }
-            if (!success) {
-                snackbarHost.showSnackbar(failedMessage)
-            } else if (magisk == true && Natives.isDefaultUmountModules()) {
-                showMagiskUmountWarning = true
-            }
-        }
-    }
-
-    if (showMagiskUmountWarning) {
-        YukiAlertDialog(
-            onDismissRequest = { showMagiskUmountWarning = false },
-            icon = { Icon(Icons.Filled.WarningAmber, contentDescription = null) },
-            title = { Text(stringResource(R.string.su_compat_magisk_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.su_compat_magisk_umount_warning,
-                        stringResource(R.string.settings_umount_modules_default),
-                        stringResource(R.string.profile_umount_modules),
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showMagiskUmountWarning = false }) {
-                    Text(stringResource(R.string.confirm))
-                }
-            },
-        )
-    }
-
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             FeatureControlTopBar(
-                onBack = { navigator.popBackStack() },
+                onBack = onBack,
                 scrollBehavior = scrollBehavior
             )
         },
@@ -252,23 +249,138 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
             WindowInsetsSides.Top + WindowInsetsSides.Horizontal
         )
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp)
-        ) {
-            KsuIsValid {
+        if (loaded?.getOrNull() != true) {
+            Box(Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                when {
+                    loaded == null -> CircularProgressIndicator()
+                    loaded?.isFailure == true -> Text(stringResource(R.string.operation_failed))
+                    else -> Text(stringResource(R.string.feature_status_unsupported_summary))
+                }
+            }
+        } else {
+            val selinuxHide = rememberFeatureToggleState(Natives.FEATURE_SELINUX_HIDE, readFeature)
+            val traditional = rememberFeatureToggleState(Natives.FEATURE_SU_COMPAT, readFeature)
+            val ksm = rememberFeatureToggleState(Natives.FEATURE_KASUMI_SUCOMPAT, readFeature)
+            val magiskCompat = rememberFeatureToggleState(Natives.FEATURE_MAGISK_COMPAT, readFeature)
+            val suMode = SuCompatSnapshot(traditional.value, ksm.value, magiskCompat.value).mode
+            val suCompatKnown = suMode != null && magiskCompat.value != null
+            fun unsupportedSuCompatFeatures() = buildSet {
+                if (traditional.status == "unsupported") add(Natives.FEATURE_SU_COMPAT)
+                if (ksm.status == "unsupported") add(Natives.FEATURE_KASUMI_SUCOMPAT)
+                if (magiskCompat.status == "unsupported") add(Natives.FEATURE_MAGISK_COMPAT)
+            }
+            fun applySuCompat(values: SuCompatSnapshot) {
+                traditional.checked = values.traditional
+                ksm.checked = values.ksm
+                magiskCompat.checked = values.magisk
+            }
+            var requestedSuCompat by remember { mutableStateOf<SuCompatMode?>(null) }
+            var suPathSaving by remember { mutableStateOf(false) }
+            var suPathRevision by remember { mutableIntStateOf(0) }
+            val suCompatStatus = traditional.displayStatus
+            val ksmStatus = ksm.displayStatus
+            val suCompatForced = suCompatStatus == "forced"
+            val suCompatSupported = suCompatStatus == "supported"
+            val ksmSupported = ksmStatus == "supported"
+            val kasumi = rememberFeatureToggleState(Natives.FEATURE_KASUMI, readFeature)
+            var kasumiInitialized by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                try {
+                    kasumiInitialized = featureReads.read(initialization)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w("FeatureControl", "Failed to read Kasumi initialization", error)
+                }
+            }
+            val kasumiAvailable = kasumi.status == "unsupported" || (kasumi.checked == true && kasumiInitialized)
+            val kernelUmountDisabled = rememberFeatureToggleState(
+                Natives.FEATURE_KERNEL_UMOUNT,
+                readFeature,
+                displayInverted = true
+            )
+            val unshareMnt = rememberFeatureToggleState(Natives.FEATURE_UNSHARE_MNT, readFeature)
+            val suLog = rememberFeatureToggleState(Natives.FEATURE_SULOG, readFeature)
+            val adbRoot = rememberFeatureToggleState(Natives.FEATURE_ADB_ROOT, readFeature)
+            val shellSuAdbOnly = rememberFeatureToggleState(Natives.FEATURE_SHELL_SU_ADB_ONLY, readFeature)
+            var showMagiskUmountWarning by rememberSaveable { mutableStateOf(false) }
+            val defaultNoNewPrivs = rememberFeatureToggleState(Natives.FEATURE_DEFAULT_NO_NEW_PRIVS, readFeature)
+            val yukiZygisk = rememberFeatureToggleState(Natives.FEATURE_YUKIZYGISK, readFeature)
+            val hideBootloader = rememberFeatureToggleState(Natives.FEATURE_HIDE_BOOTLOADER, readFeature)
+
+            val savedRebootMessage = stringResource(R.string.setting_change_saved_reboot)
+            val failedMessage = stringResource(R.string.setting_change_failed)
+            val yukiZygiskEnabledMessage = stringResource(R.string.settings_yukizygisk_toast_on)
+            val yukiZygiskDisabledMessage = stringResource(R.string.settings_yukizygisk_toast_off)
+            val yukiZygiskFailedMessage = stringResource(R.string.settings_yukizygisk_toast_failed)
+
+            fun updateSuCompat(mode: SuCompatMode? = null, magisk: Boolean? = null) {
+                if (magiskCompat.saving || kasumi.saving || suPathSaving) return
+                val unsupported = unsupportedSuCompatFeatures()
+                magiskCompat.saving = true
+                requestedSuCompat = mode
+                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    val success = withContext(NonCancellable) {
+                        try {
+                            val (saved, current, warn) = featureReads.change {
+                                val (saved, confirmed) = suCompatController.change(mode ?: SuCompatMode.KSM, magisk) {
+                                    readSuCompat(unsupported, readSuCompatValue)
+                                }
+                                val warn = saved && magisk == true && Natives.isDefaultUmountModules()
+                                Triple(saved, confirmed, warn)
+                            }
+                            applySuCompat(current)
+                            if (warn) showMagiskUmountWarning = true
+                            saved
+                        } catch (error: Exception) {
+                            Log.w("FeatureControl", "Failed to update su compatibility", error)
+                            false
+                        } finally {
+                            magiskCompat.saving = false
+                            requestedSuCompat = null
+                        }
+                    }
+                    if (!success) snackbarHost.showSnackbar(failedMessage)
+                }
+            }
+
+            if (showMagiskUmountWarning) {
+                YukiAlertDialog(
+                    onDismissRequest = { showMagiskUmountWarning = false },
+                    icon = { Icon(Icons.Filled.WarningAmber, contentDescription = null) },
+                    title = { Text(stringResource(R.string.su_compat_magisk_title)) },
+                    text = {
+                        Text(
+                            stringResource(
+                                R.string.su_compat_magisk_umount_warning,
+                                stringResource(R.string.settings_umount_modules_default),
+                                stringResource(R.string.profile_umount_modules),
+                            )
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showMagiskUmountWarning = false }) {
+                            Text(stringResource(R.string.confirm))
+                        }
+                    },
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp)
+            ) {
                 SettingsCard(title = stringResource(R.string.kernelsu_features)) {
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_SELINUX_HIDE,
                         icon = Icons.Filled.Security,
                         title = stringResource(R.string.settings_selinux_hide),
                         summary = stringResource(R.string.settings_selinux_hide_summary),
                         state = selinuxHide,
-                        groupPosition = MoreSettingsItemPosition.First,
+                        groupPosition = SettingsItemPosition.First,
                         onChange = { enabled ->
                             scope.persistFeature(
                                 state = selinuxHide,
@@ -282,7 +394,6 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_KERNEL_UMOUNT,
                         icon = Icons.Rounded.RemoveCircle,
                         title = stringResource(R.string.settings_disable_kernel_umount),
                         summary = stringResource(R.string.settings_disable_kernel_umount_summary),
@@ -299,7 +410,6 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_SULOG,
                         icon = Icons.Filled.Visibility,
                         title = stringResource(R.string.settings_disable_sulog),
                         summary = stringResource(R.string.settings_disable_sulog_summary),
@@ -309,14 +419,12 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                                 state = suLog,
                                 featureId = Natives.FEATURE_SULOG,
                                 featureName = "sulog",
-                                kernelEnabled = enabled,
-                                onRuntimeSettled = FeatureControlState::updateSuLog
+                                kernelEnabled = enabled
                             )
                         }
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_SHELL_SU_ADB_ONLY,
                         icon = Icons.Rounded.EnhancedEncryption,
                         title = stringResource(R.string.settings_shell_su_adb_only),
                         summary = stringResource(R.string.settings_shell_su_adb_only_summary),
@@ -333,12 +441,11 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_ADB_ROOT,
                         icon = Icons.Filled.DeveloperMode,
                         title = stringResource(R.string.settings_adb_root),
                         summary = stringResource(R.string.settings_adb_root_summary),
                         state = adbRoot,
-                        groupPosition = MoreSettingsItemPosition.Last,
+                        groupPosition = SettingsItemPosition.Last,
                         onChange = { enabled ->
                             scope.persistFeature(
                                 state = adbRoot,
@@ -361,12 +468,11 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
 
                 SettingsCard(title = stringResource(R.string.yukisu_features)) {
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_UNSHARE_MNT,
                         icon = ImageVector.vectorResource(R.drawable.ic_mount_view_cleanup),
                         title = stringResource(R.string.settings_unshare_mnt),
                         summary = stringResource(R.string.settings_unshare_mnt_summary),
                         state = unshareMnt,
-                        groupPosition = MoreSettingsItemPosition.First,
+                        groupPosition = SettingsItemPosition.First,
                         onChange = { enabled ->
                             scope.persistFeature(
                                 state = unshareMnt,
@@ -379,7 +485,6 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_KASUMI,
                         icon = Icons.Filled.Layers,
                         title = stringResource(R.string.kasumi_feature_title),
                         summary = stringResource(R.string.kasumi_feature_summary),
@@ -393,9 +498,12 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                                 kernelEnabled = enabled,
                                 relatedStates = listOf(magiskCompat),
                                 onRuntimeSettled = {
-                                    kasumiInitialized = Natives.kasumiIsInitialized()
-                                    suCompat = suCompatController.read()
-                                    magiskCompat.checked = suCompat.magisk
+                                    val unsupported = unsupportedSuCompatFeatures()
+                                    val (initialized, current) = withContext(Dispatchers.IO) {
+                                        initialization.load() to readSuCompat(unsupported, readSuCompatValue)
+                                    }
+                                    kasumiInitialized = initialized
+                                    applySuCompat(current)
                                     suPathRevision++
                                 },
                                 onFailure = { snackbarHost.showSnackbar(failedMessage) },
@@ -404,19 +512,20 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     SuCompatSelector(
-                        selected = requestedSuCompat ?: suCompat.mode,
+                        selected = requestedSuCompat ?: suMode,
+                        loading = suCompatStatus == "loading" || ksmStatus == "loading",
                         forced = suCompatForced,
                         managed = suCompatStatus == "managed",
-                        enabled = suCompatSupported && !magiskCompat.saving && !kasumi.saving && !suPathSaving,
+                        enabled = suCompatKnown && suCompatSupported && !magiskCompat.saving && !kasumi.saving && !suPathSaving,
                         ksmSupported = ksmSupported && kasumiAvailable,
                         onSelect = { mode ->
-                            if (mode != suCompat.mode) updateSuCompat(mode = mode)
+                            if (mode != suMode) updateSuCompat(mode = mode)
                         },
                     )
 
                     if (ksmSupported) {
                         SuPathSetting(
-                            enabled = !suCompatForced && kasumiAvailable && suCompat.mode == SuCompatMode.KSM &&
+                            enabled = !suCompatForced && kasumiAvailable && suMode == SuCompatMode.KSM &&
                                 !magiskCompat.saving && !kasumi.saving,
                             refreshKey = suPathRevision,
                             onSavingChange = { suPathSaving = it },
@@ -424,18 +533,16 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     }
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_MAGISK_COMPAT,
                         icon = Icons.Filled.Security,
                         title = stringResource(R.string.su_compat_magisk_title),
                         summary = stringResource(R.string.su_compat_magisk_summary),
                         state = magiskCompat,
-                        enabled = !suCompatForced && kasumiAvailable && suCompat.mode == SuCompatMode.KSM &&
+                        enabled = !suCompatForced && kasumiAvailable && suMode == SuCompatMode.KSM &&
                             !kasumi.saving && !suPathSaving,
                         onChange = { enabled -> updateSuCompat(magisk = enabled) },
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_DEFAULT_NO_NEW_PRIVS,
                         icon = Icons.Filled.FrontHand,
                         title = stringResource(R.string.settings_default_no_new_privs),
                         summary = stringResource(R.string.settings_default_no_new_privs_summary),
@@ -451,7 +558,6 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_YUKIZYGISK,
                         icon = Icons.Filled.Extension,
                         title = stringResource(R.string.settings_yukizygisk),
                         summary = stringResource(R.string.settings_yukizygisk_summary),
@@ -480,16 +586,15 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                     )
 
                     FeatureSwitchItem(
-                        featureId = Natives.FEATURE_HIDE_BOOTLOADER,
                         icon = Icons.Filled.Lock,
                         title = stringResource(R.string.hide_bl_title),
-                        summary = if (hideBootloader.checked) {
-                            stringResource(R.string.hide_bl_enabled)
-                        } else {
-                            stringResource(R.string.hide_bl_disabled)
+                        summary = when (hideBootloader.checked) {
+                            true -> stringResource(R.string.hide_bl_enabled)
+                            false -> stringResource(R.string.hide_bl_disabled)
+                            null -> null
                         },
                         state = hideBootloader,
-                        groupPosition = MoreSettingsItemPosition.Last,
+                        groupPosition = SettingsItemPosition.Last,
                         onChange = { enabled ->
                             scope.persistFeature(
                                 state = hideBootloader,
@@ -518,40 +623,41 @@ fun FeatureControlScreen(navigator: DestinationsNavigator) {
                         }
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 }
 
 @Composable
-private fun FeatureSwitchItem(
-    featureId: Int,
+internal fun FeatureSwitchItem(
     icon: ImageVector,
     title: String,
-    summary: String,
+    summary: String?,
     state: FeatureToggleState,
-    groupPosition: MoreSettingsItemPosition = MoreSettingsItemPosition.Middle,
+    groupPosition: SettingsItemPosition = SettingsItemPosition.Middle,
     enabled: Boolean = true,
     onChange: (Boolean) -> Unit
 ) {
-    val status by rememberFeatureStatus(featureId)
+    val status = state.displayStatus
     val renderedSummary = when (status) {
         "unsupported" -> stringResource(R.string.feature_status_unsupported_summary)
         "managed" -> stringResource(R.string.feature_status_managed_summary)
+        "unknown" -> stringResource(R.string.feature_state_unavailable)
         "forced" -> stringResource(R.string.feature_status_forced_summary)
         else -> summary
     }
 
-    SwitchSettingItem(
+    SwitchItem(
         icon = icon,
         title = title,
         summary = renderedSummary,
         checked = state.checked,
         enabled = enabled && status == "supported" && !state.saving,
+        loading = status == "loading" || (state.saving && state.checked == null),
         groupPosition = groupPosition,
-        onChange = onChange
+        onCheckedChange = onChange
     )
 }
 

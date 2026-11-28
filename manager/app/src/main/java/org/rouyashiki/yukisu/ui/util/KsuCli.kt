@@ -22,6 +22,8 @@ import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ShellUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import org.rouyashiki.yukisu.BuildConfig
@@ -91,6 +93,7 @@ object KsuCli {
     /** Recreate shell instances and optionally reconcile the installed ksud. */
     fun refreshShells(checkKsud: Boolean = true) {
         Log.d(TAG, "refreshShells: starting, old SHELL.isRoot=${SHELL.isRoot}")
+        featureStatusReader.reset()
         try {
             SHELL.close()
         } catch (_: Exception) {}
@@ -552,12 +555,90 @@ suspend fun getYukiZygiskStatusJson(): String? = withContext(Dispatchers.IO) {
         ?.takeIf { it.startsWith('{') && it.endsWith('}') }
 }
 
-suspend fun getFeatureStatus(feature: Int): String = withContext(Dispatchers.IO) {
-    runCatching { ksudReadString("feature check $feature") }
-        .getOrNull()
-        ?.takeIf { it in setOf("unsupported", "forced", "managed", "supported") }
-        ?: "unknown"
+internal class FeatureStatusReader(
+    private val open: () -> Shell = { createRootShell() },
+    private val check: (Shell, Int) -> String = { shell, id -> ksudReadString("feature check $id", shell) },
+) {
+    private val dispatcher = Dispatchers.IO.limitedParallelism(4)
+    private val statuses = setOf("unsupported", "forced", "managed", "supported", "unknown")
+    private var owners = 0
+    private var idle: ArrayDeque<Shell>? = null
+
+    private fun acquire() = synchronized(this) {
+        if (owners++ == 0) idle = ArrayDeque()
+    }
+
+    private fun release() = synchronized(this) {
+        if (--owners == 0) idle.also { idle = null } else null
+    }
+
+    fun keepSessionFor(query: Job) {
+        // A queued probe may still be waiting for a write or for defaults migration.
+        acquire()
+        query.invokeOnCompletion { release()?.forEach(::close) }
+    }
+
+    suspend fun <T> withSession(block: suspend () -> T): T {
+        acquire()
+        try {
+            return block()
+        } finally {
+            val retired = release()
+            if (!retired.isNullOrEmpty()) {
+                withContext(NonCancellable + Dispatchers.IO) { retired.forEach(::close) }
+            }
+        }
+    }
+
+    fun reset() {
+        val retired = synchronized(this) { idle?.also { idle = ArrayDeque() } }
+        retired?.forEach(::close)
+    }
+
+    suspend fun read(feature: Int): String = withSession {
+        withContext(dispatcher) {
+            try {
+                query(feature)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TAG, "Failed to check feature $feature", error)
+                "unknown"
+            }
+        }
+    }
+
+    private fun query(feature: Int): String {
+        val (pool, cached) = synchronized(this) { idle to idle?.removeLastOrNull() }
+        val shell = if (cached != null && cached.isAlive) cached else {
+            if (cached != null) close(cached)
+            open()
+        }
+        var returned = false
+        try {
+            if (!shell.isRoot) return "unknown"
+            val status = check(shell, feature)
+            if (status !in statuses) return "unknown"
+            synchronized(this) {
+                if (pool != null && pool === idle) {
+                    pool.addLast(shell)
+                    returned = true
+                }
+            }
+            return status
+        } finally {
+            if (!returned) close(shell)
+        }
+    }
+
+    private fun close(shell: Shell) {
+        runCatching { shell.close() }.onFailure { Log.w(TAG, "Failed to close feature shell", it) }
+    }
 }
+
+internal val featureStatusReader = FeatureStatusReader()
+
+suspend fun getFeatureStatus(feature: Int): String = featureStatusReader.read(feature)
 
 /** A feature's on/off state. Unsupported reads as off. */
 fun getFeatureValue(feature: Int): Boolean = Natives.isFeatureEnabled(feature)

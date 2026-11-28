@@ -10,9 +10,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.FolderDelete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.maxkeppeker.sheets.core.models.base.IconSource
 import com.maxkeppeler.sheets.list.models.ListOption
 import com.ramcosta.composedestinations.annotation.Destination
@@ -55,6 +57,7 @@ import com.ramcosta.composedestinations.generated.destinations.MoreSettingsScree
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.rouyashiki.yukisu.BuildConfig
 import org.rouyashiki.yukisu.Natives
+import org.rouyashiki.yukisu.readDefaultUmountModules
 import org.rouyashiki.yukisu.magica.MagicaHelper
 import org.rouyashiki.yukisu.R
 import org.rouyashiki.yukisu.ui.component.*
@@ -71,7 +74,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import org.rouyashiki.yukisu.ui.screen.feature.FeatureControlState
+import org.rouyashiki.yukisu.ui.screen.feature.FeatureQuery
+import org.rouyashiki.yukisu.ui.screen.feature.featureReads
 
 /**
  * @author ShirkNeko
@@ -88,6 +92,87 @@ enum class SettingsItemPosition(val index: Int, val count: Int) {
     Only(0, 1)
 }
 
+internal data class SettingsKernelState(
+    val manager: Boolean,
+    val suLog: Boolean? = null,
+    val lateLoad: Boolean? = null,
+    val defaultUmount: Boolean? = null,
+)
+
+private val settingsFeatureValues = FeatureQuery(blocksWrites = false) {
+    Natives.isSuLogEnabled() to readDefaultUmountModules()
+}
+
+internal fun changeDefaultUmount(
+    enabled: Boolean,
+    write: (Boolean) -> Boolean = { Natives.setDefaultUmountModules(it) },
+    read: () -> Boolean? = { readDefaultUmountModules() },
+): Pair<Boolean, Boolean?> {
+    val saved = write(enabled)
+    return saved to if (saved) enabled else read()
+}
+
+@Composable
+internal fun rememberSettingsKernelState(
+    readManager: suspend () -> Boolean = featureReads::isManager,
+    readLateLoad: suspend () -> Boolean = { withContext(Dispatchers.IO) { Natives.isLateLoadMode } },
+    readFeatures: suspend () -> Pair<Boolean, Boolean?> = { featureReads.read(settingsFeatureValues) },
+): MutableState<SettingsKernelState?> {
+    val scope = rememberCoroutineScope()
+    val kernel = remember { mutableStateOf<SettingsKernelState?>(null) }
+    LifecycleResumeEffect(Unit) {
+        val refresh = scope.launch {
+            try {
+                val manager = readManager()
+                if (kernel.value?.manager != manager) kernel.value = SettingsKernelState(manager)
+                launch {
+                    val lateLoad = try {
+                        readLateLoad()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        android.util.Log.w("Settings", "Failed to read late-load mode", error)
+                        null
+                    }
+                    kernel.value = kernel.value?.copy(lateLoad = lateLoad)
+                }
+                if (manager) {
+                    val (suLog, defaultUmount) = readFeatures()
+                    kernel.value = kernel.value?.copy(suLog = suLog, defaultUmount = defaultUmount)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                android.util.Log.w("Settings", "Failed to read kernel settings", error)
+            }
+        }
+        onPauseOrDispose { refresh.cancel() }
+    }
+    return kernel
+}
+
+private class SettingsScrollPosition(offset: Int) {
+    val provisional = ScrollState(offset)
+    // A shorter provisional layout can clamp the offset before the manager rows appear.
+    private val restored = if (offset > 0) ScrollState(offset) else provisional
+    val settled: ScrollState
+        get() = if (provisional.lastScrolledForward || provisional.lastScrolledBackward) provisional else restored
+
+    companion object {
+        val Saver = Saver<SettingsScrollPosition, Int>(
+            save = { it.settled.value },
+            restore = ::SettingsScrollPosition,
+        )
+    }
+}
+
+@Composable
+internal fun rememberSettingsScrollState(kernel: SettingsKernelState?): ScrollState {
+    val position = rememberSaveable(saver = SettingsScrollPosition.Saver) { SettingsScrollPosition(0) }
+    val loadingRows = kernel == null || (kernel.manager && kernel.suLog == null)
+    return if (loadingRows) position.provisional else position.settled
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
@@ -97,12 +182,9 @@ fun SettingScreen(navigator: DestinationsNavigator) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    val isKsuManager = remember { Natives.isManager }
-    val initialSuLogEnabled = remember { Natives.isSuLogEnabled() }
-    val isSuLogEnabled = FeatureControlState.suLogEnabled ?: initialSuLogEnabled
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        FeatureControlState.refreshSuLog()
-    }
+    val scope = rememberCoroutineScope()
+    var kernel by rememberSettingsKernelState()
+    val isKsuManager = kernel?.manager == true
     var selectedEngine by rememberSaveable {
         mutableStateOf(
             prefs.getString("webui_engine", "default") ?: "default"
@@ -118,9 +200,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         refreshSoftRebootStatus()
     }
-    val isLateLoadMode = remember {
-        runCatching { Natives.isLateLoadMode }.getOrDefault(false)
-    }
+    val isLateLoadMode = kernel?.lateLoad == true
 
     Scaffold(
         topBar = {
@@ -135,10 +215,9 @@ fun SettingScreen(navigator: DestinationsNavigator) {
             modifier = Modifier
                 .padding(paddingValues)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberSettingsScrollState(kernel))
         ) {
             val context = LocalContext.current
-            val scope = rememberCoroutineScope()
             val exportBugreportLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.CreateDocument("application/gzip")
             ) { uri: Uri? ->
@@ -165,7 +244,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            KsuIsValid {
+            if (isKsuManager) {
                 SettingsGroupCard(
                     title = stringResource(R.string.configuration),
                     content = {
@@ -179,14 +258,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                             }
                         )
 
-                        SettingItem(
-                            icon = Icons.Filled.Memory,
-                            title = stringResource(R.string.feature_control),
-                            summary = stringResource(R.string.feature_control_summary),
-                            onClick = {
-                                navigator.navigate(FeatureControlScreenDestination)
-                            }
-                        )
+                        FeatureControlSetting { navigator.navigate(FeatureControlScreenDestination) }
 
                         var builtinMountEnabled by rememberSaveable { mutableStateOf<Boolean?>(null) }
                         var builtinLoading by remember { mutableStateOf(true) }
@@ -250,15 +322,29 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                             onClick = { superKeyDialog.show() }
                         )
 
-                        var umountChecked by rememberSaveable { mutableStateOf(Natives.isDefaultUmountModules()) }
+                        var umountSaving by remember { mutableStateOf(false) }
                         SwitchItem(
                             icon = Icons.Rounded.FolderDelete,
                             title = stringResource(id = R.string.settings_umount_modules_default),
-                            summary = stringResource(id = R.string.settings_umount_modules_default_summary),
-                            checked = umountChecked,
-                            onCheckedChange = {
-                                if (Natives.setDefaultUmountModules(it)) {
-                                    umountChecked = it
+                            summary = stringResource(
+                                if (kernel?.defaultUmount == null) R.string.feature_state_unavailable
+                                else R.string.settings_umount_modules_default_summary
+                            ),
+                            checked = kernel?.defaultUmount,
+                            enabled = !umountSaving,
+                            onCheckedChange = { enabled ->
+                                if (!umountSaving) {
+                                    umountSaving = true
+                                    scope.launch {
+                                        val saved = try {
+                                            val (success, value) = featureReads.change { changeDefaultUmount(enabled) }
+                                            kernel = kernel?.copy(defaultUmount = value)
+                                            success
+                                        } finally {
+                                            umountSaving = false
+                                        }
+                                        if (!saved) snackBarHost.showSnackbar(resources.getString(R.string.setting_change_failed))
+                                    }
                                 }
                             }
                         )
@@ -334,7 +420,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                         }
                     )
 
-                    KsuIsValid {
+                    if (isKsuManager) {
                         WebUIEngineSelector(
                             selectedEngine = selectedEngine,
                             onEngineSelected = { engine ->
@@ -361,7 +447,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                         title = stringResource(R.string.settings_soft_reboot),
                         summary = if (softRebootBlocked) softRebootBlockedMessage(context)
                             else stringResource(R.string.settings_soft_reboot_summary),
-                        enabled = !isLateLoadMode && !softRebootBlocked,
+                        enabled = kernel?.lateLoad == false && !softRebootBlocked,
                         checked = !softRebootBlocked && (isLateLoadMode || useSoftReboot),
                         onCheckedChange = { enabled ->
                             setSoftRebootEnabled(context, enabled)
@@ -399,8 +485,8 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                         }
                     )
 
-                    KsuIsValid {
-                        if (isSuLogEnabled) {
+                    if (isKsuManager) {
+                        if (kernel?.suLog == true) {
                             SettingItem(
                                 icon = Icons.Filled.Visibility,
                                 title = stringResource(R.string.log_viewer_view_logs),
@@ -411,7 +497,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                             )
                         }
                     }
-                    KsuIsValid {
+                    if (isKsuManager) {
                         SettingItem(
                             icon = Icons.Filled.FolderOff,
                             title = stringResource(R.string.umount_path_manager),
@@ -479,7 +565,7 @@ fun SettingScreen(navigator: DestinationsNavigator) {
                             }
                         )
                     }
-                    KsuIsValid {
+                    if (isKsuManager) {
                         UninstallItem(
                             navigator = navigator,
                             groupPosition = SettingsItemPosition.Last
@@ -507,6 +593,16 @@ fun SettingScreen(navigator: DestinationsNavigator) {
             Spacer(modifier = Modifier.height(SPACING_LARGE))
         }
     }
+}
+
+@Composable
+internal fun FeatureControlSetting(onClick: () -> Unit) {
+    SettingItem(
+        icon = Icons.Filled.Memory,
+        title = stringResource(R.string.feature_control),
+        summary = stringResource(R.string.feature_control_summary),
+        onClick = onClick,
+    )
 }
 
 @Composable
